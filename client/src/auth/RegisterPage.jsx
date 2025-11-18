@@ -3,7 +3,13 @@ import { supabase } from '../lib/supabaseClient';
 import { Link, useNavigate } from 'react-router-dom';
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ email: '', password: '', full_name: '' });
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    full_name: '',
+    user_type: ''
+  });
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -12,11 +18,29 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setMsg('');
+
+    // Validate passwords match
+    if (form.password !== form.confirmPassword) {
+      setMsg('Passwords do not match.');
+      setLoading(false);
+      return;
+    }
+
+    // Validate user type selected
+    if (!form.user_type) {
+      setMsg('Please select how you are joining us.');
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: {
-        data: { full_name: form.full_name },
+        data: {
+          full_name: form.full_name,
+          user_type: form.user_type
+        },
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
@@ -31,7 +55,6 @@ export default function RegisterPage() {
       return;
     }
     setMsg('Check your email to confirm your account.');
-    // If email confirmations off, navigate after session appears
     setTimeout(() => navigate('/'), 1000);
   }
 
@@ -76,6 +99,24 @@ export default function RegisterPage() {
               </div>
 
               <div>
+                <label htmlFor="user_type" className="block text-sm font-medium text-gray-700 mb-1">
+                  Join as
+                </label>
+                <select
+                  id="user_type"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
+                  value={form.user_type}
+                  onChange={e => setForm(f => ({ ...f, user_type: e.target.value }))}
+                  required
+                >
+                  <option value="">Select an option</option>
+                  <option value="student">Student</option>
+                  <option value="founder">Founder/Startup</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                   Password
                 </label>
@@ -90,6 +131,22 @@ export default function RegisterPage() {
                   required
                 />
                 <p className="mt-1 text-xs text-gray-500">Minimum 8 characters</p>
+              </div>
+
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="••••••••"
+                  minLength="8"
+                  value={form.confirmPassword}
+                  onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                  required
+                />
               </div>
             </div>
 
