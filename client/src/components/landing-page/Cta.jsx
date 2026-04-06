@@ -1,23 +1,33 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 
 export default function CTA() {
   return (
-    // Purpose: A high-contrast section to grab the user's final attention.
-    <section className="bg-indigo-700">
-      <div className="max-w-4xl mx-auto text-center py-16 px-4 sm:py-20 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
-          <span className="block">Ready to build the future?</span>
+    <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600">
+      <div className="max-w-4xl mx-auto text-center">
+        {/* Heading */}
+        <h2 className="text-4xl lg:text-5xl font-black text-white mb-6">
+          Ready to Find Your Perfect Match?
         </h2>
-        <p className="mt-4 text-lg leading-6 text-indigo-200">
-          Join a thriving community of builders, dreamers, and innovators today.
+        
+        {/* Subheading */}
+        <p className="text-xl text-indigo-100 mb-10">
+          Join thousands of students, founders, mentors, and investors building the future together.
         </p>
-        <Link
-          to="/register"
-          className="mt-8 w-full inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-indigo-600 bg-white hover:bg-indigo-50 sm:w-auto"
+        
+        {/* CTA Button - Routes to Register */}
+        <Link 
+          to="/register" 
+          className="inline-flex items-center gap-3 px-10 py-5 bg-white text-indigo-600 rounded-full font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105"
         >
-          Sign Up for Free
+          Get Started Free <ArrowRight className="w-5 h-5" />
         </Link>
+        
+        {/* Trust Line */}
+        <p className="text-indigo-100 mt-6 text-sm">
+          No credit card required • Free forever • Cancel anytime
+        </p>
       </div>
     </section>
   );

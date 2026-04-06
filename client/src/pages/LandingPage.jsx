@@ -1,43 +1,51 @@
 import React from 'react';
+import { useAuth } from '../auth/AuthContext';
+
+// Landing Page Components
 import Navbar from '../components/landing-page/Navbar';
 import Hero from '../components/landing-page/Hero';
+import UserType from '../components/landing-page/UserType';
 import Features from '../components/landing-page/Features';
+import HowItWorks from '../components/landing-page/HowItWorks';
 import Testimonials from '../components/landing-page/Testimonials';
 import CTA from '../components/landing-page/Cta';
 import Footer from '../components/landing-page/Footer';
 
+// Role-Based Navbar and Dashboard
+import RoleNavbar from '../components/landing-page/RoleNavbar';
+import UserDashboard from '../components/platform/UserDashboard';
+
 export default function LandingPage() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white">
-      <Navbar />
+      {/* CONDITIONAL NAVBAR - Show RoleNavbar when logged in, regular Navbar when logged out */}
+      {user ? <RoleNavbar /> : <Navbar />}
+      
       <main>
-        <Hero />
-        <Features />
-
-        {/* --- Promo Video Section --- */}
-        <section className="py-20 bg-slate-50">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-3xl font-extrabold text-slate-900">
-              See How It Works
-            </h2>
-            <p className="mt-4 text-lg text-slate-600">
-              Watch our quick demo to see the power of connection in action.
-            </p>
-            {/* Purpose: Responsive video container using the aspect-ratio plugin. */}
-            <div className="mt-8 aspect-w-16 aspect-h-9 rounded-lg shadow-2xl overflow-hidden">
-              <iframe
-                src="https://www.youtube.com/embed/dQw4w9WgXcQ" // Replace with your promo video URL
-                title="Promo Video"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
-            </div>
+        {user ? (
+          <div className="animate-in fade-in duration-700">
+            <UserDashboard user={user} />
           </div>
-        </section>
-
-        <Testimonials />
-        <CTA />
+        ) : (
+          <>
+            <Hero />
+            <UserType />
+            <HowItWorks />
+            <Features />
+            <Testimonials />
+            <CTA />
+          </>
+        )}
       </main>
       <Footer />
     </div>

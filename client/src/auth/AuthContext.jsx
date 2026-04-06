@@ -15,7 +15,12 @@ export function AuthProvider({ children }) {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setUser(session?.user ?? null);
+
+      if (session?.user && !session.user.email_confirmed_at) {
+        setUser(null);
+      } else {
+        setUser(session?.user ?? null);
+      }
       setLoading(false);
     });
     return () => listener.subscription.unsubscribe();
