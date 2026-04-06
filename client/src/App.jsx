@@ -1,5 +1,5 @@
 // src/App.jsx
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 
 // ── Auth ──
 import { AuthProvider } from './auth/AuthContext'
@@ -13,10 +13,11 @@ import RoleNavbar from './components/landing-page/RoleNavbar'
 import LandingPage from './pages/LandingPage'
 import RegisterPage from './auth/RegisterPage'
 import LoginPage from './auth/LoginPage'
+import ForgotPasswordPage from './auth/ForgotPasswordPage'          // ← NEW
 
 // ── Profile Pages (role-split) ──
-import ProfilePage from './pages/ProfilePage'                
-import FounderProfilePage from './pages/FounderProfile'   
+import ProfilePage from './pages/ProfilePage'
+import FounderProfilePage from './pages/FounderProfile'
 
 // ── Shared Protected Pages (both roles) ──
 import DiscoverPage from './pages/DiscoverPage'
@@ -26,6 +27,7 @@ import FindMentorsPage from './pages/FindMentorsPage'
 // ── Student Pages ──
 import StudentDashboard from './pages/StudentRolePages/StudentDashbaord'
 import FindCoFoundersPage from './pages/StudentRolePages/FindCoFounder'
+import ConnectionRequestsPage from './pages/StudentRolePages/ConnectionRequestsPage'  
 
 // ── Founder Pages ──
 import FounderDashboard from './pages/EarlyStageFoundeRolerPages/EarlyStageDashboard'
@@ -48,10 +50,10 @@ function DashboardRouter() {
   const { user } = useAuth()
   const role = user?.user_metadata?.user_type
 
-  if (role === 'student')               return <StudentDashboard />
-  if (role === 'early-stage-founder')   return <FounderDashboard />
-  if (role === 'mentor')                return <MentorDashboard />
-  if (role === 'investor')              return <InvestorDashboard />
+  if (role === 'student') return <StudentDashboard />
+  if (role === 'early-stage-founder') return <FounderDashboard />
+  if (role === 'mentor') return <MentorDashboard />
+  if (role === 'investor') return <InvestorDashboard />
 
   return <Navigate to="/profile" replace />
 }
@@ -62,8 +64,8 @@ function ProfileRouter() {
   const role = user?.user_metadata?.user_type
 
   if (role === 'early-stage-founder') return <FounderProfilePage />
-  if (role === 'mentor')              return <MentorProfilePage />
-  if (role === 'investor')            return <InvestorProfilePage />
+  if (role === 'mentor') return <MentorProfilePage />
+  if (role === 'investor') return <InvestorProfilePage />
   return <ProfilePage />   // student, other
 }
 
@@ -90,9 +92,20 @@ function RoleRoute({ children, allowedRoles }) {
   return children
 }
 
+// ─── Auth page paths that should NEVER show the navbar ────────────────────
+const AUTH_PATHS = ['/login', '/register', '/forgot-password']
+
 function AppLayout({ children }) {
   const { session, user } = useAuth()
-  const showNavbar = Boolean(session && user)
+  const location = useLocation()
+
+  // Hide navbar on auth pages — even if a session exists
+  // (Supabase creates a session during password reset flow,
+  //  so we must check the path, not just session state)
+  const isAuthPage = AUTH_PATHS.some(
+    path => location.pathname.startsWith(path)
+  )
+  const showNavbar = Boolean(session && user) && !isAuthPage
 
   return (
     <>
@@ -109,9 +122,10 @@ export default function App() {
         <Routes>
 
           {/* ══ Public ══ */}
-          <Route path="/"         element={<LandingPage />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/login"    element={<LoginPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />   {/* ← NEW */}
 
           {/* ══ Profile — smart router: founder → FounderProfilePage, else → ProfilePage ══ */}
           <Route path="/profile" element={
@@ -148,6 +162,12 @@ export default function App() {
           <Route path="/find-cofounders" element={
             <RoleRoute allowedRoles={['student']}>
               <FindCoFoundersPage />
+            </RoleRoute>
+          } />
+
+          <Route path="/connection-requests" element={
+            <RoleRoute allowedRoles={['student']}>
+              <ConnectionRequestsPage />
             </RoleRoute>
           } />
 
