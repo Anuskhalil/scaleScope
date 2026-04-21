@@ -524,6 +524,17 @@ export async function fetchConversations(userId) {
   });
 }
 
+export async function fetchOpportunities({ limit = 5 } = {}) {
+  const { data, error } = await supabase
+    .from('opportunities')
+    .select('*')
+    .eq('is_active', true)
+    .order('deadline', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
 /**
  * Fetch all messages in a conversation, oldest first.
  */
