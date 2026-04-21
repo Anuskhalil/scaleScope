@@ -66,31 +66,50 @@ const W = {
   // Pulls the relevant matching fields out of whatever shape the profile is in.
   // ═══════════════════════════════════════════════════════════════════════════
   
-  function normaliseStudent(profile) {
-    // skills_with_levels → flat skill name list
-    const skillNames = (profile.skills_with_levels || [])
-      .map(s => (s.skill || s).toLowerCase().trim())
-      .filter(Boolean);
-  
-    // merge with flat skills array
-    const allSkills = [
-      ...new Set([
-        ...skillNames,
-        ...toArr(profile.skills),
-      ]),
-    ];
-  
-    return {
-      skills:        allSkills,
-      industry:      (profile.industry || '').toLowerCase().trim(),
-      startup_stage: (profile.startup_stage || '').toLowerCase().trim(),
-      looking_for:   toArr(profile.looking_for),
-      help_needed:   toArr(profile.help_needed),
-      interests:     toArr(profile.interests),
-      commitment:    (profile.commitment_level || '').toLowerCase(),
-      revenue_model: (profile.revenue_model || '').toLowerCase(),
-    };
+  // Find this function in matchingService.js and REPLACE it entirely:
+
+function normaliseStudent(profile) {
+  // skills_with_levels → flat skill name list
+  const skillNames = (profile.skills_with_levels || [])
+    .map(s => (s.skill || s).toLowerCase().trim())
+    .filter(Boolean);
+
+  // merge with flat skills array from profiles table
+  const allSkills = [
+    ...new Set([
+      ...skillNames,
+      ...toArr(profile.skills),
+    ]),
+  ];
+
+  // ✅ FIX #14: Derive startup_stage from has_startup_idea boolean
+  // student_profiles doesn't have a startup_stage column,
+  // but has_startup_idea + startup_idea_description can approximate it
+  let startup_stage = '';
+  if (profile.has_startup_idea) {
+    const desc = (profile.startup_idea_description || '').toLowerCase();
+    if (desc.length > 100) {
+      startup_stage = 'building mvp';       // detailed description = likely building
+    } else {
+      startup_stage = 'just an idea';        // short/no description = early stage
+    }
   }
+
+  // ✅ FIX #14: Derive industry from interests (first interest as best guess)
+  // student_profiles doesn't have an industry column
+  const industry = toArr(profile.interests)[0] || '';
+
+  return {
+    skills:        allSkills,
+    industry,                                  // derived from interests
+    startup_stage,                             // derived from has_startup_idea
+    looking_for:   toArr(profile.looking_for),
+    help_needed:   toArr(profile.help_needed),
+    interests:     toArr(profile.interests),
+    commitment:    (profile.commitment_level || '').toLowerCase(),
+    revenue_model: '',                         // no data source — investor matching limited
+  };
+}
   
   // ═══════════════════════════════════════════════════════════════════════════
   // MENTOR SCORER

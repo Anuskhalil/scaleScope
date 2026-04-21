@@ -19,7 +19,7 @@ export async function fetchStudentProfile(userId) {
       *,
       profiles (
         id, full_name, email, user_type, location, bio, avatar_url,
-        linkedin_url, github_url, twitter_url, portfolio_url,
+        linkedin_url, github_url, twitter_url,
         skills, interests, profile_completion, onboarding_completed,
         last_active, created_at, metadata
       )
@@ -77,7 +77,7 @@ export async function updateStudentProfile(userId, updates) {
  * Returns the public URL.
  */
 export async function uploadAvatar(userId, file) {
-  const ext  = file.name.split('.').pop();
+  const ext = file.name.split('.').pop();
   const path = `avatars/${userId}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
@@ -166,6 +166,11 @@ export async function fetchMentors({ expertise = [], location = '', industry = '
  * Co-founders are students, not early-stage-founders.
  * Filter: student_profiles WHERE 'Co-founder' = ANY(looking_for)
  */
+/**
+ * Fetch students who are looking for co-founders.
+ * Co-founders are students, not early-stage-founders.
+ * Filter: student_profiles WHERE 'Co-founder' = ANY(looking_for)
+ */
 export async function fetchCoFounders({
   skills = [],
   industry = '',
@@ -183,10 +188,10 @@ export async function fetchCoFounders({
       has_startup_idea, startup_idea_description,
       profiles (
         id, full_name, bio, avatar_url, location, skills, interests,
-        linkedin_url, github_url, portfolio_url
+        linkedin_url, github_url
       )
     `)
-    .contains('looking_for', ['Co-founder'])
+    .contains('looking_for', ['Co-Founder'])
     .limit(limit);
 
   const { data, error } = await query;
@@ -214,27 +219,39 @@ export async function fetchCoFounders({
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONNECTION REQUESTS
+// Matches schema: connection_requests table with partial unique index
+// on (sender_id, receiver_id, type) WHERE status = 'pending'
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
  * Send a connection request.
  * type: 'mentor_request' | 'cofounder_request' | 'investor_contact'
+ * Returns { alreadySent: true } if a pending duplicate exists, or the new row.
  */
 export async function sendConnectionRequest(senderId, receiverId, type, message = '') {
+  // Input validation
+  if (!senderId || !receiverId) throw new Error('Missing user IDs.');
+  if (senderId === receiverId) throw new Error('Cannot send request to yourself.');
+  const validTypes = ['mentor_request', 'cofounder_request', 'investor_contact'];
+  if (!validTypes.includes(type)) throw new Error(`Invalid request type: ${type}`);
+
+  // Clean message
+  const cleanMessage = (message || '').trim().slice(0, 500);
+
   const { data, error } = await supabase
     .from('connection_requests')
     .insert({
-      sender_id:   senderId,
+      sender_id: senderId,
       receiver_id: receiverId,
       type,
-      status:  'pending',
-      message: message || null,
+      status: 'pending',
+      message: cleanMessage || null,
     })
     .select()
     .single();
 
   if (error) {
-    // Duplicate — request already exists
+    // Duplicate pending request — partial unique index violation
     if (error.code === '23505') {
       return { alreadySent: true };
     }
@@ -245,30 +262,52 @@ export async function sendConnectionRequest(senderId, receiverId, type, message 
 
 /**
  * Get the connection request status between two users for a given type.
- * Returns: { status, isSender } or null
+ * Checks both directions: did I send to them, or did they send to me?
+ * Returns the MOST RECENT request: { status, isSender } or null.
  */
 export async function getConnectionStatus(userId, otherUserId, type) {
-  const { data, error } = await supabase
+  // Check if user sent a request to otherUser
+  const { data: sent, error: sentErr } = await supabase
     .from('connection_requests')
     .select('status, sender_id')
-    .or(`and(sender_id.eq.${userId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${userId})`)
+    .eq('sender_id', userId)
+    .eq('receiver_id', otherUserId)
     .eq('type', type)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
-  if (error) throw error;
-  return data ? { status: data.status, isSender: data.sender_id === userId } : null;
+  if (sentErr) throw sentErr;
+  if (sent) return { status: sent.status, isSender: true };
+
+  // Check if otherUser sent a request to user
+  const { data: received, error: recvErr } = await supabase
+    .from('connection_requests')
+    .select('status, sender_id')
+    .eq('sender_id', otherUserId)
+    .eq('receiver_id', userId)
+    .eq('type', type)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (recvErr) throw recvErr;
+  if (received) return { status: received.status, isSender: false };
+
+  return null;
 }
 
 /**
- * Fetch all connection requests received by a user (incoming, pending).
+ * Fetch all PENDING connection requests received by a user.
+ * Used by the dashboard "Pending Requests" section and the Requests page.
  */
 export async function fetchIncomingRequests(userId) {
   const { data, error } = await supabase
     .from('connection_requests')
     .select(`
       *,
-      sender: profiles!connection_requests_sender_id_fkey (
-        id, full_name, avatar_url, user_type, location
+      sender:profiles!connection_requests_sender_id_fkey (
+        id, full_name, avatar_url, user_type, location, bio, skills
       )
     `)
     .eq('receiver_id', userId)
@@ -280,27 +319,84 @@ export async function fetchIncomingRequests(userId) {
 }
 
 /**
- * Accept or decline a connection request.
- * On accept — automatically creates a conversation between the two users.
+ * Fetch all connection requests SENT by a user (any status).
+ * Used by the Requests page "Sent" tab.
+ */
+export async function fetchSentRequests(userId) {
+  const { data, error } = await supabase
+    .from('connection_requests')
+    .select(`
+      *,
+      receiver:profiles!connection_requests_receiver_id_fkey (
+        id, full_name, avatar_url, user_type, location, bio, skills
+      )
+    `)
+    .eq('sender_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Accept or decline a pending connection request.
+ * Only works on pending requests (enforced by query + RLS policy).
+ * On accept — attempts to create a conversation (non-fatal if it fails).
  */
 export async function respondToRequest(requestId, status) {
+  // Validate status value
+  if (!['accepted', 'declined'].includes(status)) {
+    throw new Error('Invalid status. Must be "accepted" or "declined".');
+  }
+
+  // Fetch the request — only act on PENDING requests
   const { data: req, error: fetchError } = await supabase
     .from('connection_requests')
-    .select('sender_id, receiver_id')
+    .select('sender_id, receiver_id, type')
     .eq('id', requestId)
+    .eq('status', 'pending')
     .single();
-  if (fetchError) throw fetchError;
 
+  if (fetchError) throw fetchError;
+  if (!req) throw new Error('Request not found or already handled.');
+
+  // Update status
   const { error } = await supabase
     .from('connection_requests')
-    .update({ status })
+    .update({
+      status,
+      responded_at: new Date().toISOString(),
+    })
     .eq('id', requestId);
+
   if (error) throw error;
 
-  // If accepted, create a conversation
+  // If accepted, try to create a conversation
   if (status === 'accepted') {
-    await getOrCreateConversation(req.receiver_id, req.sender_id);
+    try {
+      await getOrCreateConversation(req.receiver_id, req.sender_id);
+    } catch (convErr) {
+      console.error('[respondToRequest] Could not create conversation:', convErr.message);
+      // Don't throw — the request is still accepted
+    }
   }
+}
+
+/**
+ * Withdraw a pending request that the user sent.
+ * Only works on pending requests (enforced by query + RLS policy).
+ */
+export async function withdrawRequest(requestId) {
+  const { error } = await supabase
+    .from('connection_requests')
+    .update({
+      status: 'withdrawn',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', requestId)
+    .eq('status', 'pending');
+
+  if (error) throw error;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -316,18 +412,53 @@ export async function getOrCreateConversation(userId, otherUserId) {
     .rpc('create_conversation_with_participants', {
       p_created_by: userId,
       p_other_user: otherUserId,
-      p_type:       'direct',
+      p_type: 'direct',
     });
   if (error) throw error;
   return data; // conversation UUID
 }
 
+
+
 /**
  * Fetch all conversations for a user, ordered by most recent message.
  * Includes: the other participant's profile + last message preview + unread count.
+ *
+ * PERFORMANCE: Fetches all messages per conversation in one query, then
+ * processes them in a single pass to extract last message + unread count.
+ * For production with heavy message volume, consider a DB view or RPC.
  */
+
+/**
+ * Upload a file to Supabase Storage for message attachments.
+ * Returns { url, name, size }.
+ */
+export async function uploadMessageFile(file) {
+  const ext = file.name.split('.').pop();
+  const path = `messages/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from('message-attachments')
+    .upload(path, file);
+
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('message-attachments')
+    .getPublicUrl(path);
+
+  return {
+    url: publicUrl,
+    name: file.name,
+    size: file.size < 1024 * 1024
+      ? `${(file.size / 1024).toFixed(0)} KB`
+      : `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+  };
+}
+
 export async function fetchConversations(userId) {
-  const { data, error } = await supabase
+  // Step 1: Get conversation list with participants
+  const { data: participants, error: pError } = await supabase
     .from('conversation_participants')
     .select(`
       conversation_id,
@@ -348,31 +479,47 @@ export async function fetchConversations(userId) {
     .eq('user_id', userId)
     .order('conversations(last_message_at)', { ascending: false });
 
-  if (error) throw error;
+  if (pError) throw pError;
+  if (!participants || participants.length === 0) return [];
 
-  return (data || []).map(row => {
-    const conv         = row.conversations;
-    const participants = conv.conversation_participants || [];
-    const otherParticipant = participants.find(p => p.user_id !== userId);
-    const messages     = conv.messages || [];
-    const lastMessage  = messages.sort((a, b) =>
-      new Date(b.created_at) - new Date(a.created_at)
-    )[0] || null;
+  // Step 2: Single-pass through all messages to build last message map + unread counts
+  const lastMsgMap = {};
+  const unreadMap = {};
 
-    // Unread = messages after last_read_at that weren't sent by this user
-    const unreadCount = messages.filter(m =>
-      m.sender_id !== userId &&
-      (!row.last_read_at || new Date(m.created_at) > new Date(row.last_read_at))
-    ).length;
+  for (const row of participants) {
+    const convId = row.conversation_id;
+    const readAt = row.last_read_at;
+    const messages = row.conversations?.messages || [];
 
+    for (const msg of messages) {
+      // Track latest message per conversation
+      const existing = lastMsgMap[convId];
+      if (!existing || new Date(msg.created_at) > new Date(existing.created_at)) {
+        lastMsgMap[convId] = msg;
+      }
+      // Count unread (not from self, after last_read_at)
+      if (msg.sender_id !== userId) {
+        if (!readAt || new Date(msg.created_at) > new Date(readAt)) {
+          unreadMap[convId] = (unreadMap[convId] || 0) + 1;
+        }
+      }
+    }
+  }
+
+  // Step 3: Assemble final array
+  return participants.map(row => {
+    const conv = row.conversations;
+    const otherParticipant = (conv.conversation_participants || []).find(
+      p => p.user_id !== userId
+    );
     return {
-      id:              conv.id,
-      type:            conv.type,
-      title:           conv.title,
+      id: conv.id,
+      type: conv.type,
+      title: conv.title,
       last_message_at: conv.last_message_at,
-      otherUser:       otherParticipant?.profiles || null,
-      lastMessage,
-      unreadCount,
+      otherUser: otherParticipant?.profiles || null,
+      lastMessage: lastMsgMap[conv.id] || null,
+      unreadCount: unreadMap[conv.id] || 0,
     };
   });
 }
@@ -406,10 +553,10 @@ export async function sendMessage(conversationId, senderId, content, type = 'tex
     .from('messages')
     .insert({
       conversation_id: conversationId,
-      sender_id:       senderId,
+      sender_id: senderId,
       content,
       type,
-      file_url:  fileData.url  || null,
+      file_url: fileData.url || null,
       file_name: fileData.name || null,
       file_size: fileData.size || null,
     })
@@ -446,9 +593,9 @@ export function subscribeToMessages(conversationId, onNewMessage) {
     .on(
       'postgres_changes',
       {
-        event:  'INSERT',
+        event: 'INSERT',
         schema: 'public',
-        table:  'messages',
+        table: 'messages',
         filter: `conversation_id=eq.${conversationId}`,
       },
       (payload) => onNewMessage(payload.new)
@@ -468,9 +615,9 @@ export function subscribeToConversations(userId, onChange) {
     .on(
       'postgres_changes',
       {
-        event:  '*',
+        event: '*',
         schema: 'public',
-        table:  'conversations',
+        table: 'conversations',
       },
       () => onChange()
     )
@@ -543,15 +690,15 @@ export async function fetchDashboardData(userId) {
       .limit(5),
   ]);
 
-  if (profileResult.error)    throw profileResult.error;
-  if (mentorsResult.error)    throw mentorsResult.error;
+  if (profileResult.error) throw profileResult.error;
+  if (mentorsResult.error) throw mentorsResult.error;
   if (coFoundersResult.error) throw coFoundersResult.error;
   // conversations failure is non-fatal — dashboard still works without it
 
   return {
-    profile:       profileResult.data,
-    mentors:       mentorsResult.data    || [],
-    coFounders:    coFoundersResult.data  || [],
+    profile: profileResult.data,
+    mentors: mentorsResult.data || [],
+    coFounders: coFoundersResult.data || [],
     conversations: conversationsResult.error ? [] : (conversationsResult.data || []),
   };
 }
