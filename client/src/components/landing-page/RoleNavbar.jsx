@@ -16,6 +16,8 @@ export default function RoleNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const [profileData, setProfileData] = useState(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  // ✅ NEW: Separate state for the resolved avatar URL
+  const [avatarUrl, setAvatarUrl] = useState(null);
 
   const userRole = user?.user_metadata?.user_type;
 
@@ -37,7 +39,28 @@ export default function RoleNavbar() {
         .eq('id', user.id)
         .single();
       
-      if (data) setProfileData(data);
+      if (data) {
+        setProfileData(data);
+
+        // ✅ Generate signed URL for private bucket
+        if (data.avatar_url) {
+          let cleanPath = data.avatar_url;
+          if (cleanPath.startsWith('avatars/')) {
+            cleanPath = cleanPath.replace('avatars/', '');
+          }
+          if (cleanPath.startsWith('http')) {
+            // Already a full URL (signed or old format)
+            setAvatarUrl(cleanPath);
+          } else {
+            const { data: urlData } = await supabase.storage
+              .from('avatars')
+              .createSignedUrl(cleanPath, 3600);
+            if (urlData?.signedUrl) {
+              setAvatarUrl(urlData.signedUrl);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -48,7 +71,6 @@ export default function RoleNavbar() {
     navigate('/');
   };
 
-  // Role-specific navigation items
   const getRoleNavItems = () => {
     const baseItems = [
       { icon: <Home className="w-4 h-4" />, label: 'Dashboard', path: '/dashboard' },
@@ -93,7 +115,6 @@ export default function RoleNavbar() {
 
   const navItems = getRoleNavItems();
 
-  // Get role icon
   const getRoleIcon = () => {
     switch(userRole) {
       case 'student': return <GraduationCap className="w-4 h-4" />;
@@ -104,10 +125,10 @@ export default function RoleNavbar() {
     }
   };
 
-  // Get avatar or initials
+  // ✅ FIXED: Use the resolved avatarUrl state
   const getAvatarDisplay = () => {
-    if (profileData?.avatar_url) {
-      return <img src={profileData.avatar_url} alt="Profile" className="w-full h-full object-cover" />;
+    if (avatarUrl) {
+      return <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover rounded-full" />;
     }
     
     const name = profileData?.full_name || user?.email || 'U';
@@ -148,7 +169,6 @@ export default function RoleNavbar() {
 
           {/* Desktop Right Section */}
           <div className="hidden md:flex items-center gap-4">
-            {/* Notifications */}
             <button className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all relative">
               <Bell className="w-5 h-5" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
@@ -160,7 +180,7 @@ export default function RoleNavbar() {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="flex items-center gap-3 p-2 pr-4 hover:bg-slate-50 rounded-full transition-all"
               >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center overflow-hidden">
                   {getAvatarDisplay()}
                 </div>
                 <div className="text-left">
@@ -174,7 +194,6 @@ export default function RoleNavbar() {
                 </div>
               </button>
 
-              {/* Profile Dropdown Menu */}
               {showProfileMenu && (
                 <>
                   <div 
@@ -236,9 +255,8 @@ export default function RoleNavbar() {
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-t border-slate-200">
           <div className="px-4 py-4 space-y-2">
-            {/* Profile Section */}
             <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl mb-4">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center overflow-hidden">
                 {getAvatarDisplay()}
               </div>
               <div>
@@ -252,7 +270,6 @@ export default function RoleNavbar() {
               </div>
             </div>
 
-            {/* Navigation Items */}
             {navItems.map((item, idx) => (
               <Link
                 key={idx}

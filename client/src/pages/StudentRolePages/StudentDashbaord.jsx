@@ -16,6 +16,51 @@ import {
   Video, Inbox, UserCheck, UserX, Loader, Megaphone, Calendar, DollarSign,
 } from 'lucide-react';
 
+// ✅ HELPER: Get signed URL for private bucket
+const getSignedUrl = async (avatarPath) => {
+  if (!avatarPath) return null;
+  if (avatarPath.startsWith('http')) return avatarPath;
+
+  let cleanPath = avatarPath;
+  if (cleanPath.startsWith('avatars/')) {
+    cleanPath = cleanPath.replace('avatars/', '');
+  }
+
+  try {
+    const { data } = await supabase.storage
+      .from('avatars')
+      .createSignedUrl(cleanPath, 3600);
+    return data?.signedUrl || null;
+  } catch {
+    return null;
+  }
+};
+
+// ✅ HELPER: Batch convert multiple avatar paths to signed URLs
+const batchGetSignedUrls = async (items, avatarKeyPath) => {
+  return Promise.all(
+    items.map(async (item) => {
+      const keys = avatarKeyPath.split('.');
+      let avatarPath = item;
+      for (const key of keys) {
+        avatarPath = avatarPath?.[key];
+      }
+
+      const signedUrl = await getSignedUrl(avatarPath);
+
+      // Deep clone and set the signed URL at the right path
+      const clone = JSON.parse(JSON.stringify(item));
+      let target = clone;
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!target[keys[i]]) target[keys[i]] = {};
+        target = target[keys[i]];
+      }
+      target[keys[keys.length - 1]] = signedUrl;
+      return clone;
+    })
+  );
+};
+
 const CSS = `
   .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
   .lift:hover{transform:translateY(-3px);box-shadow:0 16px 48px rgba(79,70,229,.11)}
@@ -60,8 +105,10 @@ function timeAgo(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 function roleGrad(t) {
-  return { mentor:'from-violet-500 to-indigo-500', investor:'from-emerald-500 to-teal-500', student:'from-indigo-500 to-violet-500', 'early-stage-founder':'from-amber-500 to-orange-500' }[t] || 'from-slate-400 to-slate-500';
+  return { mentor: 'from-violet-500 to-indigo-500', investor: 'from-emerald-500 to-teal-500', student: 'from-indigo-500 to-violet-500', 'early-stage-founder': 'from-amber-500 to-orange-500' }[t] || 'from-slate-400 to-slate-500';
 }
+
+// ✅ shapeMentor - avatar is now already a signed URL (set before calling)
 function shapeMentor(r) {
   const p = r.profiles || {};
   return {
@@ -72,6 +119,8 @@ function shapeMentor(r) {
     why: `Expert in ${(r.expertise_areas || []).slice(0, 2).join(' & ') || 'mentorship'}.`,
   };
 }
+
+// ✅ shapeCofounder - avatar is now already a signed URL
 function shapeCofounder(r, currentUserId) {
   const p = r.profiles || {};
   const skills = (r.skills_with_levels || []).map(s => s.skill || s).filter(Boolean);
@@ -157,6 +206,7 @@ function PeopleCard({ item, accentClass, ctaClass, ctaLabel, onConnect, onMessag
 function PendingRequestCard({ req, onAccept, onDecline, loading }) {
   const sender = req.sender || {};
   const typeLabel = req.type === 'mentor_request' ? 'Mentorship Request' : 'Co-Founder Request';
+  // ✅ avatar is already a signed URL now
   return (
     <div className="flex items-start gap-3 p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
       <Avatar name={sender.full_name} avatar={sender.avatar_url} grad={roleGrad(sender.user_type)} size="md" />
@@ -193,6 +243,9 @@ export default function StudentDashboard() {
   const [connectionStatuses, setConnectionStatuses] = useState({});
   const [opportunities, setOpportunities] = useState([]);
 
+  // ✅ NEW: Separate state for current user's avatar
+  const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState(null);
+
   const [pageLoading, setPageLoading] = useState(true);
   const [connsLoading, setConnsLoading] = useState(false);
   const [journeySaving, setJourneySaving] = useState(null);
@@ -208,6 +261,12 @@ export default function StudentDashboard() {
       ]);
       setProfile(profRes.data || {});
       setActivities(actRes.data || []);
+
+      // ✅ Get signed URL for current user's avatar
+      if (profRes.data?.avatar_url) {
+        const signedUrl = await getSignedUrl(profRes.data.avatar_url);
+        setCurrentUserAvatarUrl(signedUrl);
+      }
 
       const { data: spData } = await supabase.from('student_profiles').select('*').eq('user_id', user.id).maybeSingle();
       setSp(spData || {});
@@ -229,15 +288,24 @@ export default function StudentDashboard() {
           fetchIncomingRequests(user.id).catch(() => []),
           supabase.from('opportunities').select('*').eq('is_active', true).order('deadline', { ascending: true }).limit(5).then(r => r.data || []).catch(() => []),
         ]);
-        setConvos(convData);
-        setMentors(mentorData.map(shapeMentor));
-        setCoFounders(cfData.filter(r => r.user_id !== user.id).map(r => shapeCofounder(r, user.id)));
-        setIncomingRequests(reqData);
+
+        // ✅ Convert ALL avatar paths to signed URLs in parallel
+        const [mentorsWithUrls, cfWithUrls, reqsWithUrls, convsWithUrls] = await Promise.all([
+          batchGetSignedUrls(mentorData, 'profiles.avatar_url'),
+          batchGetSignedUrls(cfData, 'profiles.avatar_url'),
+          batchGetSignedUrls(reqData, 'sender.avatar_url'),
+          batchGetSignedUrls(convData, 'otherUser.avatar_url'),
+        ]);
+
+        setConvos(convsWithUrls);
+        setMentors(mentorsWithUrls.map(shapeMentor));
+        setCoFounders(cfWithUrls.filter(r => r.user_id !== user.id).map(r => shapeCofounder(r, user.id)));
+        setIncomingRequests(reqsWithUrls);
         setOpportunities(oppData);
 
         const statuses = {};
-        for (const m of mentorData.slice(0, 6)) {
-          try { const status = await getConnectionStatus(user.id, m.user_id, 'mentor_request'); if (status) statuses[m.user_id] = status; } catch {}
+        for (const m of mentorsWithUrls.slice(0, 6)) {
+          try { const status = await getConnectionStatus(user.id, m.user_id, 'mentor_request'); if (status) statuses[m.user_id] = status; } catch { }
         }
         setConnectionStatuses(statuses);
       } finally { setConnsLoading(false); }
@@ -445,9 +513,9 @@ export default function StudentDashboard() {
                         <p className="text-sm font-semibold text-slate-800">
                           {!ideaAnswered ? 'Answer the journey questions above to get personalised guidance.'
                             : !hasStartupIdea ? "Explore ideas and mentors — you don't need an idea to start building your network."
-                            : !hasCofounder ? 'You have an idea — now find a co-founder with complementary skills.'
-                            : !hasConnectedMentor ? 'Great team! Now find a mentor to guide your startup journey.'
-                            : "You're on track. Focus on validating your idea with real users."}
+                              : !hasCofounder ? 'You have an idea — now find a co-founder with complementary skills.'
+                                : !hasConnectedMentor ? 'Great team! Now find a mentor to guide your startup journey.'
+                                  : "You're on track. Focus on validating your idea with real users."}
                         </p>
                         <Link to={primaryCTA.to} className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-all">{primaryCTA.label} <ArrowRight className="w-3.5 h-3.5" /></Link>
                       </div>
@@ -624,7 +692,7 @@ export default function StudentDashboard() {
                 <div className="relative">
                   <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">My Profile</h3><Shield className="w-5 h-5 text-slate-400" /></div>
                   <div className="flex items-center gap-3 mb-4">
-                    <Avatar name={p.full_name} avatar={p.avatar_url} grad="from-indigo-400 to-violet-500" size="xl" />
+                    <Avatar name={p.full_name} avatar={currentUserAvatarUrl} grad="from-indigo-400 to-violet-500" size="xl" />
                     <div className="min-w-0">
                       <p className="font-semibold truncate">{p.full_name || 'Complete your profile'}</p>
                       <p className="text-slate-400 text-xs flex items-center gap-1 mt-0.5"><GraduationCap className="w-3 h-3" />{s.university || 'Student'}</p>

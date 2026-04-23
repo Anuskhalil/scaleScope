@@ -82,6 +82,11 @@ const makeEmpty = (user, role) => ({
   commitment_level: '',
 });
 
+
+function slugify(text) {
+  return (text || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+}
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -101,6 +106,8 @@ export default function ProfilePage() {
   const [skillInput, setSkillInput] = useState('');
   const [interestInput, setInterestInput] = useState('');
 
+  const avatarPathRef = useRef(null);
+
   useEffect(() => { if (user) load(); }, [user]);
 
   const load = async () => {
@@ -113,6 +120,22 @@ export default function ProfilePage() {
         sd = data || {};
       }
       if (pd) {
+        // Convert stored avatar PATH to a signed URL for display
+        let avatarDisplay = pd.avatar_url || '';
+        avatarPathRef.current = avatarDisplay;
+
+        if (avatarDisplay && !avatarDisplay.includes('/object/sign/')) {
+          // It's a path, not a signed URL — generate one
+          try {
+            const { data: urlData } = await supabase.storage
+              .from('avatars')
+              .createSignedUrl(avatarDisplay, 86400);
+            if (urlData?.signedUrl) avatarDisplay = urlData.signedUrl;
+          } catch {
+            avatarDisplay = ''; // Signed URL failed — show fallback
+          }
+        }
+
         const m = {
           ...makeEmpty(user, userRole),
           full_name: pd.full_name || '',
@@ -120,7 +143,7 @@ export default function ProfilePage() {
           user_type: pd.user_type || userRole || '',
           location: pd.location || '',
           bio: pd.bio || '',
-          avatar_url: pd.avatar_url || '',
+          avatar_url: avatarDisplay,
           linkedin_url: pd.linkedin_url || '',
           github_url: pd.github_url || '',
           twitter_url: pd.twitter_url || '',
@@ -144,9 +167,15 @@ export default function ProfilePage() {
         snapRef.current = m;
         setFormData(m);
         setIsEditMode(false);
-      } else { setIsEditMode(true); }
-    } catch (err) { console.error(err); setIsEditMode(true); }
-    finally { setLoading(false); }
+      } else {
+        setIsEditMode(true);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsEditMode(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpdate = async (e) => {
@@ -161,7 +190,7 @@ export default function ProfilePage() {
         user_type: formData.user_type,
         location: formData.location,
         bio: formData.bio,
-        avatar_url: formData.avatar_url,
+        avatar_url: avatarPathRef.current || formData.avatar_url,
         linkedin_url: formData.linkedin_url,
         github_url: formData.github_url,
         twitter_url: formData.twitter_url,
@@ -206,13 +235,43 @@ export default function ProfilePage() {
     if (!file || file.size > 5 * 1024 * 1024 || !file.type.startsWith('image/')) return;
     setUploading(true);
     try {
-      const path = `avatars/${user.id}.${file.name.split('.').pop()}`;
-      const { error: ue } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+      const ext = file.name.split('.').pop();
+      const username = slugify(formData.full_name || 'user');
+
+      // ✅ FIX: Remove "avatars/" prefix - bucket name already handles it
+      const path = `${username}_${user.id}.${ext}`;
+
+      // 1. Upload file
+      const { error: ue } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true });
       if (ue) throw ue;
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
-      setFormData(prev => ({ ...prev, avatar_url: publicUrl }));
-    } catch (err) { alert('Upload failed: ' + err.message); }
-    finally { setUploading(false); }
+
+      // 2. Generate a signed URL
+      const { data: urlData, error: urlErr } = await supabase.storage
+        .from('avatars')
+        .createSignedUrl(path, 86400);
+      if (urlErr) throw urlErr;
+
+      // 3. Store the raw PATH in database
+      avatarPathRef.current = path;
+      await supabase
+        .from('profiles')
+        .update({
+          avatar_url: path,
+          updated_at: new Date().toISOString(),
+          last_active: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      // 4. Show the signed URL in state
+      setFormData(prev => ({ ...prev, avatar_url: urlData.signedUrl }));
+
+    } catch (err) {
+      alert('Upload failed: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const togSkill = s => setFormData(prev => ({ ...prev, skills: prev.skills.includes(s) ? prev.skills.filter(x => x !== s) : [...prev.skills, s] }));
@@ -431,11 +490,11 @@ function ViewMode({ formData, isStudent }) {
       <Sec title="Skills" icon={<Briefcase className="w-5 h-5 text-indigo-500" />}>
         {(formData.skills || []).length > 0
           ? <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">{formData.skills.map((s, i) => {
-                const lvl = (formData.skills_with_levels || []).find(x => x.skill === s);
-                return <span key={i} className="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-xs font-semibold">{s}{lvl ? <span className="text-indigo-400 ml-1">· {lvl.level}</span> : ''}</span>;
-              })}</div>
-            </div>
+            <div className="flex flex-wrap gap-2">{formData.skills.map((s, i) => {
+              const lvl = (formData.skills_with_levels || []).find(x => x.skill === s);
+              return <span key={i} className="px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-xs font-semibold">{s}{lvl ? <span className="text-indigo-400 ml-1">· {lvl.level}</span> : ''}</span>;
+            })}</div>
+          </div>
           : <Empty label="No skills added yet." />
         }
       </Sec>
