@@ -1,13 +1,5 @@
 // src/pages/DiscoverPage.jsx
-// ─── Discover Page — Final Brief ────────────────────────────────────────────
-// 4 sections:
-//   0. AI Recommended (top — based on student skills + interests + looking_for)
-//   1. Startups & Ideas   (founder_profiles + profiles)
-//   2. People             (mentors + co-founder-seeking students)
-//   3. Opportunities      (opportunities table)
-//
-// All data is real Supabase. Filters are client-side for speed.
-// ────────────────────────────────────────────────────────────────────────────
+// ─── Optimized Discover Page — AI-Transparent, Accessible, Production-Ready ───
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -25,10 +17,13 @@ import {
   Award, Filter, ChevronRight, CheckCircle, BarChart2,
   FileText, Gift, Megaphone, X, Loader, RefreshCw,
   UserPlus, MessageSquare, TrendingUp, ChevronDown, ChevronUp,
-  Building, Tag, Globe2, Users2,
+  Building, Tag, Globe2, Users2, Info,
 } from 'lucide-react';
 
-// ─── Design tokens ────────────────────────────────────────────────────────
+// 🔧 CHANGED: Added toast for user feedback
+import toast from 'react-hot-toast';
+
+// 🔧 CHANGED: Added CSS for tooltips, focus states, and better loading
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
   .ss{font-family:'Syne',sans-serif}
@@ -67,7 +62,79 @@ const CSS = `
   .opp-badge-hackathon{background:#fff7ed;color:#ea580c;border:1.5px solid #fed7aa}
   .opp-badge-accelerator{background:#fef9c3;color:#ca8a04;border:1.5px solid #fde68a}
   .opp-badge-grant{background:#ecfdf5;color:#059669;border:1.5px solid #a7f3d0}
+  
+  /* 🔧 CHANGED: Accessibility focus states & lightweight tooltip */
+  button:focus-visible, a:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  .tooltip-wrap{position:relative}
+  .tooltip-wrap:hover .tooltip-box{opacity:1;visibility:visible;transform:translateY(0)}
+  .tooltip-box{opacity:0;visibility:hidden;transform:translateY(4px);transition:all .15s ease;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%) translateY(4px);background:#1e293b;color:#fff;font-size:11px;padding:8px 10px;border-radius:8px;white-space:nowrap;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.15);max-width:240px;white-space:normal;text-align:left}
+  .tooltip-box::after{content:'';position:absolute;top:100%;left:50%;margin-left:-4px;border-width:4px;border-style:solid;border-color:#1e293b transparent transparent transparent}
 `;
+
+// 🔧 CHANGED: Safe fetch wrapper to prevent silent failures
+async function safeFetch(promise, fallback = [], onError = null) {
+  try {
+    const res = await promise;
+    return res?.data || fallback;
+  } catch (error) {
+    console.error('[SafeFetch] Error:', error);
+    if (onError) onError(error);
+    return fallback;
+  }
+}
+
+// 🔧 CHANGED: Simple avatar cache to reduce Supabase storage calls
+const AVATAR_CACHE = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 mins
+
+async function getCachedSignedUrl(path) {
+  if (!path || path.startsWith('http')) return path;
+  const cacheKey = `avatar:${path}`;
+  const cached = AVATAR_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.url;
+
+  try {
+    const cleanPath = path.replace(/^avatars\//, '');
+    const { data } = await supabase.storage.from('avatars').createSignedUrl(cleanPath, 3600);
+    if (data?.signedUrl) {
+      AVATAR_CACHE.set(cacheKey, { url: data.signedUrl, timestamp: Date.now() });
+      return data.signedUrl;
+    }
+  } catch (e) { console.warn('Avatar URL error:', e); }
+  return path;
+}
+
+// 🔧 CHANGED: AI match explanation generator for transparency
+function getMatchExplanation(userProfile, suggested, matchType) {
+  if (!userProfile) return ['Based on your profile activity'];
+  const reasons = [];
+  
+  if (matchType === 'mentor') {
+    const p = suggested.profiles || {};
+    const skillOverlap = userProfile.skills?.filter(s => p.expertise_areas?.includes(s)) || [];
+    if (skillOverlap.length) reasons.push(`Expertise overlap: ${skillOverlap.slice(0, 2).join(', ')}`);
+    
+    const interestOverlap = userProfile.interests?.filter(i => p.interests?.includes(i)) || [];
+    if (interestOverlap.length) reasons.push(`Shared interest in ${interestOverlap[0]}`);
+    
+    if (userProfile.location && p.location === userProfile.location) reasons.push('Same location');
+  } else if (matchType === 'startup') {
+    if (suggested.industry && userProfile.interests?.some(i => i.toLowerCase().includes(suggested.industry.toLowerCase()))) {
+      reasons.push(`Matches your interest: ${suggested.industry}`);
+    }
+    if (userProfile.startup_idea_description) reasons.push('You also have a startup idea');
+  } else {
+    // Co-founder matching
+    const userSkills = new Set(userProfile.skills_with_levels?.map(s => s.skill) || []);
+    const candSkills = new Set((suggested.skills_with_levels || []).map(s => s.skill));
+    const complementary = [...candSkills].filter(s => !userSkills.has(s)).slice(0, 2);
+    if (complementary.length) reasons.push(`Complements with: ${complementary.join(', ')}`);
+    
+    if (suggested.has_startup_idea && userProfile.startup_idea_description) reasons.push('Both actively building');
+  }
+  
+  return reasons.length > 0 ? reasons : ['Profile alignment based on activity'];
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 function initials(name) {
@@ -120,7 +187,7 @@ function SectionHead({ eye, title, action, actionTo }) {
         <h2 className="ss text-xl font-bold text-slate-900">{title}</h2>
       </div>
       {action && actionTo && (
-        <Link to={actionTo} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors">
+        <Link to={actionTo} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 transition-colors" aria-label={`Browse all ${title.toLowerCase()}`}>
           {action}<ChevronRight className="w-3.5 h-3.5" />
         </Link>
       )}
@@ -152,7 +219,7 @@ export default function DiscoverPage() {
   const [loadingMore, setLoadingMore] = useState(false);
 
   // ── Filters ─────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('startups'); // startups | people | opportunities
+  const [activeTab, setActiveTab] = useState('startups');
   const [industryFilter, setIndustryFilter] = useState('All');
   const [roleFilter, setRoleFilter] = useState('All');
   const [oppTypeFilter, setOppTypeFilter] = useState('All');
@@ -169,60 +236,60 @@ export default function DiscoverPage() {
     try {
       // 1. Student's own profile (for AI recommendations)
       const [profRes, spRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
-        supabase.from('student_profiles').select('*').eq('user_id', user.id).maybeSingle(),
+        safeFetch(supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(), {}, () => toast.error('Failed to load profile')),
+        safeFetch(supabase.from('student_profiles').select('*').eq('user_id', user.id).maybeSingle(), {}, () => toast.error('Failed to load student details')),
       ]);
-      const merged = { ...(profRes.data || {}), ...(spRes.data || {}) };
+      const merged = { ...(profRes || {}), ...(spRes || {}) };
       setStudentProfile(merged);
 
       // 2. Startups / Ideas — founder_profiles JOIN profiles
-      const { data: founderData } = await supabase
-        .from('founder_profiles')
-        .select(`
-          id, user_id,
-          company_name, company_stage, industry, founding_year,
-          team_size, funding_stage, looking_for, problem_solving,
-          target_market, idea_title, startup_stage, unique_value_proposition,
-          profiles (
-            id, full_name, bio, avatar_url, location,
-            linkedin_url, github_url
-          )
-        `)
-        .limit(20);
-
+      const { data: founderData } = await safeFetch(
+        supabase.from('founder_profiles')
+          .select(`
+            id, user_id,
+            company_name, company_stage, industry, founding_year,
+            team_size, funding_stage, looking_for, problem_solving,
+            target_market, idea_title, startup_stage, unique_value_proposition,
+            profiles (
+              id, full_name, bio, avatar_url, location,
+              linkedin_url, github_url
+            )
+          `)
+          .limit(20),
+        []
+      );
       setStartups(founderData || []);
 
       // 3. People — mentors + co-founder-seeking students
       const [mentorRes, cfRes] = await Promise.all([
-        supabase
-          .from('mentor_profiles')
-          .select(`
-            id, user_id,
-            expertise_areas, years_experience, current_role, current_company,
-            is_pro_bono, can_help_with, available_for, mentorship_style,
-            profiles (
-              id, full_name, bio, avatar_url, location, skills
-            )
-          `)
-          .limit(12),
-
-        supabase
-          .from('student_profiles')
-          .select(`
-            id, user_id,
-            skills_with_levels, looking_for, help_needed, interests,
-            commitment_level, has_startup_idea, startup_idea_description,
-            profiles (
-              id, full_name, bio, avatar_url, location, skills
-            )
-          `)
-          .contains('looking_for', ['Co-Founder'])
-          .neq('user_id', user.id)
-          .limit(12),
+        safeFetch(
+          supabase.from('mentor_profiles')
+            .select(`
+              id, user_id,
+              expertise_areas, years_experience, current_role, current_company,
+              is_pro_bono, can_help_with, available_for, mentorship_style,
+              profiles (id, full_name, bio, avatar_url, location, skills)
+            `)
+            .limit(12),
+          []
+        ),
+        safeFetch(
+          supabase.from('student_profiles')
+            .select(`
+              id, user_id,
+              skills_with_levels, looking_for, help_needed, interests,
+              commitment_level, has_startup_idea, startup_idea_description,
+              profiles (id, full_name, bio, avatar_url, location, skills)
+            `)
+            .contains('looking_for', ['Co-Founder'])
+            .neq('user_id', user.id)
+            .limit(12),
+          []
+        ),
       ]);
 
       // Shape into unified people array
-      const mentorPeople = (mentorRes.data || []).map(m => ({
+      const mentorPeople = (mentorRes || []).map(m => ({
         _type: 'mentor',
         id: m.id,
         user_id: m.user_id,
@@ -238,7 +305,7 @@ export default function DiscoverPage() {
         available: (m.available_for || []).length > 0,
       }));
 
-      const cfPeople = (cfRes.data || []).map(s => {
+      const cfPeople = (cfRes || []).map(s => {
         const skillNames = (s.skills_with_levels || []).map(x => x.skill || x).filter(Boolean);
         return {
           _type: 'cofounder',
@@ -259,22 +326,24 @@ export default function DiscoverPage() {
       setPeople([...mentorPeople, ...cfPeople]);
 
       // 4. Opportunities
-      const { data: oppData } = await supabase
-        .from('opportunities')
-        .select('*')
-        .eq('is_active', true)
-        .order('is_featured', { ascending: false })
-        .order('deadline', { ascending: true })
-        .limit(20);
-
+      const { data: oppData } = await safeFetch(
+        supabase.from('opportunities')
+          .select('*')
+          .eq('is_active', true)
+          .order('is_featured', { ascending: false })
+          .order('deadline', { ascending: true })
+          .limit(20),
+        []
+      );
       setOpportunities(oppData || []);
 
       // 5. AI Recommendations — filter by student skills + interests
       if (merged) {
-        buildRecommendations(merged, founderData || [], mentorRes.data || [], cfRes.data || []);
+        buildRecommendations(merged, founderData || [], mentorRes || [], cfRes || []);
       }
     } catch (err) {
       console.error('[Discover]', err);
+      toast.error('Failed to load discover page');
     } finally {
       setLoadingPage(false);
     }
@@ -361,9 +430,10 @@ export default function DiscoverPage() {
     setConnecting(p => ({ ...p, [targetUserId]: true }));
     try {
       await sendConnectionRequest(user.id, targetUserId, type);
+      toast.success('Connection request sent!');
     } catch (err) {
       if (!err.message?.includes('duplicate') && !err.message?.includes('23505')) {
-        alert('Could not send request: ' + err.message);
+        toast.error('Could not send request: ' + err.message);
       }
     } finally {
       setConnecting(p => ({ ...p, [targetUserId]: 'sent' }));
@@ -375,7 +445,11 @@ export default function DiscoverPage() {
     try {
       await getOrCreateConversation(user.id, targetUserId);
       navigate('/messages');
-    } catch (err) { console.error(err); }
+      toast.success('Opening conversation...');
+    } catch (err) { 
+      console.error(err); 
+      toast.error('Failed to open conversation');
+    }
   };
 
   // ── Filter logic ──────────────────────────────────────────────────────
@@ -410,10 +484,10 @@ export default function DiscoverPage() {
   if (loadingPage) return (
     <>
       <style>{CSS}</style>
-      <div className="min-h-screen page-bg flex items-center justify-center">
+      <div className="min-h-screen page-bg flex items-center justify-center" role="status" aria-live="polite">
         <div className="text-center">
           <div className="w-12 h-12 g-ind rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Globe className="w-6 h-6 text-white" />
+            <Globe className="w-6 h-6 text-white" aria-hidden="true" />
           </div>
           <p className="ss font-bold text-slate-900 text-lg">Loading Discover</p>
           <p className="text-slate-400 text-sm dm mt-1">Fetching the ecosystem…</p>
@@ -431,7 +505,7 @@ export default function DiscoverPage() {
           {/* ── PAGE HEADER ─────────────────────────────────────────── */}
           <div className="mb-8 f0">
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-500 uppercase tracking-widest bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full mb-3">
-              <Globe className="w-3.5 h-3.5" /> Discover
+              <Globe className="w-3.5 h-3.5" aria-hidden="true" /> Discover
             </span>
             <h1 className="ss text-3xl md:text-4xl font-black text-slate-900 mb-2">
               Explore the Ecosystem
@@ -444,15 +518,16 @@ export default function DiscoverPage() {
           {/* ── SEARCH ──────────────────────────────────────────────── */}
           <div className="rounded-2xl transition-all mb-6 f1">
             <div className="flex items-center bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-              <Search className="w-5 h-5 text-slate-400 ml-4 flex-shrink-0" />
+              <Search className="w-5 h-5 text-slate-400 ml-4 flex-shrink-0" aria-hidden="true" />
               <input
                 type="text" value={query} onChange={e => setQuery(e.target.value)}
                 placeholder="Search startups, people, opportunities…"
                 className="flex-1 px-3 py-4 text-sm text-slate-800 bg-transparent outline-none placeholder-slate-400 dm"
+                aria-label="Search discover content"
               />
               {query && (
-                <button onClick={() => setQuery('')} className="mr-2 p-1.5 hover:bg-slate-100 rounded-lg transition-all">
-                  <X className="w-4 h-4 text-slate-400" />
+                <button onClick={() => setQuery('')} className="mr-2 p-1.5 hover:bg-slate-100 rounded-lg transition-all" aria-label="Clear search">
+                  <X className="w-4 h-4 text-slate-400" aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -465,8 +540,12 @@ export default function DiscoverPage() {
               { key: 'people', label: '🤝 People', count: filteredPeople.length },
               { key: 'opportunities', label: '🎯 Opportunities', count: filteredOpps.length },
             ].map(tab => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`tab flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === tab.key ? 'active' : 'inactive'}`}>
+              <button 
+                key={tab.key} 
+                onClick={() => setActiveTab(tab.key)}
+                className={`tab flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap ${activeTab === tab.key ? 'active' : 'inactive'}`}
+                aria-pressed={activeTab === tab.key}
+              >
                 {tab.label}
                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${activeTab === tab.key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
                   {tab.count}
@@ -487,7 +566,7 @@ export default function DiscoverPage() {
                   {/* Banner */}
                   <div className="bg-gradient-to-r from-indigo-600 to-violet-600 rounded-2xl p-5 text-white flex items-center gap-4 mb-5">
                     <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <Sparkles className="w-5 h-5" />
+                      <Sparkles className="w-5 h-5" aria-hidden="true" />
                     </div>
                     <div className="flex-1">
                       <p className="font-bold text-sm ss">🔥 Recommended for You</p>
@@ -505,7 +584,10 @@ export default function DiscoverPage() {
 
                   <div className="grid sm:grid-cols-2 gap-4">
                     {recommended.slice(0, 4).map((r, i) => (
-                      <RecCard key={i} item={r}
+                      <RecCard 
+                        key={i} 
+                        item={r}
+                        userProfile={studentProfile}
                         onConnect={() => handleConnect(r.user_id || r.profiles?.id, r._rec_type === 'mentor' ? 'mentor_request' : 'cofounder_request')}
                         onMessage={() => handleMessage(r.user_id || r.profiles?.id)}
                         connecting={connecting[r.user_id || r.profiles?.id]}
@@ -524,19 +606,24 @@ export default function DiscoverPage() {
                       <h2 className="ss text-xl font-bold text-slate-900">Startups & Ideas</h2>
                     </div>
                     <Link to="/find-cofounders"
-                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                      Find co-founders<ChevronRight className="w-3.5 h-3.5" />
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                      aria-label="Find co-founders">
+                      Find co-founders<ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                     </Link>
                   </div>
 
                   {/* Industry filter */}
                   <div className="flex gap-2 overflow-x-auto no-scroll pb-2 mb-5">
                     {INDUSTRIES.map(ind => (
-                      <button key={ind} onClick={() => setIndustryFilter(ind)}
+                      <button 
+                        key={ind} 
+                        onClick={() => setIndustryFilter(ind)}
                         className={`text-xs font-semibold px-3.5 py-2 rounded-xl whitespace-nowrap transition-all ${industryFilter === ind
                             ? 'bg-indigo-600 text-white shadow-sm'
                             : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600'
-                          }`}>
+                          }`}
+                        aria-pressed={industryFilter === ind}
+                      >
                         {ind}
                       </button>
                     ))}
@@ -545,7 +632,10 @@ export default function DiscoverPage() {
                   {filteredStartups.length > 0 ? (
                     <div className="grid sm:grid-cols-2 gap-4">
                       {filteredStartups.map((f, i) => (
-                        <StartupCard key={f.id || i} founder={f} index={i}
+                        <StartupCard 
+                          key={f.id || i} 
+                          founder={f} 
+                          index={i}
                           onConnect={() => handleConnect(f.user_id, 'cofounder_request')}
                           onMessage={() => handleMessage(f.user_id)}
                           connecting={connecting[f.user_id]}
@@ -555,7 +645,11 @@ export default function DiscoverPage() {
                       ))}
                     </div>
                   ) : (
-                    <EmptyState icon="🚀" label={query ? `No startups matching "${query}"` : 'No startups in the ecosystem yet.'} sub="Founders will appear here once they join." />
+                    <EmptyState 
+                      icon="🚀" 
+                      label={query ? `No startups matching "${query}"` : 'No startups in the ecosystem yet.'} 
+                      sub="Founders will appear here once they join." 
+                    />
                   )}
                 </section>
               )}
@@ -569,19 +663,24 @@ export default function DiscoverPage() {
                       <h2 className="ss text-xl font-bold text-slate-900">Mentors & Co-Founders</h2>
                     </div>
                     <Link to="/find-mentors"
-                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                      Find mentors<ChevronRight className="w-3.5 h-3.5" />
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                      aria-label="Find mentors">
+                      Find mentors<ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                     </Link>
                   </div>
 
                   {/* Role filter */}
                   <div className="flex gap-2 mb-5">
                     {PEOPLE_ROLES.map(role => (
-                      <button key={role} onClick={() => setRoleFilter(role)}
+                      <button 
+                        key={role} 
+                        onClick={() => setRoleFilter(role)}
                         className={`text-xs font-semibold px-3.5 py-2 rounded-xl whitespace-nowrap transition-all ${roleFilter === role
                             ? 'bg-indigo-600 text-white shadow-sm'
                             : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600'
-                          }`}>
+                          }`}
+                        aria-pressed={roleFilter === role}
+                      >
                         {role}
                       </button>
                     ))}
@@ -590,7 +689,11 @@ export default function DiscoverPage() {
                   {filteredPeople.length > 0 ? (
                     <div className="space-y-4">
                       {filteredPeople.map((p, i) => (
-                        <PeopleCard key={p.id || i} person={p} index={i}
+                        <PeopleCard 
+                          key={p.id || i} 
+                          person={p} 
+                          index={i}
+                          userProfile={studentProfile}
                           onConnect={() => handleConnect(p.user_id, p._type === 'mentor' ? 'mentor_request' : 'cofounder_request')}
                           onMessage={() => handleMessage(p.user_id)}
                           connecting={connecting[p.user_id]}
@@ -598,7 +701,11 @@ export default function DiscoverPage() {
                       ))}
                     </div>
                   ) : (
-                    <EmptyState icon="👥" label={query ? `No people matching "${query}"` : 'No people found with that filter.'} sub="Try All or a different role filter." />
+                    <EmptyState 
+                      icon="👥" 
+                      label={query ? `No people matching "${query}"` : 'No people found with that filter.'} 
+                      sub="Try All or a different role filter." 
+                    />
                   )}
                 </section>
               )}
@@ -616,11 +723,15 @@ export default function DiscoverPage() {
                   {/* Type filter */}
                   <div className="flex gap-2 overflow-x-auto no-scroll pb-2 mb-5">
                     {OPP_TYPES.map(type => (
-                      <button key={type} onClick={() => setOppTypeFilter(type)}
+                      <button 
+                        key={type} 
+                        onClick={() => setOppTypeFilter(type)}
                         className={`text-xs font-semibold px-3.5 py-2 rounded-xl whitespace-nowrap capitalize transition-all ${oppTypeFilter === type
                             ? 'bg-indigo-600 text-white shadow-sm'
                             : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600'
-                          }`}>
+                          }`}
+                        aria-pressed={oppTypeFilter === type}
+                      >
                         {type}
                       </button>
                     ))}
@@ -633,7 +744,11 @@ export default function DiscoverPage() {
                       ))}
                     </div>
                   ) : (
-                    <EmptyState icon="🎯" label={query ? `No opportunities matching "${query}"` : 'No open opportunities right now.'} sub="Check back soon — new ones are added weekly." />
+                    <EmptyState 
+                      icon="🎯" 
+                      label={query ? `No opportunities matching "${query}"` : 'No open opportunities right now.'} 
+                      sub="Check back soon — new ones are added weekly." 
+                    />
                   )}
                 </section>
               )}
@@ -646,21 +761,24 @@ export default function DiscoverPage() {
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 f0">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="ss font-bold text-slate-900 text-base">Top Mentors</h3>
-                  <Link to="/find-mentors" className="text-xs font-semibold text-indigo-600 flex items-center gap-0.5">
-                    All<ChevronRight className="w-3.5 h-3.5" />
+                  <Link to="/find-mentors" className="text-xs font-semibold text-indigo-600 flex items-center gap-0.5" aria-label="View all mentors">
+                    All<ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
                   </Link>
                 </div>
                 {people.filter(p => p._type === 'mentor').slice(0, 4).map((m, i) => (
                   <div key={m.id || i} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 cursor-pointer transition-all group mb-1">
-                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradFor(m.user_id)} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`}>
+                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradFor(m.user_id)} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`} aria-hidden="true">
                       {initials(m.name)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors truncate ss">{m.name}</p>
                       <p className="text-xs text-slate-500 truncate">{m.role}{m.org ? ` · ${m.org}` : ''}</p>
                     </div>
-                    <button onClick={() => handleConnect(m.user_id, 'mentor_request')}
-                      className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100 transition-all whitespace-nowrap flex-shrink-0">
+                    <button 
+                      onClick={() => handleConnect(m.user_id, 'mentor_request')}
+                      className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg hover:bg-indigo-100 transition-all whitespace-nowrap flex-shrink-0"
+                      aria-label={`Request mentorship from ${m.name}`}
+                    >
                       {connecting[m.user_id] === 'sent' ? 'Sent ✓' : 'Request'}
                     </button>
                   </div>
@@ -677,7 +795,7 @@ export default function DiscoverPage() {
               {/* ── Upcoming deadlines ─────────────────────────────── */}
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 f1">
                 <h3 className="ss font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-500" /> Closing Soon
+                  <Calendar className="w-4 h-4 text-indigo-500" aria-hidden="true" /> Closing Soon
                 </h3>
                 <div className="space-y-3">
                   {opportunities
@@ -689,8 +807,10 @@ export default function DiscoverPage() {
                       return (
                         <div key={opp.id || i} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
                           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                            style={{ background: '#eef2ff', color: '#4f46e5' }}>
-                            {OPP_ICONS[opp.type] || <Gift className="w-4 h-4" />}
+                            style={{ background: '#eef2ff', color: '#4f46e5' }}
+                            aria-hidden="true"
+                          >
+                            {OPP_ICONS[opp.type] || <Gift className="w-4 h-4" aria-hidden="true" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-800 truncate">{opp.title}</p>
@@ -705,8 +825,11 @@ export default function DiscoverPage() {
                     <p className="text-xs text-slate-400 italic">No upcoming deadlines.</p>
                   )}
                 </div>
-                <button onClick={() => setActiveTab('opportunities')}
-                  className="w-full mt-3 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all ss tracking-wide">
+                <button 
+                  onClick={() => setActiveTab('opportunities')}
+                  className="w-full mt-3 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold rounded-xl transition-all ss tracking-wide"
+                  aria-label="View all opportunities"
+                >
                   VIEW ALL →
                 </button>
               </div>
@@ -723,7 +846,7 @@ export default function DiscoverPage() {
                   ].map(({ label, val, Icon, col, bg }) => (
                     <div key={label} className="flex items-center gap-3">
                       <div className={`w-8 h-8 ${bg} ${col} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                        <Icon className="w-4 h-4" />
+                        <Icon className="w-4 h-4" aria-hidden="true" />
                       </div>
                       <div className="flex-1">
                         <p className="text-xs text-slate-500">{label}</p>
@@ -756,14 +879,14 @@ function StartupCard({ founder, index, onConnect, onMessage, connecting, liked, 
       {/* Top row */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2.5">
-          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grade} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`}>
+          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grade} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`} aria-hidden="true">
             {initials(p.full_name)}
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-700 ss">{p.full_name || 'Founder'}</p>
             {p.location && (
               <p className="text-xs text-slate-400 flex items-center gap-1">
-                <MapPin className="w-2.5 h-2.5" />{p.location}
+                <MapPin className="w-2.5 h-2.5" aria-hidden="true" />{p.location}
               </p>
             )}
           </div>
@@ -781,27 +904,37 @@ function StartupCard({ founder, index, onConnect, onMessage, connecting, liked, 
       {/* Target market */}
       {founder.target_market && (
         <p className="text-xs text-slate-400 mb-3 flex items-center gap-1">
-          <Tag className="w-3 h-3" />Target: {founder.target_market}
+          <Tag className="w-3 h-3" aria-hidden="true" />Target: {founder.target_market}
         </p>
       )}
 
       {/* CTAs */}
       <div className="flex items-center gap-2">
-        <button onClick={onMessage}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all">
-          <MessageSquare className="w-3.5 h-3.5" /> Message
+        <button 
+          onClick={onMessage}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all"
+          aria-label={`Message ${name}`}
+        >
+          <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> Message
         </button>
-        <button onClick={onConnect} disabled={connecting === 'sent'}
+        <button 
+          onClick={onConnect} 
+          disabled={connecting === 'sent'}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all ${connecting === 'sent' ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
               connecting ? 'g-ind text-white opacity-70 cursor-wait' : 'g-ind text-white hover:opacity-90'
-            }`}>
-          {connecting === 'sent' ? <><CheckCircle className="w-3.5 h-3.5" />Sent</> :
-            connecting ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
-              <><UserPlus className="w-3.5 h-3.5" />Join as Co-Founder</>}
+            }`}
+          aria-label={`Join ${name} as co-founder`}
+        >
+          {connecting === 'sent' ? <><CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />Sent</> :
+            connecting ? <Loader className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> :
+              <><UserPlus className="w-3.5 h-3.5" aria-hidden="true" />Join as Co-Founder</>}
         </button>
-        <button onClick={onLike}
-          className={`p-2 rounded-xl border-2 transition-all ${liked ? 'border-rose-200 text-rose-500' : 'border-slate-200 text-slate-400 hover:border-rose-200 hover:text-rose-400'}`}>
-          <Heart className={`w-3.5 h-3.5 ${liked ? 'fill-rose-500' : ''}`} />
+        <button 
+          onClick={onLike}
+          className={`p-2 rounded-xl border-2 transition-all ${liked ? 'border-rose-200 text-rose-500' : 'border-slate-200 text-slate-400 hover:border-rose-200 hover:text-rose-400'}`}
+          aria-label={liked ? 'Remove from favorites' : 'Save to favorites'}
+        >
+          <Heart className={`w-3.5 h-3.5 ${liked ? 'fill-rose-500' : ''}`} aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -811,9 +944,11 @@ function StartupCard({ founder, index, onConnect, onMessage, connecting, liked, 
 // ═══════════════════════════════════════════════════════════════════════════
 // PEOPLE CARD (mentor + co-founder)
 // ═══════════════════════════════════════════════════════════════════════════
-function PeopleCard({ person, index, onConnect, onMessage, connecting }) {
+function PeopleCard({ person, index, onConnect, onMessage, connecting, userProfile }) {
   const isMentor = person._type === 'mentor';
   const grade = gradFor(person.user_id);
+  const matchType = isMentor ? 'mentor' : 'cofounder';
+  const reasons = getMatchExplanation(userProfile, person, matchType);
 
   return (
     <div className={`lift bg-white rounded-2xl p-5 border border-slate-100 shadow-sm f${Math.min(index, 4)}`}>
@@ -821,8 +956,10 @@ function PeopleCard({ person, index, onConnect, onMessage, connecting }) {
         {/* Accent bar + Avatar */}
         <div className="flex gap-2 items-stretch flex-shrink-0">
           <div className="w-1 rounded-full self-stretch"
-            style={{ background: isMentor ? '#4f46e5' : '#7c3aed' }} />
-          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${grade} flex items-center justify-center text-white text-sm font-bold ss`}>
+            style={{ background: isMentor ? '#4f46e5' : '#7c3aed' }} 
+            aria-hidden="true"
+          />
+          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${grade} flex items-center justify-center text-white text-sm font-bold ss`} aria-hidden="true">
             {initials(person.name)}
           </div>
         </div>
@@ -843,7 +980,7 @@ function PeopleCard({ person, index, onConnect, onMessage, connecting }) {
                 {isMentor ? 'Mentor' : 'Co-Founder'}
               </span>
               {person.available !== undefined && (
-                <div className={`w-2 h-2 rounded-full ${person.available ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                <div className={`w-2 h-2 rounded-full ${person.available ? 'bg-emerald-400' : 'bg-slate-300'}`} aria-label={person.available ? 'Available' : 'Unavailable'} />
               )}
               {person.pro_bono && (
                 <span className="text-xs bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full font-medium border border-emerald-100">Pro Bono</span>
@@ -854,7 +991,7 @@ function PeopleCard({ person, index, onConnect, onMessage, connecting }) {
           {/* Location */}
           {person.location && (
             <p className="text-xs text-slate-400 flex items-center gap-1 mb-2">
-              <MapPin className="w-3 h-3" />{person.location}
+              <MapPin className="w-3 h-3" aria-hidden="true" />{person.location}
             </p>
           )}
 
@@ -886,24 +1023,47 @@ function PeopleCard({ person, index, onConnect, onMessage, connecting }) {
           {/* Co-founder specific — has idea */}
           {!isMentor && person.has_idea && (
             <p className="text-xs text-indigo-600 font-semibold mb-3 flex items-center gap-1">
-              <Lightbulb className="w-3.5 h-3.5" />Has a startup idea
+              <Lightbulb className="w-3.5 h-3.5" aria-hidden="true" />Has a startup idea
             </p>
           )}
 
+          {/* 🔧 CHANGED: AI match explanation tooltip */}
+          <div className="tooltip-wrap mb-3">
+            <button 
+              className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1"
+              aria-label="See why this person was recommended"
+            >
+              <Info className="w-3 h-3" aria-hidden="true" /> Why recommended?
+            </button>
+            <div className="tooltip-box">
+              <p className="font-semibold mb-1">Match Reasons:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {reasons.map((r, i) => <li key={i}>{r}</li>)}
+              </ul>
+            </div>
+          </div>
+
           {/* CTAs */}
           <div className="flex gap-2">
-            <button onClick={onMessage}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 border-2 border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all">
-              <MessageSquare className="w-3.5 h-3.5" /> Message
+            <button 
+              onClick={onMessage}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 border-2 border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all"
+              aria-label={`Message ${person.name}`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> Message
             </button>
-            <button onClick={onConnect} disabled={connecting === 'sent'}
+            <button 
+              onClick={onConnect} 
+              disabled={connecting === 'sent'}
               className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${connecting === 'sent' ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
                   connecting ? 'g-ind text-white opacity-70 cursor-wait' :
                     isMentor ? 'g-ind text-white hover:opacity-90' : 'g-vi text-white hover:opacity-90'
-                }`}>
-              {connecting === 'sent' ? <><CheckCircle className="w-3.5 h-3.5" />Sent</> :
-                connecting ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
-                  <><UserPlus className="w-3.5 h-3.5" />{isMentor ? 'Request Mentor' : 'Connect'}</>}
+                }`}
+              aria-label={isMentor ? `Request mentorship from ${person.name}` : `Connect with ${person.name} as co-founder`}
+            >
+              {connecting === 'sent' ? <><CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />Sent</> :
+                connecting ? <Loader className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> :
+                  <><UserPlus className="w-3.5 h-3.5" aria-hidden="true" />{isMentor ? 'Request Mentor' : 'Connect'}</>}
             </button>
           </div>
         </div>
@@ -936,8 +1096,10 @@ function OppCard({ opp, index }) {
                   opp.type === 'hackathon' ? '#ea580c' :
                     opp.type === 'accelerator' ? '#ca8a04' :
                       opp.type === 'grant' ? '#059669' : '#16a34a',
-          }}>
-          {OPP_ICONS[opp.type] || <Gift className="w-5 h-5" />}
+          }}
+          aria-hidden="true"
+        >
+          {OPP_ICONS[opp.type] || <Gift className="w-5 h-5" aria-hidden="true" />}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -959,8 +1121,8 @@ function OppCard({ opp, index }) {
           {/* Organiser */}
           {opp.organiser && (
             <p className="text-xs text-slate-400 mb-2 flex items-center gap-1">
-              <Building className="w-3 h-3" />{opp.organiser}
-              {opp.location && <><span className="mx-1">·</span><MapPin className="w-3 h-3" />{opp.location}</>}
+              <Building className="w-3 h-3" aria-hidden="true" />{opp.organiser}
+              {opp.location && <><span className="mx-1">·</span><MapPin className="w-3 h-3" aria-hidden="true" />{opp.location}</>}
             </p>
           )}
 
@@ -973,7 +1135,7 @@ function OppCard({ opp, index }) {
           <div className="flex items-center gap-3">
             {opp.deadline && (
               <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Clock className="w-3 h-3" />
+                <Clock className="w-3 h-3" aria-hidden="true" />
                 Deadline: {new Date(opp.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
             )}
@@ -982,12 +1144,20 @@ function OppCard({ opp, index }) {
             )}
             <div className="ml-auto">
               {opp.link && opp.link !== '#' ? (
-                <a href={opp.link} target="_blank" rel="noreferrer"
-                  className="g-ind text-white text-xs font-bold px-4 py-2 rounded-xl hover:opacity-90 transition-all flex items-center gap-1.5">
-                  Apply / Join <ArrowUpRight className="w-3.5 h-3.5" />
+                <a 
+                  href={opp.link} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="g-ind text-white text-xs font-bold px-4 py-2 rounded-xl hover:opacity-90 transition-all flex items-center gap-1.5"
+                  aria-label={`Apply to ${opp.title}`}
+                >
+                  Apply / Join <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
                 </a>
               ) : (
-                <button className="g-ind text-white text-xs font-bold px-4 py-2 rounded-xl opacity-50 cursor-not-allowed flex items-center gap-1.5">
+                <button 
+                  className="g-ind text-white text-xs font-bold px-4 py-2 rounded-xl opacity-50 cursor-not-allowed flex items-center gap-1.5"
+                  disabled
+                >
                   Coming Soon
                 </button>
               )}
@@ -1002,15 +1172,16 @@ function OppCard({ opp, index }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // AI RECOMMENDED CARD
 // ═══════════════════════════════════════════════════════════════════════════
-function RecCard({ item, onConnect, onMessage, connecting }) {
+function RecCard({ item, userProfile, onConnect, onMessage, connecting }) {
   const isMentor = item._rec_type === 'mentor';
   const isStartup = item._rec_type === 'startup';
   const grade = gradFor(item.user_id);
+  const reasons = getMatchExplanation(userProfile, item, item._rec_type);
 
   return (
     <div className="lift bg-white rounded-2xl p-4 border border-indigo-100 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grade} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`}>
+        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${grade} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`} aria-hidden="true">
           {initials(item.name)}
         </div>
         <div className="flex-1 min-w-0">
@@ -1026,9 +1197,21 @@ function RecCard({ item, onConnect, onMessage, connecting }) {
       </div>
 
       {/* Why recommended */}
-      <div className="flex items-center gap-1.5 mt-2.5 mb-3 p-2 bg-indigo-50 rounded-xl">
-        <Sparkles className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+      <div className="flex items-center gap-1.5 mt-2.5 mb-3 p-2 bg-indigo-50 rounded-xl tooltip-wrap">
+        <Sparkles className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" aria-hidden="true" />
         <p className="text-xs text-indigo-700 italic">{item._rec_reason}</p>
+        <button 
+          className="ml-auto text-[10px] text-indigo-400 hover:text-indigo-600 font-medium"
+          aria-label="See detailed match reasons"
+        >
+          Details
+        </button>
+        <div className="tooltip-box">
+          <p className="font-semibold mb-1">Why this match:</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {reasons.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        </div>
       </div>
 
       {(item.skills || []).length > 0 && (
@@ -1040,13 +1223,20 @@ function RecCard({ item, onConnect, onMessage, connecting }) {
       )}
 
       <div className="flex gap-2">
-        <button onClick={onMessage}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all">
-          <MessageSquare className="w-3.5 h-3.5" /> Message
+        <button 
+          onClick={onMessage}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all"
+          aria-label={`Message ${item.name}`}
+        >
+          <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> Message
         </button>
-        <button onClick={onConnect} disabled={connecting === 'sent'}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 g-ind text-white rounded-xl text-xs font-bold hover:opacity-90 disabled:opacity-50 transition-all`}>
-          {connecting === 'sent' ? 'Sent ✓' : connecting ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <><UserPlus className="w-3.5 h-3.5" />Connect</>}
+        <button 
+          onClick={onConnect} 
+          disabled={connecting === 'sent'}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 g-ind text-white rounded-xl text-xs font-bold hover:opacity-90 disabled:opacity-50 transition-all`}
+          aria-label={`Connect with ${item.name}`}
+        >
+          {connecting === 'sent' ? 'Sent ✓' : connecting ? <Loader className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <><UserPlus className="w-3.5 h-3.5" aria-hidden="true" />Connect</>}
         </button>
       </div>
     </div>
@@ -1057,7 +1247,7 @@ function RecCard({ item, onConnect, onMessage, connecting }) {
 function EmptyState({ icon, label, sub }) {
   return (
     <div className="py-16 text-center bg-white rounded-2xl border-2 border-dashed border-slate-200">
-      <div className="text-4xl mb-3">{icon}</div>
+      <div className="text-4xl mb-3" aria-hidden="true">{icon}</div>
       <p className="text-slate-600 font-semibold ss">{label}</p>
       {sub && <p className="text-sm text-slate-400 mt-1 dm">{sub}</p>}
     </div>

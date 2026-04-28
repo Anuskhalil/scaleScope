@@ -14,53 +14,13 @@ import {
   Send, ChevronDown, ChevronUp, Search,
   ArrowRight, Sparkles, Brain,
   Video, Inbox, UserCheck, UserX, Loader, Megaphone, Calendar, DollarSign,
+  Info,
 } from 'lucide-react';
 
-// ✅ HELPER: Get signed URL for private bucket
-const getSignedUrl = async (avatarPath) => {
-  if (!avatarPath) return null;
-  if (avatarPath.startsWith('http')) return avatarPath;
+// 🔧 CHANGED: Added toast for user feedback
+import toast from 'react-hot-toast';
 
-  let cleanPath = avatarPath;
-  if (cleanPath.startsWith('avatars/')) {
-    cleanPath = cleanPath.replace('avatars/', '');
-  }
-
-  try {
-    const { data } = await supabase.storage
-      .from('avatars')
-      .createSignedUrl(cleanPath, 3600);
-    return data?.signedUrl || null;
-  } catch {
-    return null;
-  }
-};
-
-// ✅ HELPER: Batch convert multiple avatar paths to signed URLs
-const batchGetSignedUrls = async (items, avatarKeyPath) => {
-  return Promise.all(
-    items.map(async (item) => {
-      const keys = avatarKeyPath.split('.');
-      let avatarPath = item;
-      for (const key of keys) {
-        avatarPath = avatarPath?.[key];
-      }
-
-      const signedUrl = await getSignedUrl(avatarPath);
-
-      // Deep clone and set the signed URL at the right path
-      const clone = JSON.parse(JSON.stringify(item));
-      let target = clone;
-      for (let i = 0; i < keys.length - 1; i++) {
-        if (!target[keys[i]]) target[keys[i]] = {};
-        target = target[keys[i]];
-      }
-      target[keys[keys.length - 1]] = signedUrl;
-      return clone;
-    })
-  );
-};
-
+// 🔧 CHANGED: Added CSS for tooltips, focus states, and better loading
 const CSS = `
   .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
   .lift:hover{transform:translateY(-3px);box-shadow:0 16px 48px rgba(79,70,229,.11)}
@@ -90,7 +50,74 @@ const CSS = `
     .sidebar-profile-card{order:-3}
     .sidebar-requests-card{order:-2}
   }
+  
+  /* 🔧 CHANGED: Accessibility focus states & lightweight tooltip */
+  button:focus-visible, a:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  .tooltip-wrap{position:relative}
+  .tooltip-wrap:hover .tooltip-box{opacity:1;visibility:visible;transform:translateY(0)}
+  .tooltip-box{opacity:0;visibility:hidden;transform:translateY(4px);transition:all .15s ease;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%) translateY(4px);background:#1e293b;color:#fff;font-size:11px;padding:8px 10px;border-radius:8px;white-space:nowrap;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.15);max-width:240px;white-space:normal;text-align:left}
+  .tooltip-box::after{content:'';position:absolute;top:100%;left:50%;margin-left:-4px;border-width:4px;border-style:solid;border-color:#1e293b transparent transparent transparent}
 `;
+
+// 🔧 CHANGED: Safe fetch wrapper to prevent silent failures
+async function safeFetch(promise, fallback = [], onError = null) {
+  try {
+    const res = await promise;
+    return res?.data || fallback;
+  } catch (error) {
+    console.error('[SafeFetch] Error:', error);
+    if (onError) onError(error);
+    return fallback;
+  }
+}
+
+// 🔧 CHANGED: AI match explanation generator
+function getMatchExplanation(userProfile, suggested, matchType) {
+  if (!userProfile) return ['Based on your profile activity'];
+  const reasons = [];
+
+  if (matchType === 'mentor') {
+    const p = suggested.profiles || {};
+    const skillOverlap = userProfile.skills?.filter(s => p.expertise_areas?.includes(s)) || [];
+    if (skillOverlap.length) reasons.push(`Expertise overlap: ${skillOverlap.slice(0, 2).join(', ')}`);
+
+    const interestOverlap = userProfile.interests?.filter(i => p.interests?.includes(i)) || [];
+    if (interestOverlap.length) reasons.push(`Shared interest in ${interestOverlap[0]}`);
+
+    if (userProfile.location && p.location === userProfile.location) reasons.push('Same location');
+  } else {
+    // Co-founder matching
+    const userSkills = new Set(userProfile.skills_with_levels?.map(s => s.skill) || []);
+    const candSkills = new Set((suggested.skills_with_levels || []).map(s => s.skill));
+    const complementary = [...candSkills].filter(s => !userSkills.has(s)).slice(0, 2);
+    if (complementary.length) reasons.push(`Complements with: ${complementary.join(', ')}`);
+
+    if (suggested.has_startup_idea && userProfile.startup_idea_description) reasons.push('Both actively building');
+  }
+
+  return reasons.length > 0 ? reasons : ['Profile alignment based on activity'];
+}
+
+// 🔧 CHANGED: Simple avatar cache to reduce Supabase storage calls
+const AVATAR_CACHE = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 mins
+
+async function getCachedSignedUrl(path) {
+  if (!path || path.startsWith('http')) return path;
+  const cacheKey = `avatar:${path}`;
+  const cached = AVATAR_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.url;
+
+  try {
+    const cleanPath = path.replace(/^avatars\//, '');
+    const { data } = await supabase.storage.from('avatars').createSignedUrl(cleanPath, 3600);
+    if (data?.signedUrl) {
+      AVATAR_CACHE.set(cacheKey, { url: data.signedUrl, timestamp: Date.now() });
+      return data.signedUrl;
+    }
+  } catch (e) { console.warn('Avatar URL error:', e); }
+  return path;
+}
 
 function initials(name) {
   if (!name) return '?';
@@ -108,7 +135,6 @@ function roleGrad(t) {
   return { mentor: 'from-violet-500 to-indigo-500', investor: 'from-emerald-500 to-teal-500', student: 'from-indigo-500 to-violet-500', 'early-stage-founder': 'from-amber-500 to-orange-500' }[t] || 'from-slate-400 to-slate-500';
 }
 
-// ✅ shapeMentor - avatar is now already a signed URL (set before calling)
 function shapeMentor(r) {
   const p = r.profiles || {};
   return {
@@ -120,7 +146,6 @@ function shapeMentor(r) {
   };
 }
 
-// ✅ shapeCofounder - avatar is now already a signed URL
 function shapeCofounder(r, currentUserId) {
   const p = r.profiles || {};
   const skills = (r.skills_with_levels || []).map(s => s.skill || s).filter(Boolean);
@@ -140,7 +165,7 @@ function SectionHead({ title, icon, linkTo, linkLabel }) {
     <div className="flex items-center justify-between px-5 sm:px-6 pt-5 sm:pt-6 pb-3">
       <h2 className="font-bold text-slate-900 text-base sm:text-lg flex items-center gap-2">{icon}{title}</h2>
       {linkLabel && linkTo && (
-        <Link to={linkTo} className="text-xs text-indigo-600 font-semibold flex items-center gap-1 hover:gap-2 transition-all">
+        <Link to={linkTo} className="text-xs text-indigo-600 font-semibold flex items-center gap-1 hover:gap-2 transition-all" aria-label={`Browse all ${title.toLowerCase()}`}>
           {linkLabel}<ChevronRight className="w-3.5 h-3.5" />
         </Link>
       )}
@@ -148,25 +173,46 @@ function SectionHead({ title, icon, linkTo, linkLabel }) {
   );
 }
 
-function Avatar({ name, avatar, grad, size = 'md' }) {
+// 🔧 CHANGED: Avatar component with loading/error handling
+function Avatar({ name, avatarPath, grad, size = 'md' }) {
+  const [url, setUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const resolve = async () => {
+      setLoading(true);
+      const resolved = await getCachedSignedUrl(avatarPath);
+      if (!cancelled) { setUrl(resolved); setLoading(false); }
+    };
+    resolve();
+    return () => { cancelled = true; };
+  }, [avatarPath]);
+
   const sizeMap = { sm: 'w-8 h-8 text-xs rounded-lg', md: 'w-10 h-10 text-sm rounded-xl', lg: 'w-11 h-11 text-sm rounded-xl', xl: 'w-14 h-14 text-lg rounded-2xl' };
-  if (avatar) return <img src={avatar} alt={name || ''} className={`${sizeMap[size]} object-cover flex-shrink-0`} loading="lazy" />;
-  return <div className={`${sizeMap[size]} bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold flex-shrink-0`}>{initials(name)}</div>;
+
+  if (loading) return <div className={`${sizeMap[size]} bg-slate-200 animate-pulse rounded-xl`} />;
+  if (url) return <img src={url} alt={name || 'User'} className={`${sizeMap[size]} object-cover flex-shrink-0`} loading="lazy" onError={() => setUrl(null)} />;
+  return <div className={`${sizeMap[size]} bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold flex-shrink-0`} aria-hidden="true">{initials(name)}</div>;
 }
 
-function PeopleCard({ item, accentClass, ctaClass, ctaLabel, onConnect, onMessage, connectionStatus }) {
+// 🔧 CHANGED: PeopleCard with AI match explanation tooltip & accessibility
+function PeopleCard({ item, accentClass, ctaClass, ctaLabel, onConnect, onMessage, connectionStatus, userProfile }) {
   const isPending = connectionStatus?.status === 'pending' && connectionStatus?.isSender;
   const isAccepted = connectionStatus?.status === 'accepted';
+  const matchType = item.expertise ? 'mentor' : 'cofounder';
+  const reasons = getMatchExplanation(userProfile, item, matchType);
+
   return (
     <div className="border border-slate-100 rounded-2xl p-4 hover:border-indigo-100 hover:shadow-md transition-all lift">
       <div className="flex items-start gap-3 mb-3">
-        <Avatar name={item.name} avatar={item.avatar} grad={item.grad} size="lg" />
+        <Avatar name={item.name} avatarPath={item.avatar} grad={item.grad} size="lg" />
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-900 text-sm leading-snug">{item.name}</p>
           <p className="text-xs text-slate-500 truncate">{item.role}</p>
           {item.location && <p className="text-xs text-slate-400 flex items-center gap-0.5 mt-0.5"><MapPin className="w-3 h-3" />{item.location}</p>}
         </div>
-        {item.available !== undefined && <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1 ${item.available ? 'bg-emerald-400' : 'bg-slate-300'}`} />}
+        {item.available !== undefined && <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1 ${item.available ? 'bg-emerald-400' : 'bg-slate-300'}`} aria-label={item.available ? 'Available' : 'Unavailable'} />}
       </div>
       {(item.expertise || item.skills || []).length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-3">
@@ -176,25 +222,34 @@ function PeopleCard({ item, accentClass, ctaClass, ctaLabel, onConnect, onMessag
         </div>
       )}
       {item.why && (
-        <div className={`flex items-start gap-1.5 p-2.5 rounded-xl mb-3 ${accentClass}`}>
+        <div className={`flex items-start gap-1.5 p-2.5 rounded-xl mb-3 ${accentClass} relative group tooltip-wrap`}>
           <Sparkles className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 opacity-70" />
           <p className="text-xs leading-relaxed italic">{item.why}</p>
+          <button className="ml-auto text-[10px] text-indigo-400 hover:text-indigo-600 font-medium" aria-label="See why this person was suggested">
+            Why?
+          </button>
+          <div className="tooltip-box">
+            <p className="font-semibold mb-1">Match Reasons:</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              {reasons.map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+          </div>
         </div>
       )}
       <div className="flex flex-col sm:flex-row gap-2">
-        <button onClick={onMessage} className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all">
+        <button onClick={onMessage} className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-slate-200 text-slate-600 hover:border-indigo-200 hover:text-indigo-600 rounded-xl text-xs font-bold transition-all" aria-label={`Message ${item.name}`}>
           <MessageSquare className="w-3.5 h-3.5" /> Message
         </button>
         {isAccepted ? (
-          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-50 border-2 border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold">
+          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-50 border-2 border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold" aria-label="Already connected">
             <CheckCircle className="w-3.5 h-3.5" /> Connected
           </div>
         ) : isPending ? (
-          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-50 border-2 border-amber-200 text-amber-700 rounded-xl text-xs font-bold">
+          <div className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-amber-50 border-2 border-amber-200 text-amber-700 rounded-xl text-xs font-bold" aria-label="Request pending">
             <Clock className="w-3.5 h-3.5" /> Pending
           </div>
         ) : (
-          <button onClick={onConnect} className={`flex-1 flex items-center justify-center gap-1.5 py-2 ${ctaClass} text-white rounded-xl text-xs font-bold hover:opacity-90 transition-all`}>
+          <button onClick={onConnect} className={`flex-1 flex items-center justify-center gap-1.5 py-2 ${ctaClass} text-white rounded-xl text-xs font-bold hover:opacity-90 transition-all`} aria-label={`Connect with ${item.name}`}>
             <UserPlus className="w-3.5 h-3.5" /> {ctaLabel}
           </button>
         )}
@@ -206,19 +261,18 @@ function PeopleCard({ item, accentClass, ctaClass, ctaLabel, onConnect, onMessag
 function PendingRequestCard({ req, onAccept, onDecline, loading }) {
   const sender = req.sender || {};
   const typeLabel = req.type === 'mentor_request' ? 'Mentorship Request' : 'Co-Founder Request';
-  // ✅ avatar is already a signed URL now
   return (
     <div className="flex items-start gap-3 p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
-      <Avatar name={sender.full_name} avatar={sender.avatar_url} grad={roleGrad(sender.user_type)} size="md" />
+      <Avatar name={sender.full_name} avatarPath={sender.avatar_url} grad={roleGrad(sender.user_type)} size="md" />
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-slate-900 text-sm">{sender.full_name || 'Someone'}</p>
         <p className="text-xs text-slate-500">{typeLabel}{sender.location ? ` · ${sender.location}` : ''}</p>
         {req.message && <p className="text-xs text-slate-600 mt-1 italic truncate">"{req.message}"</p>}
         <div className="flex gap-2 mt-2">
-          <button onClick={() => onAccept(req.id)} disabled={loading} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50">
+          <button onClick={() => onAccept(req.id)} disabled={loading} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50" aria-label={`Accept ${typeLabel}`}>
             <UserCheck className="w-3 h-3" /> Accept
           </button>
-          <button onClick={() => onDecline(req.id)} disabled={loading} className="flex items-center gap-1 px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50">
+          <button onClick={() => onDecline(req.id)} disabled={loading} className="flex items-center gap-1 px-3 py-1.5 bg-white text-slate-600 text-xs font-bold rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50" aria-label={`Decline ${typeLabel}`}>
             <UserX className="w-3 h-3" /> Decline
           </button>
         </div>
@@ -242,8 +296,6 @@ export default function StudentDashboard() {
   const [hasConnectedMentor, setHasConnectedMentor] = useState(false);
   const [connectionStatuses, setConnectionStatuses] = useState({});
   const [opportunities, setOpportunities] = useState([]);
-
-  // ✅ NEW: Separate state for current user's avatar
   const [currentUserAvatarUrl, setCurrentUserAvatarUrl] = useState(null);
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -252,49 +304,49 @@ export default function StudentDashboard() {
   const [requestActionLoading, setRequestActionLoading] = useState(null);
   const [showMore, setShowMore] = useState({ mentors: false, cf: false, opps: false });
 
+  // 🔧 CHANGED: loadAll now uses safeFetch & proper error handling
   const loadAll = useCallback(async () => {
     if (!user) return;
     try {
       const [profRes, actRes] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
-        supabase.from('student_activities').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(8),
+        safeFetch(supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(), {}),
+        safeFetch(supabase.from('student_activities').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(8), []),
       ]);
-      setProfile(profRes.data || {});
-      setActivities(actRes.data || []);
+      setProfile(profRes || {});
+      setActivities(actRes || []);
 
-      // ✅ Get signed URL for current user's avatar
-      if (profRes.data?.avatar_url) {
-        const signedUrl = await getSignedUrl(profRes.data.avatar_url);
-        setCurrentUserAvatarUrl(signedUrl);
+      if (profRes?.avatar_url) {
+        setCurrentUserAvatarUrl(await getCachedSignedUrl(profRes.avatar_url));
       }
 
-      const { data: spData } = await supabase.from('student_profiles').select('*').eq('user_id', user.id).maybeSingle();
-      setSp(spData || {});
+      const spRes = await safeFetch(supabase.from('student_profiles').select('*').eq('user_id', user.id).maybeSingle(), {});
+      setSp(spRes || {});
 
-      const { data: mentorConn } = await supabase
-        .from('connection_requests')
-        .select('id')
-        .or(`and(sender_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted),and(receiver_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted)`)
-        .maybeSingle();
-      setHasConnectedMentor(!!mentorConn);
+      const mentorConnRes = await safeFetch(
+        supabase.from('connection_requests').select('id')
+          .or(`and(sender_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted),and(receiver_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted)`)
+          .maybeSingle(),
+        null
+      );
+      setHasConnectedMentor(!!mentorConnRes);
       setPageLoading(false);
 
       setConnsLoading(true);
       try {
         const [convData, mentorData, cfData, reqData, oppData] = await Promise.all([
-          fetchConversations(user.id).catch(() => []),
-          fetchMentors({ limit: 6 }).catch(() => []),
-          fetchCoFounders({ limit: 6 }).catch(() => []),
-          fetchIncomingRequests(user.id).catch(() => []),
-          supabase.from('opportunities').select('*').eq('is_active', true).order('deadline', { ascending: true }).limit(5).then(r => r.data || []).catch(() => []),
+          safeFetch(fetchConversations(user.id), [], () => toast.error('Messages failed to load')),
+          safeFetch(fetchMentors({ limit: 6 }), [], () => toast.error('Mentor suggestions unavailable')),
+          safeFetch(fetchCoFounders({ limit: 6 }), [], () => toast.error('Co-founder suggestions unavailable')),
+          safeFetch(fetchIncomingRequests(user.id), [], () => toast.error('Requests failed to load')),
+          safeFetch(supabase.from('opportunities').select('*').eq('is_active', true).order('deadline', { ascending: true }).limit(5), []),
         ]);
 
-        // ✅ Convert ALL avatar paths to signed URLs in parallel
+        // Resolve avatars in parallel
         const [mentorsWithUrls, cfWithUrls, reqsWithUrls, convsWithUrls] = await Promise.all([
-          batchGetSignedUrls(mentorData, 'profiles.avatar_url'),
-          batchGetSignedUrls(cfData, 'profiles.avatar_url'),
-          batchGetSignedUrls(reqData, 'sender.avatar_url'),
-          batchGetSignedUrls(convData, 'otherUser.avatar_url'),
+          Promise.all(mentorData.map(async m => ({ ...m, profiles: { ...m.profiles, avatar_url: await getCachedSignedUrl(m.profiles?.avatar_url) } }))),
+          Promise.all(cfData.map(async c => ({ ...c, profiles: { ...c.profiles, avatar_url: await getCachedSignedUrl(c.profiles?.avatar_url) } }))),
+          Promise.all(reqData.map(async r => ({ ...r, sender: { ...r.sender, avatar_url: await getCachedSignedUrl(r.sender?.avatar_url) } }))),
+          Promise.all(convData.map(async c => ({ ...c, otherUser: { ...c.otherUser, avatar_url: await getCachedSignedUrl(c.otherUser?.avatar_url) } }))),
         ]);
 
         setConvos(convsWithUrls);
@@ -305,11 +357,18 @@ export default function StudentDashboard() {
 
         const statuses = {};
         for (const m of mentorsWithUrls.slice(0, 6)) {
-          try { const status = await getConnectionStatus(user.id, m.user_id, 'mentor_request'); if (status) statuses[m.user_id] = status; } catch { }
+          try {
+            const status = await getConnectionStatus(user.id, m.user_id, 'mentor_request');
+            if (status) statuses[m.user_id] = status;
+          } catch { }
         }
         setConnectionStatuses(statuses);
       } finally { setConnsLoading(false); }
-    } catch (err) { console.error('[Dashboard] loadAll:', err); setPageLoading(false); }
+    } catch (err) {
+      console.error('[Dashboard] Critical load error:', err);
+      toast.error('Dashboard failed to load. Please refresh.');
+      setPageLoading(false);
+    }
   }, [user]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -321,19 +380,31 @@ export default function StudentDashboard() {
     setSp(prev => ({ ...prev, [field]: value }));
     try {
       const merged = { ...(sp || {}), [field]: value, updated_at: new Date().toISOString() };
-      Object.keys(merged).forEach(k => { if (merged[k] === undefined) delete merged[k]; });
+      // 🔧 CHANGED: Only include fields that have actual values (not undefined)
+      Object.keys(merged).forEach(k => {
+        if (merged[k] === undefined || merged[k] === null) delete merged[k];
+      });
       merged.user_id = user.id;
       const { error } = await supabase.from('student_profiles').upsert(merged, { onConflict: 'user_id' });
       if (error) throw error;
+
+      // Refresh connection status
       const { data: mc } = await supabase.from('connection_requests').select('id')
         .or(`and(sender_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted),and(receiver_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted)`)
         .maybeSingle();
       setHasConnectedMentor(!!mc);
-      logActivity(field, field === 'has_startup_idea' ? (value ? 'Confirmed having a startup idea' : 'Marked as exploring') : (value ? 'Connected with a co-founder' : 'Updated co-founder status'));
+
+      logActivity(field, field === 'has_startup_idea'
+        ? (value ? 'Confirmed having a startup idea' : 'Marked as not building')
+        : (value ? 'Connected with a co-founder' : 'Updated co-founder status'));
+      toast.success('Journey updated!');
     } catch (err) {
       console.error('[Dashboard] journey save:', err);
+      toast.error('Failed to update journey');
       setSp(prev => ({ ...prev, [field]: prevValue }));
-    } finally { setJourneySaving(null); }
+    } finally {
+      setJourneySaving(null);
+    }
   };
 
   const logActivity = async (type, description) => {
@@ -347,35 +418,56 @@ export default function StudentDashboard() {
     try {
       await respondToRequest(requestId, 'accepted');
       setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
-      const { data: mc } = await supabase.from('connection_requests').select('id')
-        .or(`and(sender_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted),and(receiver_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted)`)
-        .maybeSingle();
+      const { data: mc } = await safeFetch(
+        supabase.from('connection_requests').select('id')
+          .or(`and(sender_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted),and(receiver_id.eq.${user.id},type.eq.mentor_request,status.eq.accepted)`)
+          .maybeSingle(),
+        null
+      );
       setHasConnectedMentor(!!mc);
       logActivity('request_accepted', 'Accepted a connection request');
-    } catch (err) { console.error(err); }
+      toast.success('Request accepted!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to accept request');
+    }
     finally { setRequestActionLoading(null); }
   };
 
   const handleDeclineRequest = async (requestId) => {
     setRequestActionLoading(requestId);
-    try { await respondToRequest(requestId, 'declined'); setIncomingRequests(prev => prev.filter(r => r.id !== requestId)); } catch (err) { console.error(err); }
+    try {
+      await respondToRequest(requestId, 'declined');
+      setIncomingRequests(prev => prev.filter(r => r.id !== requestId));
+      toast.success('Request declined');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to decline request');
+    }
     finally { setRequestActionLoading(null); }
   };
 
   const handleConnect = async (targetUserId, type, targetName) => {
     try {
       const result = await sendConnectionRequest(user.id, targetUserId, type);
-      if (result?.alreadySent) { setConnectionStatuses(prev => ({ ...prev, [targetUserId]: { status: 'pending', isSender: true } })); return; }
+      if (result?.alreadySent) {
+        setConnectionStatuses(prev => ({ ...prev, [targetUserId]: { status: 'pending', isSender: true } }));
+        return;
+      }
       setConnectionStatuses(prev => ({ ...prev, [targetUserId]: { status: 'pending', isSender: true } }));
       logActivity(type === 'mentor_request' ? 'mentor_request' : 'cofounder_connect', type === 'mentor_request' ? `Requested mentorship from ${targetName}` : `Sent co-founder request to ${targetName}`);
-    } catch (err) { console.error(err); }
+      toast.success(`Request sent to ${targetName}`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to send connection request');
+    }
   };
 
   const tog = k => setShowMore(p => ({ ...p, [k]: !p[k] }));
 
   if (pageLoading) return (
-    <><style>{CSS}</style><div className="min-h-screen page-bg flex items-center justify-center">
-      <div className="text-center"><div className="w-12 h-12 rounded-2xl g-ind flex items-center justify-center mx-auto mb-4"><Brain className="w-6 h-6 text-white" /></div><p className="font-bold text-slate-900 text-lg mb-1">Loading Dashboard</p><p className="text-slate-400 text-sm">Fetching your journey…</p></div>
+    <><style>{CSS}</style><div className="min-h-screen page-bg flex items-center justify-center" role="status" aria-live="polite">
+      <div className="text-center"><div className="w-12 h-12 rounded-2xl g-ind flex items-center justify-center mx-auto mb-4"><Brain className="w-6 h-6 text-white" aria-hidden="true" /></div><p className="font-bold text-slate-900 text-lg mb-1">Loading Dashboard</p><p className="text-slate-400 text-sm">Fetching your journey…</p></div>
     </div></>
   );
 
@@ -385,14 +477,18 @@ export default function StudentDashboard() {
   const completion = p.profile_completion || 0;
   const unread = convos.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
 
-  const hasStartupIdea = s.has_startup_idea || false;
-  const hasCofounder = s.has_cofounder || false;
-  const ideaAnswered = s.has_startup_idea !== null && s.has_startup_idea !== undefined;
+  // 🔧 CHANGED: Correct boolean checks for journey milestones
+  const hasStartupIdea = s.has_startup_idea === true; // Must be explicitly true
+  const hasCofounder = s.has_cofounder === true; // Must be explicitly true
+
+  // 🔧 CHANGED: Only mark as "answered" if user explicitly set a value (not default false)
+  const ideaAnswered = s.has_startup_idea === true || s.has_startup_idea === false;
+  const cofounderAnswered = s.has_cofounder === true || s.has_cofounder === false;
 
   let primaryCTA;
-  if (!ideaAnswered || !hasStartupIdea) primaryCTA = { label: 'Explore Ideas', icon: <Search className="w-4 h-4" />, to: '/discover', grad: 'g-ind' };
-  else if (!hasCofounder) primaryCTA = { label: 'Find Co-Founder', icon: <UserPlus className="w-4 h-4" />, to: '/find-cofounders', grad: 'g-vi' };
-  else primaryCTA = { label: 'Find Mentor', icon: <Users className="w-4 h-4" />, to: '/find-mentors', grad: 'g-ind' };
+  if (!ideaAnswered || !hasStartupIdea) primaryCTA = { label: 'Explore Ideas', icon: <Search className="w-4 h-4" aria-hidden="true" />, to: '/discover', grad: 'g-ind' };
+  else if (!hasCofounder) primaryCTA = { label: 'Find Co-Founder', icon: <UserPlus className="w-4 h-4" aria-hidden="true" />, to: '/find-cofounders', grad: 'g-vi' };
+  else primaryCTA = { label: 'Find Mentor', icon: <Users className="w-4 h-4" aria-hidden="true" />, to: '/find-mentors', grad: 'g-ind' };
 
   const milestones = [
     { id: 'profile', label: 'Complete your profile', done: completion >= 60, icon: '👤' },
@@ -415,10 +511,10 @@ export default function StudentDashboard() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
                   <span className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full ${hasStartupIdea ? 'bg-white/10 text-white/80' : 'bg-indigo-100 text-indigo-600 border border-indigo-200'}`}>
-                    <GraduationCap className="w-3.5 h-3.5" /> Student
+                    <GraduationCap className="w-3.5 h-3.5" aria-hidden="true" /> Student
                   </span>
-                  {unread > 0 && <span className="inline-flex items-center gap-1 text-xs font-bold text-white bg-red-500 px-2.5 py-1 rounded-full"><Bell className="w-3 h-3" /> {unread} unread</span>}
-                  {incomingRequests.length > 0 && <span className="inline-flex items-center gap-1 text-xs font-bold text-white bg-violet-500 px-2.5 py-1 rounded-full"><Inbox className="w-3 h-3" /> {incomingRequests.length} request{incomingRequests.length > 1 ? 's' : ''}</span>}
+                  {unread > 0 && <span className="inline-flex items-center gap-1 text-xs font-bold text-white bg-red-500 px-2.5 py-1 rounded-full"><Bell className="w-3 h-3" aria-hidden="true" /> {unread} unread</span>}
+                  {incomingRequests.length > 0 && <span className="inline-flex items-center gap-1 text-xs font-bold text-white bg-violet-500 px-2.5 py-1 rounded-full"><Inbox className="w-3 h-3" aria-hidden="true" /> {incomingRequests.length} request{incomingRequests.length > 1 ? 's' : ''}</span>}
                 </div>
                 <h1 className={`font-black text-2xl sm:text-3xl lg:text-4xl leading-none mb-3 ${hasStartupIdea ? 'text-white' : 'text-slate-900'}`}>
                   {hasStartupIdea ? `Build your startup, ${firstName} 🚀` : `Welcome, ${firstName} 👋`}
@@ -429,8 +525,8 @@ export default function StudentDashboard() {
               </div>
               <div className="flex flex-col sm:flex-row flex-wrap gap-2.5">
                 <Link to={primaryCTA.to} className={`qa ${primaryCTA.grad} text-white flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm shadow-lg`}>{primaryCTA.icon} {primaryCTA.label}</Link>
-                <Link to="/find-mentors" className={`qa flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm border-2 ${hasStartupIdea ? 'bg-white/10 border-white/20 text-white hover:bg-white/20' : 'bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50'}`}><Users className="w-4 h-4" /> Mentors</Link>
-                <Link to="/discover" className={`qa flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm border-2 ${hasStartupIdea ? 'bg-white/10 border-white/20 text-white hover:bg-white/20' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}><Search className="w-4 h-4" /> Discover</Link>
+                <Link to="/find-mentors" className={`qa flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm border-2 ${hasStartupIdea ? 'bg-white/10 border-white/20 text-white hover:bg-white/20' : 'bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50'}`}><Users className="w-4 h-4" aria-hidden="true" /> Mentors</Link>
+                <Link to="/discover" className={`qa flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm border-2 ${hasStartupIdea ? 'bg-white/10 border-white/20 text-white hover:bg-white/20' : 'bg-white border-violet-200 text-violet-700 hover:bg-violet-50'}`}><Search className="w-4 h-4" aria-hidden="true" /> Discover</Link>
               </div>
             </div>
           </div>
@@ -444,7 +540,7 @@ export default function StudentDashboard() {
               { label: 'Requests', value: `${incomingRequests.length}`, sub: incomingRequests.length > 0 ? 'Pending review' : 'No pending', Icon: Inbox, grad: incomingRequests.length > 0 ? 'from-violet-500 to-purple-500' : 'from-slate-300 to-slate-400' },
             ].map((stat, i) => (
               <div key={i} className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-100 lift">
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${stat.grad} flex items-center justify-center text-white mb-2.5`}><stat.Icon className="w-4 h-4 sm:w-5 sm:h-5" /></div>
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${stat.grad} flex items-center justify-center text-white mb-2.5`}><stat.Icon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" /></div>
                 <p className="font-black text-xl sm:text-2xl text-slate-900">{stat.value}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{stat.label}</p>
                 <p className="text-xs text-indigo-600 font-semibold mt-1">{stat.sub}</p>
@@ -465,32 +561,74 @@ export default function StudentDashboard() {
                 </Card>
               )}
 
-              {/* JOURNEY — No more "Locked" states */}
+              {/* JOURNEY */}
               <Card className="f1">
                 <SectionHead title="Your Journey" icon={<Target className="w-5 h-5 text-indigo-500" />} />
                 <div className="px-5 sm:px-6 pb-5 sm:pb-6 space-y-3">
-                  <div className={`journey-item ${ideaAnswered ? 'done' : 'active'}`}>
+                  <div className={`journey-item ${ideaAnswered && hasStartupIdea ? 'done' : ideaAnswered ? 'active' : ''}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0 ${ideaAnswered ? 'bg-emerald-100' : 'bg-indigo-100'}`}>{ideaAnswered ? '✓' : '💡'}</div>
-                        <div className="min-w-0"><p className="font-semibold text-slate-900 text-sm">Startup Idea</p><p className="text-xs text-slate-500">{hasStartupIdea ? 'You have an idea 🚀' : 'Still exploring'}</p></div>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0 ${ideaAnswered && hasStartupIdea ? 'bg-emerald-100' : 'bg-indigo-100'}`}>
+                          {ideaAnswered && hasStartupIdea ? '✓' : '💡'}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 text-sm">Startup Idea</p>
+                          <p className="text-xs text-slate-500">
+                            {ideaAnswered
+                              ? (hasStartupIdea ? 'You have an idea 🚀' : 'Not looking to build right now')
+                              : 'Still exploring'}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
-                        <button onClick={() => setJourneyField('has_startup_idea', true)} disabled={journeySaving === 'has_startup_idea'} className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-50 ${hasStartupIdea ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-indigo-200'}`}>{journeySaving === 'has_startup_idea' ? '...' : 'Yes'}</button>
-                        <button onClick={() => setJourneyField('has_startup_idea', false)} disabled={journeySaving === 'has_startup_idea'} className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-50 ${!hasStartupIdea && ideaAnswered ? 'border-slate-400 bg-slate-100 text-slate-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>No</button>
+                        <button
+                          onClick={() => setJourneyField('has_startup_idea', true)}
+                          disabled={journeySaving === 'has_startup_idea'}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-50 ${hasStartupIdea ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-indigo-200'}`}
+                        >
+                          {journeySaving === 'has_startup_idea' ? '...' : 'Yes'}
+                        </button>
+                        <button
+                          onClick={() => setJourneyField('has_startup_idea', false)}
+                          disabled={journeySaving === 'has_startup_idea'}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-50 ${ideaAnswered && !hasStartupIdea ? 'border-slate-400 bg-slate-100 text-slate-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                        >
+                          No
+                        </button>
                       </div>
                     </div>
                   </div>
 
-                  <div className={`journey-item ${hasCofounder ? 'done' : ideaAnswered && hasStartupIdea ? 'active' : ''}`}>
+                  <div className={`journey-item ${cofounderAnswered && hasCofounder ? 'done' : cofounderAnswered && hasStartupIdea ? 'active' : ''}`}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0 ${hasCofounder ? 'bg-emerald-100' : ideaAnswered && hasStartupIdea ? 'bg-indigo-100' : 'bg-slate-100'}`}>{hasCofounder ? '✓' : '👥'}</div>
-                        <div><p className="font-semibold text-slate-900 text-sm">Co-Founder</p><p className="text-xs text-slate-500">{hasCofounder ? 'You have a co-founder ✓' : hasStartupIdea ? 'Looking for a co-founder' : 'Answer idea step first'}</p></div>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0 ${cofounderAnswered && hasCofounder ? 'bg-emerald-100' : cofounderAnswered && hasStartupIdea ? 'bg-indigo-100' : 'bg-slate-100'}`}>
+                          {cofounderAnswered && hasCofounder ? '✓' : '👥'}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900 text-sm">Co-Founder</p>
+                          <p className="text-xs text-slate-500">
+                            {cofounderAnswered
+                              ? (hasCofounder ? 'You have a co-founder ✓' : 'Looking alone for now')
+                              : (hasStartupIdea ? 'Looking for a co-founder' : 'Answer idea step first')}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
-                        <button onClick={() => setJourneyField('has_cofounder', true)} disabled={journeySaving === 'has_cofounder' || (!ideaAnswered && !hasStartupIdea)} className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-40 ${hasCofounder ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500 hover:border-emerald-200'}`}>{journeySaving === 'has_cofounder' ? '...' : 'Yes'}</button>
-                        <button onClick={() => setJourneyField('has_cofounder', false)} disabled={journeySaving === 'has_cofounder'} className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-50 ${!hasCofounder ? 'border-slate-400 bg-slate-100 text-slate-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>No</button>
+                        <button
+                          onClick={() => setJourneyField('has_cofounder', true)}
+                          disabled={journeySaving === 'has_cofounder' || (!ideaAnswered || !hasStartupIdea)}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-40 ${hasCofounder ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500 hover:border-emerald-200'}`}
+                        >
+                          {journeySaving === 'has_cofounder' ? '...' : 'Yes'}
+                        </button>
+                        <button
+                          onClick={() => setJourneyField('has_cofounder', false)}
+                          disabled={journeySaving === 'has_cofounder'}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition-all disabled:opacity-50 ${cofounderAnswered && !hasCofounder ? 'border-slate-400 bg-slate-100 text-slate-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                        >
+                          No
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -501,7 +639,7 @@ export default function StudentDashboard() {
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0 ${hasConnectedMentor ? 'bg-emerald-100' : 'bg-slate-100'}`}>{hasConnectedMentor ? '✓' : '🤝'}</div>
                         <div><p className="font-semibold text-slate-900 text-sm">Mentor Connection</p><p className="text-xs text-slate-500">{hasConnectedMentor ? 'Connected with a mentor ✓' : 'No mentor yet — they speed up everything'}</p></div>
                       </div>
-                      {!hasConnectedMentor && <Link to="/find-mentors" className="text-xs font-bold px-3 py-1.5 g-ind text-white rounded-lg hover:opacity-90 flex items-center gap-1 flex-shrink-0">Find <ArrowRight className="w-3 h-3" /></Link>}
+                      {!hasConnectedMentor && <Link to="/find-mentors" className="text-xs font-bold px-3 py-1.5 g-ind text-white rounded-lg hover:opacity-90 flex items-center gap-1 flex-shrink-0">Find <ArrowRight className="w-3 h-3" aria-hidden="true" /></Link>}
                     </div>
                   </div>
 
@@ -517,20 +655,20 @@ export default function StudentDashboard() {
                                 : !hasConnectedMentor ? 'Great team! Now find a mentor to guide your startup journey.'
                                   : "You're on track. Focus on validating your idea with real users."}
                         </p>
-                        <Link to={primaryCTA.to} className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-all">{primaryCTA.label} <ArrowRight className="w-3.5 h-3.5" /></Link>
+                        <Link to={primaryCTA.to} className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-all">{primaryCTA.label} <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" /></Link>
                       </div>
                     </div>
                   </div>
                 </div>
               </Card>
 
-              {/* STARTUP IDEA CARD — Now editable from Profile */}
+              {/* STARTUP IDEA CARD */}
               {hasStartupIdea && (
                 <Card className="f1">
                   <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3">
                     <div className="flex items-center justify-between">
-                      <h2 className="font-bold text-slate-900 text-base sm:text-lg flex items-center gap-2"><Lightbulb className="w-5 h-5 text-amber-500" /> Your Startup Idea</h2>
-                      <Link to="/profile" className="text-xs text-indigo-600 font-semibold flex items-center gap-1 hover:gap-2 transition-all">Edit <Edit3 className="w-3 h-3" /></Link>
+                      <h2 className="font-bold text-slate-900 text-base sm:text-lg flex items-center gap-2"><Lightbulb className="w-5 h-5 text-amber-500" aria-hidden="true" /> Your Startup Idea</h2>
+                      <Link to="/profile" className="text-xs text-indigo-600 font-semibold flex items-center gap-1 hover:gap-2 transition-all">Edit <Edit3 className="w-3 h-3" aria-hidden="true" /></Link>
                     </div>
                   </div>
                   <div className="px-5 sm:px-6 pb-5 sm:pb-6">
@@ -539,10 +677,10 @@ export default function StudentDashboard() {
                     ) : (
                       <div className="p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl text-center">
                         <p className="text-sm text-slate-500 mb-2">You haven't described your idea yet.</p>
-                        <Link to="/profile" className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800"><Edit3 className="w-3.5 h-3.5" /> Add idea description</Link>
+                        <Link to="/profile" className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800"><Edit3 className="w-3.5 h-3.5" aria-hidden="true" /> Add idea description</Link>
                       </div>
                     )}
-                    {!hasCofounder && <div className="mt-3 flex items-center gap-2 p-3 bg-violet-50 border border-violet-100 rounded-xl"><UserPlus className="w-4 h-4 text-violet-500 flex-shrink-0" /><p className="text-xs text-violet-700"><Link to="/find-cofounders" className="font-bold underline">Find a co-founder</Link> to build this with you.</p></div>}
+                    {!hasCofounder && <div className="mt-3 flex items-center gap-2 p-3 bg-violet-50 border border-violet-100 rounded-xl"><UserPlus className="w-4 h-4 text-violet-500 flex-shrink-0" aria-hidden="true" /><p className="text-xs text-violet-700"><Link to="/find-cofounders" className="font-bold underline">Find a co-founder</Link> to build this with you.</p></div>}
                   </div>
                 </Card>
               )}
@@ -558,10 +696,10 @@ export default function StudentDashboard() {
                       { Icon: Shield, grad: 'g-em', label: 'Complete Profile', desc: `${completion}% complete — better matches.`, cta: 'Edit', to: '/profile', done: completion >= 100 },
                     ].map((card, i) => (
                       <div key={i} className={`rounded-2xl p-4 sm:p-5 border-2 ${card.highlight ? 'border-violet-200 bg-violet-50' : card.done ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100 bg-white'} lift`}>
-                        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${card.grad} flex items-center justify-center text-white mb-3`}><card.Icon className="w-4 h-4 sm:w-5 sm:h-5" /></div>
+                        <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${card.grad} flex items-center justify-center text-white mb-3`}><card.Icon className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" /></div>
                         <h3 className="font-bold text-slate-900 text-sm mb-1">{card.label}</h3>
                         <p className="text-xs text-slate-500 leading-relaxed mb-3">{card.desc}</p>
-                        <Link to={card.to} className={`inline-flex items-center gap-1.5 text-xs font-bold ${card.done ? 'text-emerald-700' : card.highlight ? 'text-violet-700' : 'text-indigo-600'} hover:gap-2.5 transition-all`}>{card.cta} <ArrowRight className="w-3.5 h-3.5" /></Link>
+                        <Link to={card.to} className={`inline-flex items-center gap-1.5 text-xs font-bold ${card.done ? 'text-emerald-700' : card.highlight ? 'text-violet-700' : 'text-indigo-600'} hover:gap-2.5 transition-all`}>{card.cta} <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" /></Link>
                       </div>
                     ))}
                   </div>
@@ -572,11 +710,11 @@ export default function StudentDashboard() {
               <Card className="f2">
                 <SectionHead title="Suggested Mentors" icon={<Users className="w-5 h-5 text-indigo-500" />} linkLabel="Browse All" linkTo="/find-mentors" />
                 <div className="px-5 sm:px-6 pb-5 sm:pb-6">
-                  <p className="text-xs text-slate-400 mb-4 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Matched to your skills and interests</p>
+                  <p className="text-xs text-slate-400 mb-4 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-indigo-400" aria-hidden="true" /> Matched to your skills and interests</p>
                   {connsLoading ? (<div className="space-y-3"><Shimmer h="h-28" /><Shimmer h="h-28" /><Shimmer h="h-24" /></div>) : mentors.length > 0 ? (
                     <>
-                      <div className="space-y-3">{(showMore.mentors ? mentors : mentors.slice(0, 3)).map((m, i) => <PeopleCard key={m.id || i} item={m} accentClass="bg-indigo-50 text-indigo-700" ctaClass="g-ind" ctaLabel="Request" connectionStatus={connectionStatuses[m.user_id]} onConnect={() => handleConnect(m.user_id, 'mentor_request', m.name)} onMessage={() => { logActivity('message_sent', `Messaged ${m.name}`); navigate('/messages'); }} />)}</div>
-                      {mentors.length > 3 && <button onClick={() => tog('mentors')} className="w-full mt-3 py-2.5 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 rounded-xl flex items-center justify-center gap-1.5 transition-all">{showMore.mentors ? <><ChevronUp className="w-4 h-4" />Show less</> : <><ChevronDown className="w-4 h-4" />See {mentors.length - 3} more</>}</button>}
+                      <div className="space-y-3">{(showMore.mentors ? mentors : mentors.slice(0, 3)).map((m, i) => <PeopleCard key={m.id || i} item={m} accentClass="bg-indigo-50 text-indigo-700" ctaClass="g-ind" ctaLabel="Request" connectionStatus={connectionStatuses[m.user_id]} onConnect={() => handleConnect(m.user_id, 'mentor_request', m.name)} onMessage={() => { logActivity('message_sent', `Messaged ${m.name}`); navigate('/messages'); }} userProfile={profile} />)}</div>
+                      {mentors.length > 3 && <button onClick={() => tog('mentors')} className="w-full mt-3 py-2.5 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 rounded-xl flex items-center justify-center gap-1.5 transition-all">{showMore.mentors ? <><ChevronUp className="w-4 h-4" aria-hidden="true" />Show less</> : <><ChevronDown className="w-4 h-4" aria-hidden="true" />See {mentors.length - 3} more</>}</button>}
                     </>
                   ) : (
                     <div className="py-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200"><p className="text-slate-400 text-sm mb-3">No mentors found yet.</p><Link to="/find-mentors" className="inline-flex items-center gap-1.5 g-ind text-white text-xs font-bold px-4 py-2 rounded-xl">Browse Mentors</Link></div>
@@ -588,11 +726,11 @@ export default function StudentDashboard() {
               <Card className="f3">
                 <SectionHead title="Suggested Co-Founders" icon={<UserPlus className="w-5 h-5 text-violet-500" />} linkLabel="Browse All" linkTo="/find-cofounders" />
                 <div className="px-5 sm:px-6 pb-5 sm:pb-6">
-                  <p className="text-xs text-slate-400 mb-4 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-violet-400" /> Students actively looking to build together</p>
+                  <p className="text-xs text-slate-400 mb-4 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-violet-400" aria-hidden="true" /> Students actively looking to build together</p>
                   {connsLoading ? (<div className="space-y-3"><Shimmer h="h-24" /><Shimmer h="h-24" /></div>) : coFounders.length > 0 ? (
                     <>
-                      <div className="space-y-3">{(showMore.cf ? coFounders : coFounders.slice(0, 3)).map((cf, i) => <PeopleCard key={cf.id || i} item={cf} accentClass="bg-violet-50 text-violet-700" ctaClass="g-vi" ctaLabel="Connect" onConnect={() => handleConnect(cf.user_id, 'cofounder_request', cf.name)} onMessage={() => { logActivity('message_sent', `Messaged ${cf.name}`); navigate('/messages'); }} />)}</div>
-                      {coFounders.length > 3 && <button onClick={() => tog('cf')} className="w-full mt-3 py-2.5 text-sm font-semibold text-violet-600 hover:bg-violet-50 rounded-xl flex items-center justify-center gap-1.5 transition-all">{showMore.cf ? <><ChevronUp className="w-4 h-4" />Show less</> : <><ChevronDown className="w-4 h-4" />See {coFounders.length - 3} more</>}</button>}
+                      <div className="space-y-3">{(showMore.cf ? coFounders : coFounders.slice(0, 3)).map((cf, i) => <PeopleCard key={cf.id || i} item={cf} accentClass="bg-violet-50 text-violet-700" ctaClass="g-vi" ctaLabel="Connect" onConnect={() => handleConnect(cf.user_id, 'cofounder_request', cf.name)} onMessage={() => { logActivity('message_sent', `Messaged ${cf.name}`); navigate('/messages'); }} userProfile={profile} />)}</div>
+                      {coFounders.length > 3 && <button onClick={() => tog('cf')} className="w-full mt-3 py-2.5 text-sm font-semibold text-violet-600 hover:bg-violet-50 rounded-xl flex items-center justify-center gap-1.5 transition-all">{showMore.cf ? <><ChevronUp className="w-4 h-4" aria-hidden="true" />Show less</> : <><ChevronDown className="w-4 h-4" aria-hidden="true" />See {coFounders.length - 3} more</>}</button>}
                     </>
                   ) : (
                     <div className="py-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200"><p className="text-slate-400 text-sm mb-3">No co-founders found yet.</p><Link to="/find-cofounders" className="inline-flex items-center gap-1.5 g-vi text-white text-xs font-bold px-4 py-2 rounded-xl">Browse Co-Founders</Link></div>
@@ -609,9 +747,9 @@ export default function StudentDashboard() {
                       {convos.slice(0, 4).map(c => {
                         const other = c.otherUser || {};
                         return (
-                          <Link key={c.id} to="/messages" className={`flex items-start gap-3 p-3 sm:p-3.5 rounded-2xl transition-all hover:bg-slate-50 ${c.unreadCount > 0 ? 'border-l-4 border-indigo-500 bg-indigo-50/50' : ''}`}>
+                          <Link key={c.id} to="/messages" className={`flex items-start gap-3 p-3 sm:p-3.5 rounded-2xl transition-all hover:bg-slate-50 ${c.unreadCount > 0 ? 'border-l-4 border-indigo-500 bg-indigo-50/50' : ''}`} aria-label={`Chat with ${other.full_name}`}>
                             <div className="relative flex-shrink-0">
-                              <Avatar name={other.full_name} avatar={other.avatar_url} grad={roleGrad(other.user_type)} size="md" />
+                              <Avatar name={other.full_name} avatarPath={other.avatar_url} grad={roleGrad(other.user_type)} size="md" />
                               {c.unreadCount > 0 && <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-500 rounded-full border-2 border-white unread-dot" />}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -627,7 +765,7 @@ export default function StudentDashboard() {
                     </div>
                   ) : (
                     <div className="py-6 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 mb-4">
-                      <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" aria-hidden="true" />
                       <p className="text-slate-400 text-sm">No messages yet.</p>
                       <p className="text-xs text-slate-400 mt-1">Request a mentor to start your first conversation.</p>
                     </div>
@@ -637,18 +775,18 @@ export default function StudentDashboard() {
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Recent Actions</p>
                       {activities.slice(0, 4).map((act, i) => (
                         <div key={i} className="flex items-center gap-2.5 py-1.5">
-                          <div className="w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0"><Activity className="w-3.5 h-3.5 text-indigo-500" /></div>
+                          <div className="w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0"><Activity className="w-3.5 h-3.5 text-indigo-500" aria-hidden="true" /></div>
                           <p className="text-xs text-slate-700 truncate flex-1">{act.description}</p>
                           <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo(act.created_at)}</span>
                         </div>
                       ))}
                     </div>
                   )}
-                  <Link to="/messages" className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 border-2 border-indigo-100 text-indigo-600 rounded-xl text-sm font-semibold hover:bg-indigo-50 transition-all"><Send className="w-4 h-4" /> Open Messages</Link>
+                  <Link to="/messages" className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 border-2 border-indigo-100 text-indigo-600 rounded-xl text-sm font-semibold hover:bg-indigo-50 transition-all"><Send className="w-4 h-4" aria-hidden="true" /> Open Messages</Link>
                 </div>
               </Card>
 
-              {/* OPPORTUNITIES — Real data from DB */}
+              {/* OPPORTUNITIES */}
               <Card className="f4">
                 <SectionHead title="Opportunities" icon={<Megaphone className="w-5 h-5 text-amber-500" />} linkLabel="See All" linkTo="/discover" />
                 <div className="px-5 sm:px-6 pb-5 sm:pb-6">
@@ -659,26 +797,26 @@ export default function StudentDashboard() {
                         const tl = opp.deadline ? (() => { const d = Math.ceil((new Date(opp.deadline) - Date.now()) / 86400000); if (d < 0) return { label: 'Closed', cls: 'text-slate-400' }; if (d === 0) return { label: 'Today!', cls: 'text-red-600 font-bold' }; if (d <= 7) return { label: `${d}d left`, cls: 'text-orange-500 font-semibold' }; return { label: `${d}d left`, cls: 'text-slate-500' }; })() : null;
                         return (
                           <div key={opp.id} className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:shadow-sm transition-all">
-                            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl g-am flex items-center justify-center text-white flex-shrink-0"><Megaphone className="w-5 h-5" /></div>
+                            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl g-am flex items-center justify-center text-white flex-shrink-0"><Megaphone className="w-5 h-5" aria-hidden="true" /></div>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-slate-900 text-sm leading-snug mb-1">{opp.title}</p>
                               {opp.description && <p className="text-xs text-slate-500 mb-2 hidden sm:block line-clamp-2">{opp.description}</p>}
                               <div className="flex gap-3 text-xs">
-                                {opp.deadline && <span className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" />{opp.deadline}</span>}
+                                {opp.deadline && <span className="text-slate-500 flex items-center gap-1"><Clock className="w-3 h-3" aria-hidden="true" />{opp.deadline}</span>}
                                 {tl && <span className={`font-semibold ${tl.cls}`}>{tl.label}</span>}
-                                {opp.link && <a href={opp.link} target="_blank" rel="noreferrer" className="ml-auto g-ind text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:opacity-90 flex items-center gap-1"><ArrowUpRight className="w-3 h-3" />Apply</a>}
+                                {opp.link && <a href={opp.link} target="_blank" rel="noreferrer" className="ml-auto g-ind text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:opacity-90 flex items-center gap-1"><ArrowUpRight className="w-3 h-3" aria-hidden="true" />Apply</a>}
                               </div>
                             </div>
                           </div>
                         );
                       })}
-                      {opportunities.length > 3 && <button onClick={() => tog('opps')} className="w-full mt-3 py-2.5 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl flex items-center justify-center gap-1.5 transition-all">{showMore.opps ? <><ChevronUp className="w-4 h-4" />Show less</> : <><ChevronDown className="w-4 h-4" />See {opportunities.length - 3} more</>}</button>}
+                      {opportunities.length > 3 && <button onClick={() => tog('opps')} className="w-full mt-3 py-2.5 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl flex items-center justify-center gap-1.5 transition-all">{showMore.opps ? <><ChevronUp className="w-4 h-4" aria-hidden="true" />Show less</> : <><ChevronDown className="w-4 h-4" aria-hidden="true" />See {opportunities.length - 3} more</>}</button>}
                     </div>
                   ) : (
                     <div className="py-8 text-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                      <Megaphone className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <Megaphone className="w-8 h-8 text-slate-300 mx-auto mb-2" aria-hidden="true" />
                       <p className="text-slate-400 text-sm">No open opportunities right now.</p>
-                      <Link to="/discover" className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 mt-2">Check Discover <ArrowRight className="w-3.5 h-3.5" /></Link>
+                      <Link to="/discover" className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 mt-2">Check Discover <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" /></Link>
                     </div>
                   )}
                 </div>
@@ -690,13 +828,13 @@ export default function StudentDashboard() {
               <div className="g-dk rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden f0 lift sidebar-profile-card">
                 <div className="absolute -right-6 -bottom-6 w-28 h-28 bg-white/10 rounded-full" />
                 <div className="relative">
-                  <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">My Profile</h3><Shield className="w-5 h-5 text-slate-400" /></div>
+                  <div className="flex items-center justify-between mb-4"><h3 className="font-bold text-lg">My Profile</h3><Shield className="w-5 h-5 text-slate-400" aria-hidden="true" /></div>
                   <div className="flex items-center gap-3 mb-4">
-                    <Avatar name={p.full_name} avatar={currentUserAvatarUrl} grad="from-indigo-400 to-violet-500" size="xl" />
+                    <Avatar name={p.full_name} avatarPath={currentUserAvatarUrl} grad="from-indigo-400 to-violet-500" size="xl" />
                     <div className="min-w-0">
                       <p className="font-semibold truncate">{p.full_name || 'Complete your profile'}</p>
-                      <p className="text-slate-400 text-xs flex items-center gap-1 mt-0.5"><GraduationCap className="w-3 h-3" />{s.university || 'Student'}</p>
-                      {p.location && <p className="text-slate-400 text-xs flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3" />{p.location}</p>}
+                      <p className="text-slate-400 text-xs flex items-center gap-1 mt-0.5"><GraduationCap className="w-3 h-3" aria-hidden="true" />{s.university || 'Student'}</p>
+                      {p.location && <p className="text-slate-400 text-xs flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3" aria-hidden="true" />{p.location}</p>}
                     </div>
                   </div>
                   <div className="flex justify-between text-sm mb-1.5"><span className="text-slate-400">Profile Complete</span><span className="font-bold">{completion}%</span></div>
@@ -707,14 +845,14 @@ export default function StudentDashboard() {
                       <div className="flex flex-wrap gap-1">{s.help_needed.slice(0, 3).map((h, i) => <span key={i} className="text-[10px] bg-white/10 text-white/80 px-2 py-0.5 rounded-full">{h}</span>)}</div>
                     </div>
                   )}
-                  <Link to="/profile" className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-2.5 rounded-xl transition-all"><Edit3 className="w-4 h-4" /> Edit Profile</Link>
+                  <Link to="/profile" className="flex items-center justify-center gap-2 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold py-2.5 rounded-xl transition-all"><Edit3 className="w-4 h-4" aria-hidden="true" /> Edit Profile</Link>
                 </div>
               </div>
 
-              {/* MILESTONES (no XP numbers) */}
+              {/* MILESTONES */}
               <Card className="f1">
                 <div className="px-5 sm:px-6 pt-5 pb-2">
-                  <div className="flex items-center justify-between"><h3 className="font-bold text-slate-900 flex items-center gap-2"><Award className="w-4 h-4 text-violet-500" /> Progress</h3><span className="text-xs text-slate-400">{milestones.filter(m => m.done).length}/{milestones.length}</span></div>
+                  <div className="flex items-center justify-between"><h3 className="font-bold text-slate-900 flex items-center gap-2"><Award className="w-4 h-4 text-violet-500" aria-hidden="true" /> Progress</h3><span className="text-xs text-slate-400">{milestones.filter(m => m.done).length}/{milestones.length}</span></div>
                 </div>
                 <div className="px-5 sm:px-6 pb-5 sm:pb-6 space-y-2">
                   {milestones.map(m => (
@@ -737,10 +875,10 @@ export default function StudentDashboard() {
                     { Icon: MessageSquare, label: 'Messages', to: '/messages', col: 'text-blue-600', badge: unread > 0 ? unread : null },
                     { Icon: Edit3, label: 'Edit Profile', to: '/profile', col: 'text-slate-500' },
                   ].map(({ Icon, label, to, col, badge }, i) => (
-                    <Link key={i} to={to} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-all group">
-                      <Icon className={`w-4 h-4 ${col}`} /><span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 flex-1">{label}</span>
+                    <Link key={i} to={to} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-all group" aria-label={label}>
+                      <Icon className={`w-4 h-4 ${col}`} aria-hidden="true" /><span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 flex-1">{label}</span>
                       {badge && <span className="w-5 h-5 bg-indigo-500 text-white text-xs font-bold rounded-full flex items-center justify-center">{badge}</span>}
-                      <ArrowUpRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500" />
+                      <ArrowUpRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500" aria-hidden="true" />
                     </Link>
                   ))}
                 </div>

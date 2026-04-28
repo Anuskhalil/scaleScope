@@ -1,5 +1,5 @@
-// src/pages/StudentRolePages/ConnectionRequestsPage.jsx
-// ─── Connection Requests — Student view ─────────────────────────────────
+// src/pages/student/ConnectionRequestsPage.jsx
+// ─── Optimized Connection Requests Page — Accessible, Trust-Focused, Production-Ready ───
 // Tabs: Incoming (accept/decline) | Sent (track status)
 // ───────────────────────────────────────────────────────────────────────
 
@@ -17,8 +17,11 @@ import {
     Inbox, Send, UserCheck, UserX, Clock, CheckCircle,
     XCircle, ArrowRight, MapPin, MessageSquare, Users,
     UserPlus, Shield, Briefcase, AlertCircle, Loader,
-    ChevronRight, GraduationCap,
+    ChevronRight, GraduationCap, ArrowLeft,
 } from 'lucide-react';
+
+// 🔧 CHANGED: Added toast for user feedback
+import toast from 'react-hot-toast';
 
 const CSS = `
   .page-bg{background-color:#f4f5fb;background-image:radial-gradient(circle,#c7d2fe 1px,transparent 1px);background-size:28px 28px}
@@ -30,7 +33,51 @@ const CSS = `
   .f1{animation:fu .3s .06s ease both}
   .f2{animation:fu .3s .12s ease both}
   @keyframes fu{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  
+  /* 🔧 CHANGED: Accessibility focus states */
+  button:focus-visible, a:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  
+  /* Mobile optimizations */
+  @media (max-width: 1024px) {
+    .lift:hover { transform: none; box-shadow: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
 `;
+
+// 🔧 CHANGED: Safe fetch wrapper to prevent silent failures
+async function safeFetch(promise, fallback = [], onError = null) {
+  try {
+    const res = await promise;
+    return res?.data || fallback;
+  } catch (error) {
+    console.error('[SafeFetch] Error:', error);
+    if (onError) onError(error);
+    return fallback;
+  }
+}
+
+// 🔧 CHANGED: Simple avatar cache to reduce Supabase storage calls
+const AVATAR_CACHE = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 mins
+
+async function getCachedSignedUrl(path) {
+  if (!path || path.startsWith('http')) return path;
+  const cacheKey = `avatar:${path}`;
+  const cached = AVATAR_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.url;
+
+  try {
+    const cleanPath = path.replace(/^avatars\//, '');
+    const { data } = await supabase.storage.from('avatars').createSignedUrl(cleanPath, 3600);
+    if (data?.signedUrl) {
+      AVATAR_CACHE.set(cacheKey, { url: data.signedUrl, timestamp: Date.now() });
+      return data.signedUrl;
+    }
+  } catch (e) { console.warn('Avatar URL error:', e); }
+  return path;
+}
 
 function roleGrad(t) {
     return {
@@ -46,20 +93,31 @@ function initials(name) {
     return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
-function Avatar({ name, avatar, grad, size = 'md' }) {
+// 🔧 CHANGED: Avatar component with caching + error handling
+function Avatar({ name, avatarPath, grad, size = 'md' }) {
+    const [url, setUrl] = useState(null);
+    const [loading, setLoading] = useState(true);
+    
+    useEffect(() => {
+        let cancelled = false;
+        const resolve = async () => {
+            setLoading(true);
+            const resolved = await getCachedSignedUrl(avatarPath);
+            if (!cancelled) { setUrl(resolved); setLoading(false); }
+        };
+        resolve();
+        return () => { cancelled = true; };
+    }, [avatarPath]);
+
     const sizeMap = {
         sm: 'w-9 h-9 text-xs rounded-xl',
         md: 'w-12 h-12 text-sm rounded-xl',
         lg: 'w-14 h-14 text-base rounded-2xl',
     };
-    if (avatar) {
-        return <img src={avatar} alt={name || ''} className={`${sizeMap[size]} object-cover flex-shrink-0`} />;
-    }
-    return (
-        <div className={`${sizeMap[size]} bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold flex-shrink-0`}>
-            {initials(name)}
-        </div>
-    );
+    
+    if (loading) return <div className={`${sizeMap[size]} bg-slate-200 animate-pulse rounded-xl`} />;
+    if (url) return <img src={url} alt={name || 'User'} className={`${sizeMap[size]} object-cover flex-shrink-0`} loading="lazy" onError={() => setUrl(null)} />;
+    return <div className={`${sizeMap[size]} bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold flex-shrink-0`} aria-hidden="true">{initials(name)}</div>;
 }
 
 function typeBadge(type) {
@@ -109,14 +167,15 @@ export default function ConnectionRequestsPage() {
         setError('');
         try {
             const [inRes, sentRes] = await Promise.all([
-                fetchIncomingRequests(user.id).catch(e => { console.warn(e.message); return []; }),
-                fetchSentRequests(user.id).catch(e => { console.warn(e.message); return []; }),
+                safeFetch(fetchIncomingRequests(user.id), [], () => toast.error('Failed to load incoming requests')),
+                safeFetch(fetchSentRequests(user.id), [], () => toast.error('Failed to load sent requests')),
             ]);
             setIncoming(inRes);
             setSent(sentRes);
         } catch (err) {
             console.error('[ConnectionRequests]', err);
             setError('Failed to load requests.');
+            toast.error('Failed to load requests');
         } finally {
             setLoading(false);
         }
@@ -130,8 +189,10 @@ export default function ConnectionRequestsPage() {
         try {
             await respondToRequest(requestId, 'accepted');
             setIncoming(prev => prev.filter(r => r.id !== requestId));
+            toast.success('Request accepted!');
         } catch (err) {
             setError(err.message || 'Failed to accept request.');
+            toast.error('Failed to accept request');
         } finally {
             setActionLoading(null);
         }
@@ -143,8 +204,10 @@ export default function ConnectionRequestsPage() {
         try {
             await respondToRequest(requestId, 'declined');
             setIncoming(prev => prev.filter(r => r.id !== requestId));
+            toast.success('Request declined');
         } catch (err) {
             setError(err.message || 'Failed to decline request.');
+            toast.error('Failed to decline request');
         } finally {
             setActionLoading(null);
         }
@@ -156,8 +219,10 @@ export default function ConnectionRequestsPage() {
         try {
             await withdrawRequest(requestId);
             setSent(prev => prev.map(r => r.id === requestId ? { ...r, status: 'withdrawn' } : r));
+            toast.success('Request withdrawn');
         } catch (err) {
             setError(err.message || 'Failed to withdraw request.');
+            toast.error('Failed to withdraw request');
         } finally {
             setActionLoading(null);
         }
@@ -170,6 +235,13 @@ export default function ConnectionRequestsPage() {
             <style>{CSS}</style>
             <div className="min-h-screen page-bg">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-8 lg:py-24">
+
+                    {/* ── Back to dashboard ─────────────────────────────────────── */}
+                    <header className="mb-4 f0">
+                        <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-indigo-600 transition-colors">
+                            <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back to Dashboard
+                        </Link>
+                    </header>
 
                     {/* ── Header ─────────────────────────────────────────────── */}
                     <div className="mb-6 f0">
@@ -185,8 +257,9 @@ export default function ConnectionRequestsPage() {
                                     ? 'bg-indigo-600 text-white shadow-sm'
                                     : 'text-slate-600 hover:bg-slate-50'
                                 }`}
+                            aria-pressed={activeTab === 'incoming'}
                         >
-                            <Inbox className="w-4 h-4" />
+                            <Inbox className="w-4 h-4" aria-hidden="true" />
                             Incoming
                             {pendingIncomingCount > 0 && (
                                 <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold ${activeTab === 'incoming' ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
@@ -201,8 +274,9 @@ export default function ConnectionRequestsPage() {
                                     ? 'bg-indigo-600 text-white shadow-sm'
                                     : 'text-slate-600 hover:bg-slate-50'
                                 }`}
+                            aria-pressed={activeTab === 'sent'}
                         >
-                            <Send className="w-4 h-4" />
+                            <Send className="w-4 h-4" aria-hidden="true" />
                             Sent
                             {sent.length > 0 && (
                                 <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold ${activeTab === 'sent' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
@@ -215,15 +289,15 @@ export default function ConnectionRequestsPage() {
 
                     {/* ── Error ──────────────────────────────────────────────── */}
                     {error && (
-                        <div className="flex items-start gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl">
-                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl" role="alert">
+                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
                             <p className="text-sm text-red-700">{error}</p>
                         </div>
                     )}
 
                     {/* ── Loading ────────────────────────────────────────────── */}
                     {loading && (
-                        <div className="space-y-4">
+                        <div className="space-y-4" role="status" aria-live="polite">
                             {[1, 2, 3].map(i => (
                                 <div key={i} className="bg-white rounded-2xl border border-slate-100 p-5">
                                     <div className="flex items-center gap-4">
@@ -236,6 +310,7 @@ export default function ConnectionRequestsPage() {
                                     </div>
                                 </div>
                             ))}
+                            <span className="sr-only">Loading requests...</span>
                         </div>
                     )}
 
@@ -246,7 +321,7 @@ export default function ConnectionRequestsPage() {
                         <>
                             {incoming.length === 0 ? (
                                 <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center f1">
-                                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
                                         <Inbox className="w-8 h-8 text-slate-300" />
                                     </div>
                                     <h3 className="font-bold text-slate-900 text-lg mb-1">No pending requests</h3>
@@ -258,13 +333,13 @@ export default function ConnectionRequestsPage() {
                                             to="/find-mentors"
                                             className="inline-flex items-center justify-center gap-2 g-ind text-white px-5 py-2.5 rounded-xl text-sm font-bold"
                                         >
-                                            Find Mentors <ArrowRight className="w-4 h-4" />
+                                            Find Mentors <ArrowRight className="w-4 h-4" aria-hidden="true" />
                                         </Link>
                                         <Link
                                             to="/find-cofounders"
                                             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 border-2 border-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50"
                                         >
-                                            Find Co-Founders <ArrowRight className="w-4 h-4" />
+                                            Find Co-Founders <ArrowRight className="w-4 h-4" aria-hidden="true" />
                                         </Link>
                                     </div>
                                 </div>
@@ -283,7 +358,7 @@ export default function ConnectionRequestsPage() {
                                                     <div className="flex items-start gap-3 flex-1 min-w-0">
                                                         <Avatar
                                                             name={sender.full_name}
-                                                            avatar={sender.avatar_url}
+                                                            avatarPath={sender.avatar_url}
                                                             grad={roleGrad(sender.user_type)}
                                                             size="md"
                                                         />
@@ -303,7 +378,7 @@ export default function ConnectionRequestsPage() {
                                                                 <span className="capitalize">{sender.user_type || 'User'}</span>
                                                                 {sender.location && (
                                                                     <span className="flex items-center gap-0.5">
-                                                                        <MapPin className="w-3 h-3" />{sender.location}
+                                                                        <MapPin className="w-3 h-3" aria-hidden="true" />{sender.location}
                                                                     </span>
                                                                 )}
                                                                 <span>{timeAgo(req.created_at)}</span>
@@ -332,21 +407,23 @@ export default function ConnectionRequestsPage() {
                                                         <button
                                                             onClick={() => handleAccept(req.id)}
                                                             disabled={actionLoading === req.id}
-                                                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                                                            aria-label={`Accept request from ${sender.full_name || 'user'}`}
                                                         >
                                                             {actionLoading === req.id ? (
-                                                                <Loader className="w-4 h-4 animate-spin" />
+                                                                <Loader className="w-4 h-4 animate-spin" aria-hidden="true" />
                                                             ) : (
-                                                                <UserCheck className="w-4 h-4" />
+                                                                <UserCheck className="w-4 h-4" aria-hidden="true" />
                                                             )}
                                                             Accept
                                                         </button>
                                                         <button
                                                             onClick={() => handleDecline(req.id)}
                                                             disabled={actionLoading === req.id}
-                                                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white text-slate-600 text-sm font-bold rounded-xl border-2 border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white text-slate-600 text-sm font-bold rounded-xl border-2 border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                                                            aria-label={`Decline request from ${sender.full_name || 'user'}`}
                                                         >
-                                                            <UserX className="w-4 h-4" />
+                                                            <UserX className="w-4 h-4" aria-hidden="true" />
                                                             Decline
                                                         </button>
                                                     </div>
@@ -366,7 +443,7 @@ export default function ConnectionRequestsPage() {
                         <>
                             {sent.length === 0 ? (
                                 <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center f1">
-                                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                    <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
                                         <Send className="w-8 h-8 text-slate-300" />
                                     </div>
                                     <h3 className="font-bold text-slate-900 text-lg mb-1">No sent requests</h3>
@@ -378,13 +455,13 @@ export default function ConnectionRequestsPage() {
                                             to="/find-mentors"
                                             className="inline-flex items-center justify-center gap-2 g-ind text-white px-5 py-2.5 rounded-xl text-sm font-bold"
                                         >
-                                            Find Mentors <ArrowRight className="w-4 h-4" />
+                                            Find Mentors <ArrowRight className="w-4 h-4" aria-hidden="true" />
                                         </Link>
                                         <Link
                                             to="/find-cofounders"
                                             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 border-2 border-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50"
                                         >
-                                            Find Co-Founders <ArrowRight className="w-4 h-4" />
+                                            Find Co-Founders <ArrowRight className="w-4 h-4" aria-hidden="true" />
                                         </Link>
                                     </div>
                                 </div>
@@ -407,7 +484,7 @@ export default function ConnectionRequestsPage() {
                                                     <div className="flex items-start gap-3 flex-1 min-w-0">
                                                         <Avatar
                                                             name={receiver.full_name}
-                                                            avatar={receiver.avatar_url}
+                                                            avatarPath={receiver.avatar_url}
                                                             grad={roleGrad(receiver.user_type)}
                                                             size="md"
                                                         />
@@ -418,14 +495,14 @@ export default function ConnectionRequestsPage() {
                                                                     {tBadge.label}
                                                                 </span>
                                                                 <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${sBadge.cls}`}>
-                                                                    <SIcon className="w-3 h-3" />{sBadge.label}
+                                                                    <SIcon className="w-3 h-3" aria-hidden="true" />{sBadge.label}
                                                                 </span>
                                                             </div>
                                                             <div className="flex items-center gap-3 text-xs text-slate-500 mb-1">
                                                                 <span className="capitalize">{receiver.user_type || 'User'}</span>
                                                                 {receiver.location && (
                                                                     <span className="flex items-center gap-0.5">
-                                                                        <MapPin className="w-3 h-3" />{receiver.location}
+                                                                        <MapPin className="w-3 h-3" aria-hidden="true" />{receiver.location}
                                                                     </span>
                                                                 )}
                                                                 <span>Sent {timeAgo(req.created_at)}</span>
@@ -441,12 +518,13 @@ export default function ConnectionRequestsPage() {
                                                         <button
                                                             onClick={() => handleWithdraw(req.id)}
                                                             disabled={actionLoading === req.id}
-                                                            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white text-slate-500 text-xs font-bold rounded-xl border-2 border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                                            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white text-slate-500 text-xs font-bold rounded-xl border-2 border-slate-200 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 min-h-[44px]"
+                                                            aria-label={`Withdraw request to ${receiver.full_name || 'user'}`}
                                                         >
                                                             {actionLoading === req.id ? (
-                                                                <Loader className="w-3.5 h-3.5 animate-spin" />
+                                                                <Loader className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                                                             ) : (
-                                                                <XCircle className="w-3.5 h-3.5" />
+                                                                <XCircle className="w-3.5 h-3.5" aria-hidden="true" />
                                                             )}
                                                             Withdraw
                                                         </button>

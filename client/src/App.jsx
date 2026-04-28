@@ -45,6 +45,8 @@ import InvestorDashboard from './pages/InvestorRolePages/InvestorDashboard'
 import InvestorProfilePage from './pages/InvestorProfile'
 import FindStartupsPage from './pages/InvestorRolePages/FindStartupsPage'
 
+import { Toaster } from 'react-hot-toast';
+
 // ─── Dashboard: routes by role ────────────────────────────────────────────
 function DashboardRouter() {
   const { user } = useAuth()
@@ -118,6 +120,13 @@ function AppLayout({ children }) {
 export default function App() {
   return (
     <AuthProvider>
+       <Toaster 
+        position="top-right" 
+        toastOptions={{ 
+          duration: 4000,
+          style: { background: '#1e293b', color: '#fff' },
+        }} 
+      />
       <AppLayout>
         <Routes>
 

@@ -1,3 +1,6 @@
+// src/pages/student/FindCoFoundersPage.jsx
+// ─── Optimized Find Co-Founders Page — AI-Transparent, Accessible, Production-Ready ───
+
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
@@ -12,9 +15,13 @@ import {
   Award, MessageSquare, Heart, UserPlus,
   ChevronRight, Filter, MapPin, Briefcase,
   Loader, AlertTriangle, RefreshCw, Users, Rocket,
+  Info,
 } from 'lucide-react';
 
-// ─── Design system (moved to global CSS in production) ───────────────────
+// 🔧 CHANGED: Added toast for user feedback
+import toast from 'react-hot-toast';
+
+// 🔧 CHANGED: Added CSS for tooltips, focus states, and better loading
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
   .ss { font-family:'Syne',sans-serif; }
@@ -57,6 +64,14 @@ const STYLES = `
   .shimmer { background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%); background-size:200% 100%; animation:sh 1.4s infinite; border-radius:16px; contain: content; }
   @keyframes sh { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
   .no-scroll::-webkit-scrollbar{display:none} .no-scroll{-ms-overflow-style:none;scrollbar-width:none}
+  
+  /* 🔧 CHANGED: Accessibility focus states & lightweight tooltip */
+  button:focus-visible, a:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  .tooltip-wrap{position:relative}
+  .tooltip-wrap:hover .tooltip-box{opacity:1;visibility:visible;transform:translateY(0)}
+  .tooltip-box{opacity:0;visibility:hidden;transform:translateY(4px);transition:all .15s ease;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%) translateY(4px);background:#1e293b;color:#fff;font-size:11px;padding:8px 10px;border-radius:8px;white-space:nowrap;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.15);max-width:240px;white-space:normal;text-align:left}
+  .tooltip-box::after{content:'';position:absolute;top:100%;left:50%;margin-left:-4px;border-width:4px;border-style:solid;border-color:#1e293b transparent transparent transparent}
+  
   /* Mobile optimizations */
   @media (max-width: 1024px) {
     .lift:hover { transform: none; box-shadow: none; }
@@ -66,6 +81,69 @@ const STYLES = `
     * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   }
 `;
+
+// 🔧 CHANGED: Safe fetch wrapper to prevent silent failures
+async function safeFetch(promise, fallback = [], onError = null) {
+  try {
+    const res = await promise;
+    return res?.data || fallback;
+  } catch (error) {
+    console.error('[SafeFetch] Error:', error);
+    if (onError) onError(error);
+    return fallback;
+  }
+}
+
+// 🔧 CHANGED: Simple avatar cache to reduce Supabase storage calls
+const AVATAR_CACHE = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 mins
+
+async function getCachedSignedUrl(path) {
+  if (!path || path.startsWith('http')) return path;
+  const cacheKey = `avatar:${path}`;
+  const cached = AVATAR_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.url;
+
+  try {
+    const cleanPath = path.replace(/^avatars\//, '');
+    const { data } = await supabase.storage.from('avatars').createSignedUrl(cleanPath, 3600);
+    if (data?.signedUrl) {
+      AVATAR_CACHE.set(cacheKey, { url: data.signedUrl, timestamp: Date.now() });
+      return data.signedUrl;
+    }
+  } catch (e) { console.warn('Avatar URL error:', e); }
+  return path;
+}
+
+// 🔧 CHANGED: AI match explanation generator for transparency
+function getMatchExplanation(userProfile, suggested) {
+  if (!userProfile) return ['Based on your profile activity'];
+  const reasons = [];
+  
+  // Skill complementarity
+  const userSkills = new Set(userProfile.skills_with_levels?.map(s => s.skill?.toLowerCase()) || []);
+  const candSkills = new Set((suggested.skills_with_levels || []).map(s => s.skill?.toLowerCase()));
+  const complementary = [...candSkills].filter(s => !userSkills.has(s)).slice(0, 2);
+  if (complementary.length) reasons.push(`Complements with: ${complementary.join(', ')}`);
+  
+  // Shared interests
+  const userInterests = new Set(userProfile.interests?.map(i => i.toLowerCase()) || []);
+  const candInterests = new Set(suggested.interests?.map(i => i.toLowerCase()) || []);
+  const shared = [...userInterests].filter(i => candInterests.has(i)).slice(0, 2);
+  if (shared.length) reasons.push(`Shared interest: ${shared.join(', ')}`);
+  
+  // Startup stage alignment
+  if (suggested.has_startup_idea && userProfile.startup_idea_description) {
+    reasons.push('Both actively building startups');
+  }
+  
+  // Location match
+  if (userProfile.location && suggested.profiles?.location === userProfile.location) {
+    reasons.push('Same location');
+  }
+  
+  return reasons.length > 0 ? reasons : ['Profile alignment based on activity'];
+}
 
 // ─── Constants (memoized to prevent re-creation) ─────────────────────────
 const F_SKILLS = Object.freeze(['React', 'Node.js', 'AI/ML', 'Python', 'iOS/Swift', 'Design/Figma', 'Marketing', 'Finance', 'Product', 'Data', 'DevOps', 'Sales']);
@@ -84,14 +162,7 @@ function useDebounce(value, delay = 300) {
   return debounced;
 }
 
-function useTimeout(callback, delay, deps = []) {
-  useEffect(() => {
-    const id = setTimeout(callback, delay);
-    return () => clearTimeout(id);
-  }, deps); // eslint-disable-line react-hooks/exhaustive-deps
-}
-
-// ─── Shape DB row into card format (FIXED) ─────────────────────
+// ─── Shape DB row into card format (FIXED + enhanced) ─────────────────────
 function shapeCofounder(row, currentUserId) {
   const p = row.profiles || {};
   const name = p.full_name || 'Founder';
@@ -173,6 +244,8 @@ function shapeCofounder(row, currentUserId) {
     ].map(c => ({ ...c, val: Math.min(c.val, 99) })),
 
     projects: [],
+    // 🔧 CHANGED: Store raw avatar path for caching
+    avatarPath: p.avatar_url,
   };
 }
 
@@ -222,7 +295,7 @@ const CompatBars = memo(({ scores }) => (
   </div>
 ));
 
-// ─── Profile Panel (memoized) ────────────────────────────────────────────
+// ─── Profile Panel (memoized + accessible) ────────────────────────────────────────────
 const ProfilePanel = memo(({ cf, onClose, onConnect, onMessage }) => {
   const [tab, setTab] = useState('about');
 
@@ -238,8 +311,8 @@ const ProfilePanel = memo(({ cf, onClose, onConnect, onMessage }) => {
       <div className="w-full max-w-lg bg-white h-full flex flex-col shadow-2xl slide-in dm overflow-hidden">
         <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <p id="profile-title" className="text-xs font-bold text-slate-400 uppercase tracking-widest">Co-Founder Profile</p>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-all" aria-label="Close profile">
-            <X className="w-4 h-4 text-slate-500" />
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-all min-h-[44px]" aria-label="Close profile">
+            <X className="w-4 h-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto thin">
@@ -342,10 +415,10 @@ const ProfilePanel = memo(({ cf, onClose, onConnect, onMessage }) => {
           </div>
         </div>
         <div className="sticky bottom-0 border-t border-slate-100 bg-white px-6 py-4 flex gap-3 flex-shrink-0">
-          <button onClick={() => onMessage(cf)} className="flex-1 flex items-center justify-center gap-2 border-2 border-slate-200 text-slate-700 hover:border-violet-300 hover:text-violet-600 py-3 rounded-xl text-sm font-bold transition-all min-h-[44px]">
+          <button onClick={() => onMessage(cf)} className="flex-1 flex items-center justify-center gap-2 border-2 border-slate-200 text-slate-700 hover:border-violet-300 hover:text-violet-600 py-3 rounded-xl text-sm font-bold transition-all min-h-[44px]" aria-label={`Message ${cf.name}`}>
             <MessageSquare className="w-4 h-4" aria-hidden="true" /> Message
           </button>
-          <button onClick={() => onConnect(cf)} className="flex-1 flex items-center justify-center gap-2 g-vi text-white py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-violet-200 min-h-[44px]">
+          <button onClick={() => onConnect(cf)} className="flex-1 flex items-center justify-center gap-2 g-vi text-white py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-violet-200 min-h-[44px]" aria-label={`Connect with ${cf.name}`}>
             <UserPlus className="w-4 h-4" aria-hidden="true" /> Connect
           </button>
         </div>
@@ -354,7 +427,7 @@ const ProfilePanel = memo(({ cf, onClose, onConnect, onMessage }) => {
   );
 });
 
-// ─── Connect Modal (memoized) ────────────────────────────────────────────
+// ─── Connect Modal (memoized + accessible + toast feedback) ────────────────────────────────────────────
 const ConnectModal = memo(({ cf, userId, onClose }) => {
   const [idea, setIdea] = useState('');
   const [why, setWhy] = useState('');
@@ -368,8 +441,10 @@ const ConnectModal = memo(({ cf, userId, onClose }) => {
       const message = [idea && `Idea: ${idea}`, why && `Why: ${why}`].filter(Boolean).join('\n');
       await sendConnectionRequest(userId, cf.user_id, 'cofounder_request', message);
       setSent(true);
+      toast.success('Co-founder request sent!');
     } catch (err) {
       setError(err.message || 'Failed to send request');
+      toast.error('Failed to send request');
     } finally {
       setSending(false);
     }
@@ -385,11 +460,11 @@ const ConnectModal = memo(({ cf, userId, onClose }) => {
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
       <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl modal-pop">
         <div className="w-16 h-16 g-vi rounded-2xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
-          <CheckCircle className="w-8 h-8 text-white" />
+          <CheckCircle className="w-8 h-8 text-white" aria-hidden="true" />
         </div>
         <h3 className="ss font-black text-slate-900 text-xl mb-2">Request Sent!</h3>
         <p className="text-sm text-slate-500 leading-relaxed mb-6"><strong className="text-slate-700">{cf.name}</strong> will receive your co-founder request.</p>
-        <button onClick={onClose} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all min-h-[44px]">Done</button>
+        <button onClick={onClose} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all min-h-[44px]" aria-label="Close confirmation">Done</button>
       </div>
     </div>
   );
@@ -399,8 +474,8 @@ const ConnectModal = memo(({ cf, userId, onClose }) => {
       <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl modal-pop dm">
         <div className="flex items-center justify-between mb-6">
           <h3 id="connect-title" className="ss font-black text-slate-900 text-xl">Send Co-Founder Request</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all" aria-label="Close">
-            <X className="w-4 h-4 text-slate-500" />
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all min-h-[44px]" aria-label="Close">
+            <X className="w-4 h-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
         <div className="flex items-center gap-3 p-4 bg-violet-50 border border-violet-100 rounded-2xl mb-6">
@@ -425,6 +500,7 @@ const ConnectModal = memo(({ cf, userId, onClose }) => {
               onChange={e => setIdea(e.target.value)}
               placeholder="e.g. AI-powered personalised learning for Pakistan's students"
               maxLength={200}
+              aria-label="Your startup idea"
             />
           </div>
           <div>
@@ -437,6 +513,7 @@ const ConnectModal = memo(({ cf, userId, onClose }) => {
               onChange={e => setWhy(e.target.value)}
               placeholder="Reference their specific background..."
               maxLength={500}
+              aria-label="Why you want to connect"
             />
           </div>
         </div>
@@ -457,7 +534,7 @@ const ConnectModal = memo(({ cf, userId, onClose }) => {
   );
 });
 
-// ─── Message Modal (memoized) ────────────────────────────────────────────
+// ─── Message Modal (memoized + accessible + toast feedback) ────────────────────────────────────────────
 const MessageModal = memo(({ cf, userId, onClose }) => {
   const navigate = useNavigate();
   const [msg, setMsg] = useState('');
@@ -471,8 +548,10 @@ const MessageModal = memo(({ cf, userId, onClose }) => {
       await getOrCreateConversation(userId, cf.user_id);
       navigate('/messages');
       onClose();
+      toast.success('Opening conversation...');
     } catch (err) {
       setError(err.message || 'Failed to open conversation');
+      toast.error('Failed to open conversation');
       setSending(false);
     }
   }, [msg, userId, cf.user_id, navigate, onClose]);
@@ -496,8 +575,8 @@ const MessageModal = memo(({ cf, userId, onClose }) => {
               <p className="text-xs text-slate-400">{cf.role}</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all" aria-label="Close">
-            <X className="w-4 h-4 text-slate-500" />
+          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all min-h-[44px]" aria-label="Close">
+            <X className="w-4 h-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 p-3 rounded-xl mb-4" role="alert">{error}</p>}
@@ -525,9 +604,10 @@ const MessageModal = memo(({ cf, userId, onClose }) => {
   );
 });
 
-// ─── CoFounder Card (memoized for performance) ───────────────────────────
-const CoFounderCard = memo(({ cf, onView, onConnect, onMessage, onSave, isSaved }) => {
+// ─── CoFounder Card (memoized for performance + accessibility + AI transparency) ───────────────────────────
+const CoFounderCard = memo(({ cf, onView, onConnect, onMessage, onSave, isSaved, userProfile }) => {
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const reasons = getMatchExplanation(userProfile, cf);
 
   return (
     <div
@@ -591,8 +671,8 @@ const CoFounderCard = memo(({ cf, onView, onConnect, onMessage, onSave, isSaved 
           )}
           <div className="mb-4"><CompatBars scores={cf.compatScore} /></div>
 
-          {/* Match transparency - accessible toggle */}
-          <div className="bg-violet-50 border border-violet-100 rounded-xl p-3 mb-4 text-xs text-violet-700 leading-relaxed">
+          {/* 🔧 CHANGED: Match transparency - accessible toggle with tooltip */}
+          <div className="bg-violet-50 border border-violet-100 rounded-xl p-3 mb-4 text-xs text-violet-700 leading-relaxed tooltip-wrap">
             <button
               onClick={() => setShowBreakdown(!showBreakdown)}
               className="flex items-center justify-between w-full group text-left"
@@ -626,24 +706,37 @@ const CoFounderCard = memo(({ cf, onView, onConnect, onMessage, onSave, isSaved 
                 </div>
               ))}
             </div>
+            {/* 🔧 CHANGED: AI explanation tooltip */}
+            <button className="mt-2 text-[10px] text-violet-500 hover:text-violet-700 font-medium" aria-label="See detailed match reasons">
+              Why these reasons?
+            </button>
+            <div className="tooltip-box">
+              <p className="font-semibold mb-1">Match Factors:</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                {reasons.map((r, i) => <li key={i}>{r}</li>)}
+              </ul>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => onView(cf)}
               className="flex items-center gap-1.5 border-2 border-slate-200 text-slate-700 hover:border-violet-300 hover:text-violet-600 px-4 py-2 rounded-xl text-sm font-bold transition-all min-h-[44px]"
+              aria-label={`View ${cf.name}'s profile`}
             >
               View Profile <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
             <button
               onClick={() => onConnect(cf)}
               className="flex items-center gap-1.5 g-vi text-white px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-md shadow-violet-200 min-h-[44px]"
+              aria-label={`Connect with ${cf.name}`}
             >
               <UserPlus className="w-3.5 h-3.5" aria-hidden="true" /> Connect
             </button>
             <button
               onClick={() => onMessage(cf)}
               className="flex items-center gap-1.5 border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-4 py-2 rounded-xl text-sm font-bold transition-all min-h-[44px]"
+              aria-label={`Message ${cf.name}`}
             >
               <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> Message
             </button>
@@ -652,6 +745,7 @@ const CoFounderCard = memo(({ cf, onView, onConnect, onMessage, onSave, isSaved 
               className={`flex items-center gap-1.5 border-2 px-4 py-2 rounded-xl text-sm font-bold transition-all min-h-[44px]
                 ${isSaved ? 'border-rose-300 bg-rose-50 text-rose-600' : 'border-slate-200 text-slate-500 hover:border-rose-300 hover:text-rose-500'}`}
               aria-pressed={isSaved}
+              aria-label={isSaved ? 'Remove from saved' : 'Save to favorites'}
             >
               <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} aria-hidden="true" />
               {isSaved ? 'Saved' : 'Save'}
@@ -673,6 +767,7 @@ export default function FindCoFoundersPage() {
   const [founders, setFounders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchErr, setFetchErr] = useState('');
+  const [studentProfile, setStudentProfile] = useState(null); // 🔧 CHANGED: Store for AI explanations
 
   const [query, setQuery] = useState('');
   const [fSkills, setFSkills] = useState([]);
@@ -707,19 +802,29 @@ export default function FindCoFoundersPage() {
     }, 10000);
 
     try {
-      const currentUserProfile = await fetchStudentProfile(user.id);
+      // 🔧 CHANGED: Use safeFetch with error handling
+      const currentUserProfile = await safeFetch(
+        fetchStudentProfile(user.id),
+        {},
+        () => toast.error('Failed to load your profile')
+      );
+      setStudentProfile(currentUserProfile);
 
-      const matchedFounders = await fetchMatchedCoFounders(
-        currentUserProfile,
-        {
-          skills: fSkills,
-          industry: fInd[0],
-          startupStage: fStage,
-          location: fLoc[0],
-          availability: fAvail,
-          limit: 30,
-        },
-        { minScore: 35 }
+      const matchedFounders = await safeFetch(
+        fetchMatchedCoFounders(
+          currentUserProfile,
+          {
+            skills: fSkills,
+            industry: fInd[0],
+            startupStage: fStage,
+            location: fLoc[0],
+            availability: fAvail,
+            limit: 30,
+          },
+          { minScore: 35 }
+        ),
+        [],
+        () => toast.error('Failed to load co-founder matches')
       );
 
       const shaped = matchedFounders
@@ -736,6 +841,7 @@ export default function FindCoFoundersPage() {
           ? "Network issue. Please check your connection."
           : "Failed to load matches. Please try again.";
       setFetchErr(userMsg);
+      toast.error(userMsg);
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
@@ -832,7 +938,7 @@ export default function FindCoFoundersPage() {
         {/* Match Banner */}
         <div className="g-vi rounded-2xl p-5 mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 f1">
           <div className="w-11 h-11 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0" aria-hidden="true">
-            <Sparkles className="w-5 h-5 text-white" />
+            <Sparkles className="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div className="flex-1">
             <p className="ss font-bold text-white text-base">Smart Matching Based on Your Profile</p>
@@ -848,7 +954,7 @@ export default function FindCoFoundersPage() {
           <div className="flex items-center gap-3 bg-red-50 border border-red-100 rounded-2xl px-5 py-3 mb-6" role="alert">
             <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" aria-hidden="true" />
             <p className="text-sm text-red-700 flex-1">{fetchErr}</p>
-            <button onClick={loadFounders} className="flex items-center gap-1 text-xs font-bold text-red-600">
+            <button onClick={loadFounders} className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-800 min-h-[44px]" aria-label="Retry loading">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Retry
             </button>
           </div>
@@ -871,6 +977,7 @@ export default function FindCoFoundersPage() {
             className="lg:hidden flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm min-h-[44px]"
             aria-expanded={sbOpen}
             aria-controls="filters-sidebar"
+            aria-label="Toggle filters"
           >
             <Filter className="w-4 h-4" aria-hidden="true" /> Filters
             {activeN > 0 && <span className="g-vi text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeN}</span>}
@@ -992,7 +1099,7 @@ export default function FindCoFoundersPage() {
               // Empty state with CTAs
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-100">
                 <div className="w-16 h-16 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4" aria-hidden="true">
-                  <Users className="w-8 h-8 text-violet-500" />
+                  <Users className="w-8 h-8 text-violet-500" aria-hidden="true" />
                 </div>
                 <p className="ss font-bold text-slate-700 mb-2 text-lg">No co-founders match your filters</p>
                 <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
@@ -1008,7 +1115,7 @@ export default function FindCoFoundersPage() {
                     Clear Filters
                   </button>
                   <button
-                    onClick={() => navigate('/student-profile')}
+                    onClick={() => navigate('/profile')}
                     className="px-5 py-2.5 border-2 border-violet-200 text-violet-700 rounded-xl font-semibold hover:bg-violet-50 transition-all min-h-[44px]"
                   >
                     Complete My Profile
@@ -1021,6 +1128,7 @@ export default function FindCoFoundersPage() {
                 <CoFounderCard
                   key={cf.id}
                   cf={cf}
+                  userProfile={studentProfile} // 🔧 CHANGED: Pass for AI explanations
                   onView={handleView}
                   onConnect={handleConnect}
                   onMessage={handleMessage}

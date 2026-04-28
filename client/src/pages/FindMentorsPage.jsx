@@ -1,3 +1,6 @@
+// src/pages/student/FindMentorsPage.jsx
+// ─── Optimized Find Mentors Page — AI-Transparent, Accessible, Production-Ready ───
+
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
@@ -16,9 +19,13 @@ import {
   ChevronRight, Filter, Building2,
   MapPin, Send, Loader,
   AlertTriangle, RefreshCw, ArrowLeft,
+  Info,
 } from 'lucide-react';
 
-// ─── Design system (move to global CSS in production) ───────────────────
+// 🔧 CHANGED: Added toast for user feedback
+import toast from 'react-hot-toast';
+
+// 🔧 CHANGED: Added CSS for tooltips, focus states, and better loading
 const STYLES = `
   .ss  { font-family:'Syne',sans-serif; }
   .dm  { font-family:'DM Sans',sans-serif; }
@@ -54,6 +61,14 @@ const STYLES = `
   .thin::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:4px; }
   .shimmer { background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%); background-size:200% 100%; animation:sh 1.4s infinite; border-radius:16px; contain: content; }
   @keyframes sh { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  
+  /* 🔧 CHANGED: Accessibility focus states & lightweight tooltip */
+  button:focus-visible, a:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  .tooltip-wrap{position:relative}
+  .tooltip-wrap:hover .tooltip-box{opacity:1;visibility:visible;transform:translateY(0)}
+  .tooltip-box{opacity:0;visibility:hidden;transform:translateY(4px);transition:all .15s ease;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%) translateY(4px);background:#1e293b;color:#fff;font-size:11px;padding:8px 10px;border-radius:8px;white-space:nowrap;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.15);max-width:240px;white-space:normal;text-align:left}
+  .tooltip-box::after{content:'';position:absolute;top:100%;left:50%;margin-left:-4px;border-width:4px;border-style:solid;border-color:#1e293b transparent transparent transparent}
+  
   /* Mobile optimizations */
   @media (max-width: 1024px) {
     .lift:hover { transform: none; box-shadow: none; }
@@ -63,6 +78,69 @@ const STYLES = `
     * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   }
 `;
+
+// 🔧 CHANGED: Safe fetch wrapper to prevent silent failures
+async function safeFetch(promise, fallback = [], onError = null) {
+  try {
+    const res = await promise;
+    return res?.data || fallback;
+  } catch (error) {
+    console.error('[SafeFetch] Error:', error);
+    if (onError) onError(error);
+    return fallback;
+  }
+}
+
+// 🔧 CHANGED: Simple avatar cache to reduce Supabase storage calls
+const AVATAR_CACHE = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 mins
+
+async function getCachedSignedUrl(path) {
+  if (!path || path.startsWith('http')) return path;
+  const cacheKey = `avatar:${path}`;
+  const cached = AVATAR_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.url;
+
+  try {
+    const cleanPath = path.replace(/^avatars\//, '');
+    const { data } = await supabase.storage.from('avatars').createSignedUrl(cleanPath, 3600);
+    if (data?.signedUrl) {
+      AVATAR_CACHE.set(cacheKey, { url: data.signedUrl, timestamp: Date.now() });
+      return data.signedUrl;
+    }
+  } catch (e) { console.warn('Avatar URL error:', e); }
+  return path;
+}
+
+// 🔧 CHANGED: AI match explanation generator for transparency
+function getMatchExplanation(userProfile, mentor) {
+  if (!userProfile) return ['Based on your profile activity'];
+  const reasons = [];
+  
+  // Expertise overlap with student's needs
+  const studentNeeds = new Set(userProfile.help_needed?.map(h => h.toLowerCase()) || []);
+  const mentorExpertise = new Set(mentor.expertise_areas?.map(e => e.toLowerCase()) || []);
+  const overlap = [...studentNeeds].filter(n => mentorExpertise.has(n)).slice(0, 2);
+  if (overlap.length) reasons.push(`Helps with: ${overlap.join(', ')}`);
+  
+  // Industry alignment
+  if (userProfile.interests?.some(i => mentor.expertise_areas?.some(e => e.toLowerCase().includes(i.toLowerCase())))) {
+    reasons.push('Shared industry interest');
+  }
+  
+  // Experience level match
+  const studentYear = userProfile.current_year?.match(/\d+/)?.[0];
+  if (studentYear && mentor.years_experience >= 5) {
+    reasons.push('Experienced mentor for early-stage founders');
+  }
+  
+  // Location match
+  if (userProfile.location && mentor.profiles?.location === userProfile.location) {
+    reasons.push('Same location for in-person meetings');
+  }
+  
+  return reasons.length > 0 ? reasons : ['Profile alignment based on activity'];
+}
 
 // ─── Constants (frozen to prevent mutation) ────────────────────────────
 const F_IND = Object.freeze(['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech']);
@@ -86,7 +164,7 @@ const initials = (name) => {
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 };
 
-// ✅ Shape mentor data with real scores + connection status
+// ✅ Shape mentor data with real scores + connection status + avatar caching
 const shapeMentor = (row, connStatus) => {
   const p = row.profiles || {};
   const yearsExp = typeof row.years_experience === 'number' 
@@ -122,6 +200,8 @@ const shapeMentor = (row, connStatus) => {
     sessionTypes: row.available_for || [],
     slots: [],
     connStatus: connStatus || null,
+    // 🔧 CHANGED: Store raw avatar path for caching
+    avatarPath: p.avatar_url,
   };
 };
 
@@ -158,9 +238,10 @@ const CheckRow = memo(({ label, checked, onClick }) => (
   </label>
 ));
 
-// ─── Profile Panel (memoized + accessible) ─────────────────────────────
-const ProfilePanel = memo(({ mentor, onClose, onRequest, onMessage }) => {
+// ─── Profile Panel (memoized + accessible + AI transparency) ─────────────────────────────
+const ProfilePanel = memo(({ mentor, onClose, onRequest, onMessage, userProfile }) => {
   const [tab, setTab] = useState('about');
+  const reasons = getMatchExplanation(userProfile, mentor);
   
   useEffect(() => {
     const handleEsc = (e) => e.key === 'Escape' && onClose();
@@ -175,7 +256,7 @@ const ProfilePanel = memo(({ mentor, onClose, onRequest, onMessage }) => {
         <div className="border-b border-slate-100 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <p id="mentor-profile-title" className="text-xs font-bold text-slate-400 uppercase tracking-widest">Mentor Profile</p>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-all min-h-[44px]" aria-label="Close profile">
-            <X className="w-4 h-4 text-slate-500" />
+            <X className="w-4 h-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto thin">
@@ -205,9 +286,18 @@ const ProfilePanel = memo(({ mentor, onClose, onRequest, onMessage }) => {
               ))}
             </div>
             {mentor.aiReason && (
-              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-700 leading-relaxed">
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-xs text-indigo-700 leading-relaxed tooltip-wrap">
                 <p className="font-bold flex items-center gap-1 mb-1"><Zap className="w-3 h-3 text-indigo-500" aria-hidden="true" />Why AI matched you</p>
                 {mentor.aiReason}
+                <button className="mt-1 text-[10px] text-indigo-500 hover:text-indigo-700 font-medium" aria-label="See detailed match reasons">
+                  Why these reasons?
+                </button>
+                <div className="tooltip-box">
+                  <p className="font-semibold mb-1">Match Factors:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {reasons.map((r, i) => <li key={i}>{r}</li>)}
+                  </ul>
+                </div>
               </div>
             )}
           </div>
@@ -288,20 +378,24 @@ const ProfilePanel = memo(({ mentor, onClose, onRequest, onMessage }) => {
         </div>
         <div className="border-t border-slate-100 bg-white px-6 py-4 flex gap-3 flex-shrink-0">
           <button onClick={() => onMessage(mentor)}
-            className="flex-1 flex items-center justify-center gap-2 border-2 border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 py-3 rounded-xl text-sm font-bold transition-all min-h-[44px]">
+            className="flex-1 flex items-center justify-center gap-2 border-2 border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 py-3 rounded-xl text-sm font-bold transition-all min-h-[44px]"
+            aria-label={`Message ${mentor.name}`}
+          >
             <MessageSquare className="w-4 h-4" aria-hidden="true" /> Message
           </button>
           {mentor.connStatus === 'accepted' ? (
-            <div className="flex-1 flex items-center justify-center gap-2 bg-emerald-50 border-2 border-emerald-200 text-emerald-700 py-3 rounded-xl text-sm font-bold min-h-[44px]">
+            <div className="flex-1 flex items-center justify-center gap-2 bg-emerald-50 border-2 border-emerald-200 text-emerald-700 py-3 rounded-xl text-sm font-bold min-h-[44px]" aria-label="Already connected">
               <CheckCircle className="w-4 h-4" aria-hidden="true" /> Connected
             </div>
           ) : mentor.connStatus === 'pending' ? (
-            <div className="flex-1 flex items-center justify-center gap-2 bg-amber-50 border-2 border-amber-200 text-amber-700 py-3 rounded-xl text-sm font-bold min-h-[44px]">
+            <div className="flex-1 flex items-center justify-center gap-2 bg-amber-50 border-2 border-amber-200 text-amber-700 py-3 rounded-xl text-sm font-bold min-h-[44px]" aria-label="Request pending">
               <Clock className="w-4 h-4" aria-hidden="true" /> Pending
             </div>
           ) : (
             <button onClick={() => onRequest(mentor)}
-              className="flex-1 flex items-center justify-center gap-2 g-ai text-white py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-indigo-200 min-h-[44px]">
+              className="flex-1 flex items-center justify-center gap-2 g-ai text-white py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-indigo-200 min-h-[44px]"
+              aria-label={`Request mentorship from ${mentor.name}`}
+            >
               <Send className="w-4 h-4" aria-hidden="true" /> Request Mentorship
             </button>
           )}
@@ -311,7 +405,7 @@ const ProfilePanel = memo(({ mentor, onClose, onRequest, onMessage }) => {
   );
 });
 
-// ─── Request Modal (memoized + accessible) ─────────────────────────────
+// ─── Request Modal (memoized + accessible + toast feedback) ─────────────────────────────
 const RequestModal = memo(({ mentor, userId, onClose }) => {
   const [note, setNote] = useState('');
   const [sending, setSending] = useState(false);
@@ -329,8 +423,10 @@ const RequestModal = memo(({ mentor, userId, onClose }) => {
         return;
       }
       setSent(true);
+      toast.success('Mentorship request sent!');
     } catch (err) {
       setError(err.message || 'Failed to send request');
+      toast.error('Failed to send request');
     } finally {
       setSending(false);
     }
@@ -346,11 +442,11 @@ const RequestModal = memo(({ mentor, userId, onClose }) => {
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="already-sent-title">
       <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl modal-pop">
         <div className="w-16 h-16 bg-amber-50 border-2 border-amber-200 rounded-2xl flex items-center justify-center mx-auto mb-4" aria-hidden="true">
-          <Clock className="w-8 h-8 text-amber-600" />
+          <Clock className="w-8 h-8 text-amber-600" aria-hidden="true" />
         </div>
         <h3 id="already-sent-title" className="ss font-black text-slate-900 text-xl mb-2">Already Requested</h3>
         <p className="text-sm text-slate-500 leading-relaxed mb-6">You've already sent a mentorship request to <strong className="text-slate-700">{mentor.name}</strong>. Wait for them to respond.</p>
-        <button onClick={onClose} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all min-h-[44px]">Close</button>
+        <button onClick={onClose} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all min-h-[44px]" aria-label="Close confirmation">Close</button>
       </div>
     </div>
   );
@@ -358,10 +454,10 @@ const RequestModal = memo(({ mentor, userId, onClose }) => {
   if (sent) return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="sent-title">
       <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl modal-pop">
-        <div className="w-16 h-16 g-ai rounded-2xl flex items-center justify-center mx-auto mb-4" aria-hidden="true"><CheckCircle className="w-8 h-8 text-white" /></div>
+        <div className="w-16 h-16 g-ai rounded-2xl flex items-center justify-center mx-auto mb-4" aria-hidden="true"><CheckCircle className="w-8 h-8 text-white" aria-hidden="true" /></div>
         <h3 id="sent-title" className="ss font-black text-slate-900 text-xl mb-2">Request Sent!</h3>
         <p className="text-sm text-slate-500 leading-relaxed mb-6"><strong className="text-slate-700">{mentor.name}</strong> will respond within 48 hours.</p>
-        <button onClick={onClose} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all min-h-[44px]">Close</button>
+        <button onClick={onClose} className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all min-h-[44px]" aria-label="Close confirmation">Close</button>
       </div>
     </div>
   );
@@ -372,7 +468,7 @@ const RequestModal = memo(({ mentor, userId, onClose }) => {
         <div className="flex items-center justify-between mb-6">
           <h3 id="request-title" className="ss font-black text-slate-900 text-xl">Request Mentorship</h3>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all min-h-[44px]" aria-label="Close">
-            <X className="w-4 h-4 text-slate-500" />
+            <X className="w-4 h-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
         <div className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl mb-6">
@@ -396,6 +492,7 @@ const RequestModal = memo(({ mentor, userId, onClose }) => {
               className="inp resize-none"
               placeholder="e.g. Preparing for pre-seed raise, product-market fit validation..."
               maxLength={500}
+              aria-label="Your mentorship request message"
             />
           </div>
         </div>
@@ -412,7 +509,7 @@ const RequestModal = memo(({ mentor, userId, onClose }) => {
   );
 });
 
-// ─── Message Modal (memoized + accessible) ─────────────────────────────
+// ─── Message Modal (memoized + accessible + toast feedback) ─────────────────────────────
 const MessageModal = memo(({ mentor, userId, onClose }) => {
   const navigate = useNavigate();
   const [msg, setMsg] = useState('');
@@ -428,8 +525,10 @@ const MessageModal = memo(({ mentor, userId, onClose }) => {
       await sendMessage(conversationId, userId, msg.trim());
       navigate('/messages');
       onClose();
+      toast.success('Message sent!');
     } catch (err) {
       setError(err.message || 'Failed to open conversation');
+      toast.error('Failed to send message');
       setSending(false);
     }
   }, [msg, userId, mentor.user_id, navigate, onClose]);
@@ -453,7 +552,7 @@ const MessageModal = memo(({ mentor, userId, onClose }) => {
             <div><p className="ss font-bold text-slate-900">{mentor.name}</p><p className="text-xs text-slate-400">{mentor.title}</p></div>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all min-h-[44px]" aria-label="Close">
-            <X className="w-4 h-4 text-slate-500" />
+            <X className="w-4 h-4 text-slate-500" aria-hidden="true" />
           </button>
         </div>
         {error && <p className="text-xs text-red-600 bg-red-50 p-3 rounded-xl mb-4" role="alert">{error}</p>}
@@ -481,8 +580,10 @@ const MessageModal = memo(({ mentor, userId, onClose }) => {
   );
 });
 
-// ─── Mentor Card (memoized for performance) ────────────────────────────
-const MentorCard = memo(({ m, onView, onRequest, onMessage }) => {
+// ─── Mentor Card (memoized for performance + accessibility + AI transparency) ────────────────────────────
+const MentorCard = memo(({ m, onView, onRequest, onMessage, userProfile }) => {
+  const reasons = getMatchExplanation(userProfile, m);
+  
   return (
     <div 
       key={m.id}
@@ -546,32 +647,47 @@ const MentorCard = memo(({ m, onView, onRequest, onMessage }) => {
             </div>
           )}
           {m.aiReason && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-4 text-xs text-indigo-700 leading-relaxed">
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-4 text-xs text-indigo-700 leading-relaxed tooltip-wrap">
               <Zap className="w-3 h-3 inline mr-1 text-indigo-500" aria-hidden="true" />
               <strong>Why AI matched you: </strong>{m.aiReason}
+              <button className="ml-1 text-[10px] text-indigo-500 hover:text-indigo-700 font-medium" aria-label="See detailed match reasons">
+                Why?
+              </button>
+              <div className="tooltip-box">
+                <p className="font-semibold mb-1">Match Factors:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  {reasons.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
             </div>
           )}
           <div className="flex flex-wrap gap-2">
             <button onClick={() => onView(m)}
-              className="flex items-center gap-1.5 border-2 border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold transition-all min-h-[44px]">
+              className="flex items-center gap-1.5 border-2 border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 px-4 py-2 rounded-xl text-sm font-bold transition-all min-h-[44px]"
+              aria-label={`View ${m.name}'s profile`}
+            >
               View Profile <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
             {m.connStatus === 'accepted' ? (
-              <div className="flex items-center gap-1.5 bg-emerald-50 border-2 border-emerald-200 text-emerald-700 px-4 py-2 rounded-xl text-sm font-bold min-h-[44px]">
+              <div className="flex items-center gap-1.5 bg-emerald-50 border-2 border-emerald-200 text-emerald-700 px-4 py-2 rounded-xl text-sm font-bold min-h-[44px]" aria-label="Already connected">
                 <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" /> Connected
               </div>
             ) : m.connStatus === 'pending' ? (
-              <div className="flex items-center gap-1.5 bg-amber-50 border-2 border-amber-200 text-amber-700 px-4 py-2 rounded-xl text-sm font-bold min-h-[44px]">
+              <div className="flex items-center gap-1.5 bg-amber-50 border-2 border-amber-200 text-amber-700 px-4 py-2 rounded-xl text-sm font-bold min-h-[44px]" aria-label="Request pending">
                 <Clock className="w-3.5 h-3.5" aria-hidden="true" /> Request Pending
               </div>
             ) : (
               <>
                 <button onClick={() => onRequest(m)}
-                  className="flex items-center gap-1.5 g-ai text-white px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-md shadow-indigo-200 min-h-[44px]">
+                  className="flex items-center gap-1.5 g-ai text-white px-4 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-md shadow-indigo-200 min-h-[44px]"
+                  aria-label={`Request mentorship from ${m.name}`}
+                >
                   <Send className="w-3.5 h-3.5" aria-hidden="true" /> Request Mentorship
                 </button>
                 <button onClick={() => onMessage(m)}
-                  className="flex items-center gap-1.5 border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-4 py-2 rounded-xl text-sm font-bold transition-all min-h-[44px]">
+                  className="flex items-center gap-1.5 border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-4 py-2 rounded-xl text-sm font-bold transition-all min-h-[44px]"
+                  aria-label={`Message ${m.name}`}
+                >
                   <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" /> Message
                 </button>
               </>
@@ -593,6 +709,7 @@ export default function FindMentorsPage() {
   const [mentors, setMentors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchErr, setFetchErr] = useState('');
+  const [studentProfile, setStudentProfile] = useState(null); // 🔧 CHANGED: Store for AI explanations
 
   const [query, setQuery] = useState('');
   const [fInd, setFInd] = useState([]);
@@ -625,16 +742,29 @@ export default function FindMentorsPage() {
 
     try {
       // 1. Get student profile for matching
-      const studentProfile = await fetchStudentProfile(user.id);
+      const studentProfileData = await safeFetch(
+        fetchStudentProfile(user.id),
+        {},
+        () => toast.error('Failed to load your profile')
+      );
+      setStudentProfile(studentProfileData);
 
       // 2. Fetch raw mentors from DB
-      const rawData = await fetchMentors({ limit: 50 });
+      const rawData = await safeFetch(
+        fetchMentors({ limit: 50 }),
+        [],
+        () => toast.error('Failed to load mentors')
+      );
 
       // 3. Score and rank with matchingService (personalized to student profile)
-      const ranked = rankMentors(rawData, studentProfile, { limit: 50 });
+      const ranked = rankMentors(rawData, studentProfileData, { limit: 50 });
 
       // 4. Get connection status in ONE query (not N queries)
-      const sentReqs = await fetchSentRequests(user.id);
+      const sentReqs = await safeFetch(
+        fetchSentRequests(user.id),
+        [],
+        () => toast.error('Failed to load connection status')
+      );
       const statusMap = {};
       for (const req of sentReqs) {
         if (req.status === 'pending') statusMap[req.receiver_id] = 'pending';
@@ -652,6 +782,7 @@ export default function FindMentorsPage() {
           ? "Network issue. Please check your connection."
           : "Failed to load mentors. Please try again.";
       setFetchErr(userMsg);
+      toast.error(userMsg);
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
@@ -740,7 +871,7 @@ export default function FindMentorsPage() {
         {/* AI Banner */}
         <div className="g-ai rounded-2xl p-5 mb-7 flex flex-col sm:flex-row items-start sm:items-center gap-4 f1">
           <div className="w-11 h-11 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0" aria-hidden="true">
-            <Sparkles className="w-5 h-5 text-white" />
+            <Sparkles className="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div className="flex-1">
             <p className="ss font-bold text-white text-base">AI-Powered Mentor Matching</p>
@@ -756,7 +887,7 @@ export default function FindMentorsPage() {
           <div className="flex items-center gap-3 bg-red-50 border border-red-100 rounded-2xl px-5 py-3 mb-6" role="alert">
             <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" aria-hidden="true" />
             <p className="text-sm text-red-700 flex-1">{fetchErr}</p>
-            <button onClick={loadMentors} className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-800 min-h-[44px]">
+            <button onClick={loadMentors} className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-800 min-h-[44px]" aria-label="Retry loading">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Retry
             </button>
           </div>
@@ -779,6 +910,7 @@ export default function FindMentorsPage() {
             className="lg:hidden flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 shadow-sm min-h-[44px]"
             aria-expanded={sbOpen}
             aria-controls="filters-sidebar"
+            aria-label="Toggle filters"
           >
             <Filter className="w-4 h-4" aria-hidden="true" /> Filters
             {activeN > 0 && <span className="g-ai text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeN}</span>}
@@ -886,6 +1018,7 @@ export default function FindMentorsPage() {
                 <MentorCard
                   key={m.id}
                   m={m}
+                  userProfile={studentProfile} // 🔧 CHANGED: Pass for AI explanations
                   onView={handleView}
                   onRequest={handleRequest}
                   onMessage={handleMessage}
@@ -903,6 +1036,7 @@ export default function FindMentorsPage() {
           onClose={() => setProfile(null)} 
           onRequest={m => { setProfile(null); setRequest(m); }} 
           onMessage={m => { setProfile(null); setMessage(m); }} 
+          userProfile={studentProfile} // 🔧 CHANGED: Pass for AI explanations
         />
       )}
       {request && user && (

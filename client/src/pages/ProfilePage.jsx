@@ -8,7 +8,11 @@ import {
   Edit3, MapPin, Mail, Link as LinkIcon, CheckCircle, Camera,
   Loader, Github, Twitter, Linkedin, X, Tag, Shield,
   BookOpen, Users, DollarSign, Rocket, Plus, Lightbulb, Heart,
+  Info, Clock,
 } from 'lucide-react';
+
+// 🔧 CHANGED: Added toast import for user feedback
+import toast from 'react-hot-toast';
 
 const STYLES = `
   .ss { font-family:'Syne',sans-serif; }
@@ -28,6 +32,16 @@ const STYLES = `
   .sec-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6366f1; display:flex; align-items:center; gap:6px; margin-bottom:16px; }
   .fade-in { animation:fi .3s ease both; }
   @keyframes fi { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+  
+  /* 🔧 CHANGED: Added focus styles for accessibility */
+  .inp:focus-visible, .sel:focus-visible, .ta:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+  button:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
 `;
 
 const GRADUATION_YEARS = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i - 2);
@@ -44,26 +58,42 @@ const LOOKING_FOR_OPTS = [
   { val: 'Startup', icon: '🚀', desc: 'Join a startup' },
 ];
 
+// 🔧 CHANGED: New function that returns completion breakdown with actionable tips
+function calcCompletionWithBreakdown(f) {
+  const checks = [
+    { field: 'full_name', condition: (f.full_name || '').trim().length > 1, points: 10, label: 'Full name' },
+    { field: 'bio', condition: (f.bio || '').trim().length > 20, points: 10, label: 'Bio (20+ chars)' },
+    { field: 'location', condition: (f.location || '').trim().length > 1, points: 5, label: 'Location' },
+    { field: 'avatar', condition: !!f.avatar_url, points: 10, label: 'Profile photo' },
+    { field: 'university', condition: (f.university || '').trim().length > 1, points: 8, label: 'University' },
+    { field: 'degree', condition: (f.degree || '').trim().length > 1, points: 8, label: 'Degree' },
+    { field: 'skills', condition: (f.skills || []).length >= 3, points: 10, label: '3+ skills' },
+    { field: 'interests', condition: (f.interests || []).length >= 2, points: 5, label: '2+ interests' },
+    { field: 'linkedin', condition: !!f.linkedin_url, points: 10, label: 'LinkedIn profile' },
+    { field: 'github', condition: !!f.github_url, points: 3, label: 'GitHub profile' },
+    { field: 'career_goals', condition: (f.career_goals || '').trim().length > 10, points: 5, label: 'Career goals' },
+    { field: 'looking_for', condition: (f.looking_for || []).length > 0, points: 3, label: 'Looking for preference' },
+    { field: 'help_needed', condition: (f.help_needed || []).length > 0, points: 3, label: 'Help needed' },
+    { field: 'mentor_bio', condition: (f.short_bio_for_mentors || '').trim().length > 10, points: 3, label: 'Mentor bio' },
+    { field: 'commitment', condition: !!f.commitment_level, points: 2, label: 'Commitment level' },
+    { field: 'skill_levels', condition: (f.skills_with_levels || []).length >= (f.skills || []).length && (f.skills || []).length > 0, points: 3, label: 'Skill proficiency levels' },
+    { field: 'startup_idea', condition: (f.startup_idea_description || '').trim().length > 10, points: 2, label: 'Startup idea description' },
+  ];
+
+  const earned = checks.filter(c => c.condition).reduce((sum, c) => sum + c.points, 0);
+  const total = checks.reduce((sum, c) => sum + c.points, 0);
+  const missing = checks.filter(c => !c.condition).slice(0, 3); // Top 3 priorities
+
+  return {
+    percentage: Math.min(Math.round((earned / total) * 100), 100),
+    missing: missing,
+    all: checks
+  };
+}
+
+// 🔧 CHANGED: Original calcCompletion kept for backward compatibility in DB updates
 function calcCompletion(f) {
-  let s = 0;
-  if ((f.full_name || '').trim().length > 1) s += 10;
-  if ((f.bio || '').trim().length > 20) s += 10;
-  if ((f.location || '').trim().length > 1) s += 5;
-  if (f.avatar_url) s += 10;
-  if ((f.university || '').trim().length > 1) s += 8;
-  if ((f.degree || '').trim().length > 1) s += 8;
-  if ((f.skills || []).length >= 3) s += 10;
-  if ((f.interests || []).length >= 2) s += 5;
-  if (f.linkedin_url) s += 10;
-  if (f.github_url) s += 3;
-  if ((f.career_goals || '').trim().length > 10) s += 5;
-  if ((f.looking_for || []).length > 0) s += 3;
-  if ((f.help_needed || []).length > 0) s += 3;
-  if ((f.short_bio_for_mentors || '').trim().length > 10) s += 3;
-  if (f.commitment_level) s += 2;
-  if ((f.skills_with_levels || []).length >= (f.skills || []).length && (f.skills || []).length > 0) s += 3;
-  if ((f.startup_idea_description || '').trim().length > 10) s += 2;
-  return Math.min(s, 100);
+  return calcCompletionWithBreakdown(f).percentage;
 }
 
 const makeEmpty = (user, role) => ({
@@ -82,9 +112,21 @@ const makeEmpty = (user, role) => ({
   commitment_level: '',
 });
 
-
 function slugify(text) {
   return (text || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+}
+
+// 🔧 CHANGED: New helper to get signed URL for avatar display only (never stored in DB)
+async function getAvatarSignedUrl(avatarPath) {
+  if (!avatarPath || avatarPath.startsWith('http')) return avatarPath;
+  try {
+    const cleanPath = avatarPath.replace(/^avatars\//, '');
+    const { data } = await supabase.storage.from('avatars').createSignedUrl(cleanPath, 3600);
+    return data?.signedUrl || null;
+  } catch (err) {
+    console.warn('Failed to generate avatar signed URL:', err);
+    return null;
+  }
 }
 
 export default function ProfilePage() {
@@ -106,9 +148,61 @@ export default function ProfilePage() {
   const [skillInput, setSkillInput] = useState('');
   const [interestInput, setInterestInput] = useState('');
 
-  const avatarPathRef = useRef(null);
+  // 🔧 CHANGED: Store raw avatar PATH only (never signed URL in state for DB)
+  const [avatarPath, setAvatarPath] = useState('');
+  const [avatarDisplayUrl, setAvatarDisplayUrl] = useState('');
+
+  // 🔧 CHANGED: Local storage helpers for draft persistence
+  const STORAGE_KEY = `student_profile_draft_${user?.id || 'anon'}`;
+
+  const saveDraftToStorage = (formData) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        ...formData,
+        _savedAt: Date.now(),
+        _isDraft: true
+      }));
+    } catch (e) {
+      console.warn('Failed to save draft to localStorage', e);
+    }
+  };
+
+  const loadDraftFromStorage = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const draft = JSON.parse(raw);
+      // Only use drafts saved in last 24 hours
+      if (Date.now() - draft._savedAt < 24 * 60 * 60 * 1000) {
+        return draft;
+      }
+      // Clean up old draft
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to load draft from localStorage', e);
+    }
+    return null;
+  };
+
+  const clearDraftFromStorage = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to clear draft', e);
+    }
+  };
 
   useEffect(() => { if (user) load(); }, [user]);
+
+  // 🔧 CHANGED: Auto-save draft on form changes (debounced)
+  useEffect(() => {
+    if (isEditMode && formData.full_name) { // Only save if user has started typing
+      const timer = setTimeout(() => {
+        saveDraftToStorage(formData);
+      }, 1000); // Save draft 1 second after last change
+      return () => clearTimeout(timer);
+    }
+  }, [formData, isEditMode]);
 
   const load = async () => {
     setLoading(true);
@@ -119,59 +213,84 @@ export default function ProfilePage() {
         const { data } = await supabase.from('student_profiles').select('*').eq('user_id', user.id).maybeSingle();
         sd = data || {};
       }
+
       if (pd) {
-        // Convert stored avatar PATH to a signed URL for display
-        let avatarDisplay = pd.avatar_url || '';
-        avatarPathRef.current = avatarDisplay;
+        // 🔧 CHANGED: Check for unsaved draft first
+        const draft = loadDraftFromStorage();
+
+        // Only use database data if no valid draft exists OR if draft is older than DB
+        const useDB = !draft || (new Date(pd.updated_at).getTime() > draft._savedAt);
+
+        const sourceData = useDB ? { ...pd, ...sd } : { ...pd, ...sd, ...draft };
+
+        // 🔧 CHANGED: Convert stored avatar PATH to a signed URL for display
+        let avatarDisplay = sourceData.avatar_url || '';
+        // 🔧 FIX: Use state variable instead of undefined ref
+        setAvatarPath(avatarDisplay);
 
         if (avatarDisplay && !avatarDisplay.includes('/object/sign/')) {
-          // It's a path, not a signed URL — generate one
           try {
             const { data: urlData } = await supabase.storage
               .from('avatars')
               .createSignedUrl(avatarDisplay, 86400);
             if (urlData?.signedUrl) avatarDisplay = urlData.signedUrl;
           } catch {
-            avatarDisplay = ''; // Signed URL failed — show fallback
+            avatarDisplay = '';
           }
         }
 
+        // 🔧 FIX: Update display URL state
+        setAvatarDisplayUrl(avatarDisplay);
+
         const m = {
           ...makeEmpty(user, userRole),
-          full_name: pd.full_name || '',
-          email: pd.email || user?.email || '',
-          user_type: pd.user_type || userRole || '',
-          location: pd.location || '',
-          bio: pd.bio || '',
-          avatar_url: avatarDisplay,
-          linkedin_url: pd.linkedin_url || '',
-          github_url: pd.github_url || '',
-          twitter_url: pd.twitter_url || '',
-          skills: Array.isArray(pd.skills) ? pd.skills : [],
-          interests: Array.isArray(pd.interests) ? pd.interests : [],
-          onboarding_completed: pd.onboarding_completed || false,
-          metadata: pd.metadata || {},
-          university: sd.university || '',
-          degree: sd.degree || '',
-          major: sd.major || '',
-          graduation_year: sd.graduation_year || '',
-          current_year: sd.current_year || '',
-          career_goals: sd.career_goals || '',
-          looking_for: Array.isArray(sd.looking_for) ? sd.looking_for : [],
-          startup_idea_description: sd.startup_idea_description || '',
-          skills_with_levels: Array.isArray(sd.skills_with_levels) ? sd.skills_with_levels : [],
-          help_needed: Array.isArray(sd.help_needed) ? sd.help_needed : [],
-          short_bio_for_mentors: sd.short_bio_for_mentors || '',
-          commitment_level: sd.commitment_level || '',
+          full_name: sourceData.full_name || '',
+          email: sourceData.email || user?.email || '',
+          user_type: sourceData.user_type || userRole || '',
+          location: sourceData.location || '',
+          bio: sourceData.bio || '',
+          avatar_url: avatarDisplay, // For UI display only
+          linkedin_url: sourceData.linkedin_url || '',
+          github_url: sourceData.github_url || '',
+          twitter_url: sourceData.twitter_url || '',
+          skills: Array.isArray(sourceData.skills) ? sourceData.skills : [],
+          interests: Array.isArray(sourceData.interests) ? sourceData.interests : [],
+          onboarding_completed: sourceData.onboarding_completed || false,
+          metadata: sourceData.metadata || {},
+          university: sourceData.university || '',
+          degree: sourceData.degree || '',
+          major: sourceData.major || '',
+          graduation_year: sourceData.graduation_year || '',
+          current_year: sourceData.current_year || '',
+          career_goals: sourceData.career_goals || '',
+          looking_for: Array.isArray(sourceData.looking_for) ? sourceData.looking_for : [],
+          startup_idea_description: sourceData.startup_idea_description || '',
+          skills_with_levels: Array.isArray(sourceData.skills_with_levels) ? sourceData.skills_with_levels : [],
+          help_needed: Array.isArray(sourceData.help_needed) ? sourceData.help_needed : [],
+          short_bio_for_mentors: sourceData.short_bio_for_mentors || '',
+          commitment_level: sourceData.commitment_level || '',
         };
+
         snapRef.current = m;
         setFormData(m);
         setIsEditMode(false);
+
+        // 🔧 CHANGED: If we loaded a draft, show a gentle notice
+        if (draft && !useDB) {
+          toast.info('Unsaved changes restored', { duration: 3000 });
+        }
       } else {
+        // New user - check for draft
+        const draft = loadDraftFromStorage();
+        if (draft) {
+          setFormData(draft);
+          toast.info('Draft restored', { duration: 3000 });
+        }
         setIsEditMode(true);
       }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to load profile');
       setIsEditMode(true);
     } finally {
       setLoading(false);
@@ -183,6 +302,8 @@ export default function ProfilePage() {
     setSaving(true); setSaveError('');
     try {
       const now = new Date().toISOString();
+
+      // 🔧 CHANGED: Always store raw PATH in database, never signed URL
       const { error: pe } = await supabase.from('profiles').upsert({
         id: user.id,
         full_name: formData.full_name,
@@ -190,7 +311,7 @@ export default function ProfilePage() {
         user_type: formData.user_type,
         location: formData.location,
         bio: formData.bio,
-        avatar_url: avatarPathRef.current || formData.avatar_url,
+        avatar_url: avatarPath || null, // ← Critical: store PATH only
         linkedin_url: formData.linkedin_url,
         github_url: formData.github_url,
         twitter_url: formData.twitter_url,
@@ -222,53 +343,61 @@ export default function ProfilePage() {
         }, { onConflict: 'user_id' });
         if (se) throw se;
       }
+
+      // 🔧 CHANGED: Clear draft on successful save
+      clearDraftFromStorage();
+
+      toast.success('Profile saved successfully!');
       setIsEditMode(false);
       await load();
     } catch (err) {
-      setSaveError(err.message || 'Error saving');
+      console.error('Save error:', err);
+      setSaveError(err.message || 'Error saving profile');
+      toast.error('Failed to save. Please try again.');
       if (snapRef.current) setFormData(snapRef.current);
     } finally { setSaving(false); }
   };
 
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0];
-    if (!file || file.size > 5 * 1024 * 1024 || !file.type.startsWith('image/')) return;
+    if (!file || file.size > 5 * 1024 * 1024 || !file.type.startsWith('image/')) {
+      toast.error('Please select a valid image under 5MB');
+      return;
+    }
     setUploading(true);
     try {
       const ext = file.name.split('.').pop();
       const username = slugify(formData.full_name || 'user');
+      const path = `${username}_${user.id}.${ext}`; // ← Store this exact path
 
-      // ✅ FIX: Remove "avatars/" prefix - bucket name already handles it
-      const path = `${username}_${user.id}.${ext}`;
-
-      // 1. Upload file
+      // 1. Upload file to storage
       const { error: ue } = await supabase.storage
         .from('avatars')
         .upload(path, file, { upsert: true });
       if (ue) throw ue;
 
-      // 2. Generate a signed URL
-      const { data: urlData, error: urlErr } = await supabase.storage
+      // 2. Generate signed URL for display only (NOT stored in DB)
+      const { data: urlData } = await supabase.storage
         .from('avatars')
         .createSignedUrl(path, 86400);
-      if (urlErr) throw urlErr;
 
-      // 3. Store the raw PATH in database
-      avatarPathRef.current = path;
-      await supabase
-        .from('profiles')
-        .update({
-          avatar_url: path,
-          updated_at: new Date().toISOString(),
-          last_active: new Date().toISOString(),
-        })
-        .eq('id', user.id);
+      // 3. Update state: store PATH for DB, signed URL for display
+      setAvatarPath(path);
+      setAvatarDisplayUrl(urlData?.signedUrl || '');
 
-      // 4. Show the signed URL in state
-      setFormData(prev => ({ ...prev, avatar_url: urlData.signedUrl }));
+      // 4. Update DB with PATH only
+      await supabase.from('profiles').update({
+        avatar_url: path, // ← Critical: PATH only, never signed URL
+        updated_at: new Date().toISOString(),
+        last_active: new Date().toISOString(),
+      }).eq('id', user.id);
 
+      // 5. Update form data for immediate UI feedback
+      setFormData(prev => ({ ...prev, avatar_url: urlData?.signedUrl || prev.avatar_url }));
+      toast.success('Avatar updated!');
     } catch (err) {
-      alert('Upload failed: ' + err.message);
+      console.error('Upload error:', err);
+      toast.error('Upload failed: ' + err.message);
     } finally {
       setUploading(false);
     }
@@ -292,19 +421,27 @@ export default function ProfilePage() {
     try {
       await supabase.from('profiles').delete().eq('id', user.id);
       await supabase.auth.signOut();
+      toast.success('Account deleted');
       navigate('/');
-    } catch (err) { alert('Error: ' + err.message); }
+    } catch (err) {
+      console.error('Delete error:', err);
+      toast.error('Failed to delete: ' + err.message);
+    }
   };
 
   const getRoleIcon = () => ({ student: <GraduationCap className="w-4 h-4" />, mentor: <Users className="w-4 h-4" />, investor: <DollarSign className="w-4 h-4" />, 'early-stage-founder': <Rocket className="w-4 h-4" /> }[userRole] || <User className="w-4 h-4" />);
 
   if (loading) return (
     <><style>{STYLES}</style><RoleNavbar />
-      <div className="h-screen flex items-center justify-center"><Loader className="w-8 h-8 animate-spin text-indigo-600" /></div>
+      <div className="h-screen flex items-center justify-center" role="status" aria-live="polite">
+        <Loader className="w-8 h-8 animate-spin text-indigo-600" aria-hidden="true" />
+        <span className="sr-only">Loading profile...</span>
+      </div>
     </>
   );
 
-  const completion = calcCompletion(formData);
+  // 🔧 CHANGED: Use new breakdown function
+  const completion = calcCompletionWithBreakdown(formData);
   const verifPts = [formData.linkedin_url ? 3 : 0, formData.github_url ? 2 : 0, formData.twitter_url ? 1 : 0].reduce((a, b) => a + b, 0);
   const verifPct = Math.round((verifPts / 6) * 100);
 
@@ -316,25 +453,49 @@ export default function ProfilePage() {
         <div className="max-w-5xl mx-auto">
 
           {saveError && (
-            <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-3 mb-6 fade-in">
-              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-3 mb-6 fade-in" role="alert">
+              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" aria-hidden="true" />
               <p className="text-sm text-red-700 flex-1">{saveError}</p>
-              <button onClick={() => setSaveError('')}><X className="w-4 h-4 text-red-400" /></button>
+              <button onClick={() => setSaveError('')} aria-label="Dismiss error">
+                <X className="w-4 h-4 text-red-400" />
+              </button>
             </div>
           )}
 
-          {completion < 100 && (
+          {/* 🔧 CHANGED: Completion banner now shows actionable tips */}
+          {completion.percentage < 100 && (
             <div className="g-am rounded-2xl p-5 mb-8 text-white fade-in">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h3 className="font-bold text-base ss">Complete Your Profile</h3>
-                  <p className="text-sm text-white/80">A complete profile gets you better mentor and co-founder matches.</p>
+                  <p className="text-sm text-white/80">
+                    {completion.missing.length > 0
+                      ? `Next: Add ${completion.missing.map(m => m.label).join(', ')}`
+                      : 'A complete profile gets better mentor and co-founder matches.'}
+                  </p>
                 </div>
-                <div className="text-right"><div className="text-3xl font-black ss">{completion}%</div><div className="text-xs text-white/70">Complete</div></div>
+                <div className="text-right"><div className="text-3xl font-black ss">{completion.percentage}%</div><div className="text-xs text-white/70">Complete</div></div>
               </div>
               <div className="w-full bg-white/30 rounded-full h-2">
-                <div className="bg-white rounded-full h-2 transition-all duration-500" style={{ width: `${completion}%` }} />
+                <div className="bg-white rounded-full h-2 transition-all duration-500" style={{ width: `${completion.percentage}%` }} />
               </div>
+
+              {/* 🔧 CHANGED: Expandable suggestions */}
+              {completion.missing.length > 0 && (
+                <details className="mt-3 text-sm">
+                  <summary className="cursor-pointer font-medium hover:underline flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5" /> See all suggestions
+                  </summary>
+                  <ul className="mt-2 space-y-1.5">
+                    {completion.missing.map((item, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-white rounded-full" />
+                        <span>{item.label} (+{item.points}%)</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </div>
           )}
 
@@ -345,15 +506,22 @@ export default function ProfilePage() {
               <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-7 text-center">
                 <div className="relative inline-block mb-4">
                   <div className="h-24 w-24 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 mx-auto flex items-center justify-center border-4 border-white shadow-lg overflow-hidden">
-                    {formData.avatar_url
-                      ? <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" loading="lazy" />
-                      : <span className="text-white text-2xl font-bold ss">{formData.full_name?.charAt(0)?.toUpperCase() || 'U'}</span>
+                    {avatarDisplayUrl
+                      ? <img src={avatarDisplayUrl} alt={`${formData.full_name || 'User'} avatar`} className="w-full h-full object-cover" loading="lazy" />
+                      : <span className="text-white text-2xl font-bold ss" aria-hidden="true">{formData.full_name?.charAt(0)?.toUpperCase() || 'U'}</span>
                     }
                   </div>
                   {isEditMode && (
                     <label className="absolute bottom-0 right-0 p-2 bg-indigo-600 rounded-full cursor-pointer hover:bg-indigo-700 shadow-lg">
-                      {uploading ? <Loader className="w-4 h-4 text-white animate-spin" /> : <Camera className="w-4 h-4 text-white" />}
-                      <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" disabled={uploading} />
+                      {uploading ? <Loader className="w-4 h-4 text-white animate-spin" aria-hidden="true" /> : <Camera className="w-4 h-4 text-white" aria-hidden="true" />}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                        className="hidden"
+                        disabled={uploading}
+                        aria-label="Upload profile picture"
+                      />
                     </label>
                   )}
                 </div>
@@ -363,7 +531,7 @@ export default function ProfilePage() {
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold uppercase mb-2">
                   {getRoleIcon()} {formData.user_type?.replace(/-/g, ' ')}
                 </div>
-                {formData.location && <p className="text-xs text-slate-400 flex items-center justify-center gap-1 mt-1"><MapPin className="w-3 h-3" />{formData.location}</p>}
+                {formData.location && <p className="text-xs text-slate-400 flex items-center justify-center gap-1 mt-1"><MapPin className="w-3 h-3" aria-hidden="true" />{formData.location}</p>}
                 {(formData.looking_for || []).length > 0 && (
                   <div className="flex flex-wrap justify-center gap-1 mt-2">
                     {formData.looking_for.map((v, i) => {
@@ -374,32 +542,51 @@ export default function ProfilePage() {
                 )}
                 {formData.commitment_level && (
                   <p className="text-xs text-slate-400 mt-2 flex items-center justify-center gap-1">
-                    <Rocket className="w-3 h-3" />{formData.commitment_level}
+                    <Rocket className="w-3 h-3" aria-hidden="true" />{formData.commitment_level}
                   </p>
                 )}
               </div>
 
               <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-5 space-y-3">
                 {!isEditMode ? (
-                  <button onClick={() => setIsEditMode(true)} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all">
-                    <Edit3 className="w-4 h-4" /> Edit Profile
+                  <button
+                    onClick={() => setIsEditMode(true)}
+                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all"
+                    aria-label="Edit profile"
+                  >
+                    <Edit3 className="w-4 h-4" aria-hidden="true" /> Edit Profile
                   </button>
                 ) : (
                   <>
-                    <button onClick={handleUpdate} disabled={saving} className="w-full py-3 bg-green-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-green-700 disabled:opacity-50 transition-all">
-                      {saving ? <><Loader className="w-4 h-4 animate-spin" />Saving…</> : <><Save className="w-4 h-4" />Save Changes</>}
+                    <button
+                      onClick={handleUpdate}
+                      disabled={saving}
+                      className="w-full py-3 bg-green-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-green-700 disabled:opacity-50 transition-all"
+                      aria-busy={saving}
+                    >
+                      {saving ? <><Loader className="w-4 h-4 animate-spin" aria-hidden="true" />Saving…</> : <><Save className="w-4 h-4" aria-hidden="true" />Save Changes</>}
                     </button>
-                    <button type="button" onClick={() => { setFormData(snapRef.current || makeEmpty(user, userRole)); setIsEditMode(false); setSaveError(''); }} className="w-full py-2.5 bg-slate-100 text-slate-600 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-all">Cancel</button>
+                    <button
+                      type="button"
+                      onClick={() => { setFormData(snapRef.current || makeEmpty(user, userRole)); setIsEditMode(false); setSaveError(''); }}
+                      className="w-full py-2.5 bg-slate-100 text-slate-600 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-all"
+                    >
+                      Cancel
+                    </button>
                   </>
                 )}
-                <button onClick={() => setShowDeleteConfirm(true)} className="w-full py-2.5 bg-white border-2 border-red-100 text-red-600 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-red-50 transition-all">
-                  <Trash2 className="w-4 h-4" /> Delete Account
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full py-2.5 bg-white border-2 border-red-100 text-red-600 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-red-50 transition-all"
+                  aria-label="Delete account"
+                >
+                  <Trash2 className="w-4 h-4" aria-hidden="true" /> Delete Account
                 </button>
               </div>
 
               <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-5">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-bold text-slate-700 flex items-center gap-1.5 ss"><Shield className="w-4 h-4 text-emerald-500" />Verification</p>
+                  <p className="text-sm font-bold text-slate-700 flex items-center gap-1.5 ss"><Shield className="w-4 h-4 text-emerald-500" aria-hidden="true" />Verification</p>
                   <span className="text-sm font-black text-emerald-600">{verifPct}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-3">
@@ -419,14 +606,23 @@ export default function ProfilePage() {
               {!isEditMode
                 ? <ViewMode formData={formData} isStudent={isStudent} />
                 : <EditMode
-                  formData={formData} setFormData={setFormData}
+                  formData={formData} 
+                  setFormData={setFormData}
                   isStudent={isStudent}
-                  togSkill={togSkill} togInterest={togInterest}
-                  togLookingFor={togLookingFor} togHelpNeeded={togHelpNeeded}
-                  skillInput={skillInput} setSkillInput={setSkillInput}
-                  interestInput={interestInput} setInterestInput={setInterestInput}
-                  addSkill={addSkill} addInterest={addInterest}
-                  handleUpdate={handleUpdate} saving={saving}
+                  togSkill={togSkill} 
+                  togInterest={togInterest}
+                  togLookingFor={togLookingFor} 
+                  togHelpNeeded={togHelpNeeded}
+                  skillInput={skillInput} 
+                  setSkillInput={setSkillInput}
+                  interestInput={interestInput} 
+                  setInterestInput={setInterestInput}
+                  addSkill={addSkill} 
+                  addInterest={addInterest}
+                  handleUpdate={handleUpdate} 
+                  saving={saving}
+                  // 🔧 Pass draft indicator props
+                  STORAGE_KEY={STORAGE_KEY}
                 />
               }
             </div>
@@ -448,7 +644,7 @@ function ViewMode({ formData, isStudent }) {
         <p className="text-slate-500 text-sm">Your identity powers mentor, co-founder, and investor matching.</p>
       </div>
 
-      <Sec title="Basic Information" icon={<User className="w-5 h-5 text-indigo-500" />}>
+      <Sec title="Basic Information" icon={<User className="w-5 h-5 text-indigo-500" aria-hidden="true" />}>
         <div className="grid md:grid-cols-2 gap-3 mb-3">
           {[
             { label: 'Full Name', val: formData.full_name, Icon: User },
@@ -456,7 +652,7 @@ function ViewMode({ formData, isStudent }) {
             { label: 'Location', val: formData.location, Icon: MapPin },
           ].map((item, i) => (
             <div key={i} className="flex items-start gap-3 p-3.5 bg-slate-50 rounded-xl">
-              <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg flex-shrink-0"><item.Icon className="w-4 h-4" /></div>
+              <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg flex-shrink-0"><item.Icon className="w-4 h-4" aria-hidden="true" /></div>
               <div className="min-w-0">
                 <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-0.5">{item.label}</p>
                 <p className="text-sm font-semibold text-slate-800 truncate">{item.val || <span className="text-slate-300 font-normal italic">Not provided</span>}</p>
@@ -468,7 +664,7 @@ function ViewMode({ formData, isStudent }) {
       </Sec>
 
       {isStudent && (
-        <Sec title="Education" icon={<GraduationCap className="w-5 h-5 text-indigo-500" />}>
+        <Sec title="Education" icon={<GraduationCap className="w-5 h-5 text-indigo-500" aria-hidden="true" />}>
           {formData.university ? (
             <div className="space-y-3">
               <div className="bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-2xl p-5">
@@ -487,7 +683,7 @@ function ViewMode({ formData, isStudent }) {
         </Sec>
       )}
 
-      <Sec title="Skills" icon={<Briefcase className="w-5 h-5 text-indigo-500" />}>
+      <Sec title="Skills" icon={<Briefcase className="w-5 h-5 text-indigo-500" aria-hidden="true" />}>
         {(formData.skills || []).length > 0
           ? <div className="space-y-2">
             <div className="flex flex-wrap gap-2">{formData.skills.map((s, i) => {
@@ -499,7 +695,7 @@ function ViewMode({ formData, isStudent }) {
         }
       </Sec>
 
-      <Sec title="Interests" icon={<Tag className="w-5 h-5 text-indigo-500" />}>
+      <Sec title="Interests" icon={<Tag className="w-5 h-5 text-indigo-500" aria-hidden="true" />}>
         {(formData.interests || []).length > 0
           ? <div className="flex flex-wrap gap-2">{formData.interests.map((s, i) => <span key={i} className="px-3 py-2 bg-violet-50 text-violet-700 border border-violet-100 rounded-full text-xs font-semibold">{s}</span>)}</div>
           : <Empty label="No interests added yet." />
@@ -507,7 +703,7 @@ function ViewMode({ formData, isStudent }) {
       </Sec>
 
       {isStudent && (
-        <Sec title="Looking For" icon={<Tag className="w-5 h-5 text-indigo-500" />}>
+        <Sec title="Looking For" icon={<Tag className="w-5 h-5 text-indigo-500" aria-hidden="true" />}>
           {(formData.looking_for || []).length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {formData.looking_for.map((v, i) => {
@@ -526,7 +722,7 @@ function ViewMode({ formData, isStudent }) {
       )}
 
       {isStudent && (
-        <Sec title="Help Needed" icon={<Heart className="w-5 h-5 text-rose-500" />}>
+        <Sec title="Help Needed" icon={<Heart className="w-5 h-5 text-rose-500" aria-hidden="true" />}>
           {(formData.help_needed || []).length > 0
             ? <div className="flex flex-wrap gap-2">{formData.help_needed.map((s, i) => <span key={i} className="px-3 py-2 bg-rose-50 text-rose-700 border border-rose-100 rounded-full text-xs font-semibold">{s}</span>)}</div>
             : <Empty label="Not set. Mentors won't know how to help you." />
@@ -535,7 +731,7 @@ function ViewMode({ formData, isStudent }) {
       )}
 
       {isStudent && (
-        <Sec title="For Mentors" icon={<Lightbulb className="w-5 h-5 text-amber-500" />}>
+        <Sec title="For Mentors" icon={<Lightbulb className="w-5 h-5 text-amber-500" aria-hidden="true" />}>
           {formData.short_bio_for_mentors
             ? <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl"><p className="text-sm text-slate-700 leading-relaxed">{formData.short_bio_for_mentors}</p></div>
             : <Empty label="No mentor-focused bio set." />
@@ -549,7 +745,7 @@ function ViewMode({ formData, isStudent }) {
         </Sec>
       )}
 
-      <Sec title="Links" icon={<LinkIcon className="w-5 h-5 text-indigo-500" />}>
+      <Sec title="Links" icon={<LinkIcon className="w-5 h-5 text-indigo-500" aria-hidden="true" />}>
         {[formData.linkedin_url, formData.github_url, formData.twitter_url].some(Boolean) ? (
           <div className="grid md:grid-cols-2 gap-3">
             {[
@@ -557,11 +753,17 @@ function ViewMode({ formData, isStudent }) {
               { key: 'github_url', label: 'GitHub', Icon: Github, bg: 'bg-slate-50', tc: 'text-slate-600' },
               { key: 'twitter_url', label: 'Twitter', Icon: Twitter, bg: 'bg-sky-50', tc: 'text-sky-600' },
             ].filter(l => formData[l.key]).map(l => (
-              <a key={l.key} href={formData[l.key]} target="_blank" rel="noreferrer"
-                className={`flex items-center gap-3 p-3.5 ${l.bg} ${l.tc} rounded-xl hover:opacity-80 transition-all group`}>
-                <l.Icon className="w-4 h-4 flex-shrink-0" />
+              <a
+                key={l.key}
+                href={formData[l.key]}
+                target="_blank"
+                rel="noreferrer"
+                className={`flex items-center gap-3 p-3.5 ${l.bg} ${l.tc} rounded-xl hover:opacity-80 transition-all group`}
+                aria-label={`Visit ${l.label} profile`}
+              >
+                <l.Icon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                 <div className="flex-1 min-w-0"><p className="text-xs font-bold uppercase tracking-wide">{l.label}</p><p className="text-xs truncate group-hover:underline opacity-80">{formData[l.key].replace(/^https?:\/\//, '')}</p></div>
-                <LinkIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-50" />
+                <LinkIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-50" aria-hidden="true" />
               </a>
             ))}
           </div>
@@ -572,9 +774,27 @@ function ViewMode({ formData, isStudent }) {
 }
 
 /* ═══ EDIT MODE ═══ */
-function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, togLookingFor, togHelpNeeded, skillInput, setSkillInput, interestInput, setInterestInput, addSkill, addInterest, handleUpdate, saving }) {
+function EditMode({ 
+  formData, 
+  setFormData, 
+  isStudent, 
+  togSkill, 
+  togInterest, 
+  togLookingFor, 
+  togHelpNeeded, 
+  skillInput, 
+  setSkillInput, 
+  interestInput, 
+  setInterestInput, 
+  addSkill, 
+  addInterest, 
+  handleUpdate, 
+  saving,
+  STORAGE_KEY // 🔧 Receive STORAGE_KEY as prop
+}) {
   const f = (field, val) => setFormData(prev => ({ ...prev, [field]: val }));
-  const completion = calcCompletion(formData);
+  // 🔧 CHANGED: Use breakdown for edit mode too
+  const completion = calcCompletionWithBreakdown(formData);
 
   return (
     <form onSubmit={handleUpdate} className="space-y-10 dm">
@@ -583,22 +803,31 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
         <p className="text-slate-400 text-sm">Basic info + Education + Startup details.</p>
       </div>
 
+      {/* 🔧 DRAFT INDICATOR — Shows when unsaved local draft exists */}
+      {localStorage.getItem(STORAGE_KEY) && (
+        <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full mb-4 w-fit">
+          <Clock className="w-3 h-3" aria-hidden="true" /> 
+          <span>Unsaved changes auto-saved locally</span>
+        </div>
+      )}
+
+      {/* Profile Completion Bar */}
       <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-sm font-bold text-indigo-700 ss">Profile Completion</span>
-          <span className="font-black text-indigo-600 ss">{completion}%</span>
+          <span className="font-black text-indigo-600 ss">{completion.percentage}%</span>
         </div>
         <div className="h-2.5 bg-indigo-200 rounded-full overflow-hidden">
-          <div className="h-full prog rounded-full transition-all duration-500" style={{ width: `${completion}%` }} />
+          <div className="h-full prog rounded-full transition-all duration-500" style={{ width: `${completion.percentage}%` }} />
         </div>
       </div>
 
       {/* A — Basic Information */}
-      <EditSec title="Basic Information" icon={<User className="w-4 h-4" />}>
+      <EditSec title="Basic Information" icon={<User className="w-4 h-4" aria-hidden="true" />}>
         <div className="grid md:grid-cols-2 gap-4">
-          <FInp label="Full Name *" value={formData.full_name} onChange={v => f('full_name', v)} icon={<User className="w-4 h-4" />} placeholder="Your full name" required />
-          <FInp label="Email" value={formData.email} disabled icon={<Mail className="w-4 h-4" />} />
-          <FInp label="City / Country" value={formData.location} onChange={v => f('location', v)} icon={<MapPin className="w-4 h-4" />} placeholder="e.g. Karachi, Pakistan" />
+          <FInp label="Full Name *" value={formData.full_name} onChange={v => f('full_name', v)} icon={<User className="w-4 h-4" aria-hidden="true" />} placeholder="Your full name" required />
+          <FInp label="Email" value={formData.email} disabled icon={<Mail className="w-4 h-4" aria-hidden="true" />} />
+          <FInp label="City / Country" value={formData.location} onChange={v => f('location', v)} icon={<MapPin className="w-4 h-4" aria-hidden="true" />} placeholder="e.g. Karachi, Pakistan" />
         </div>
         <FTxt label="About You" value={formData.bio} onChange={v => f('bio', v)}
           placeholder="2–3 sentences about who you are, what you study, and what excites you." rows={3} max={400} />
@@ -607,12 +836,12 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
 
       {/* B — Education */}
       {isStudent && (
-        <EditSec title="Education" icon={<GraduationCap className="w-4 h-4" />}
+        <EditSec title="Education" icon={<GraduationCap className="w-4 h-4" aria-hidden="true" />}
           hint="Helps mentors understand your background and match you better.">
           <div className="grid md:grid-cols-2 gap-4">
-            <FInp label="University / College" value={formData.university} onChange={v => f('university', v)} icon={<GraduationCap className="w-4 h-4" />} placeholder="e.g. NUST, IBA, LUMS" />
-            <FInp label="Degree" value={formData.degree} onChange={v => f('degree', v)} icon={<BookOpen className="w-4 h-4" />} placeholder="e.g. BSc Computer Science" />
-            <FInp label="Major / Specialisation" value={formData.major} onChange={v => f('major', v)} icon={<Briefcase className="w-4 h-4" />} placeholder="e.g. Software Engineering" />
+            <FInp label="University / College" value={formData.university} onChange={v => f('university', v)} icon={<GraduationCap className="w-4 h-4" aria-hidden="true" />} placeholder="e.g. NUST, IBA, LUMS" />
+            <FInp label="Degree" value={formData.degree} onChange={v => f('degree', v)} icon={<BookOpen className="w-4 h-4" aria-hidden="true" />} placeholder="e.g. BSc Computer Science" />
+            <FInp label="Major / Specialisation" value={formData.major} onChange={v => f('major', v)} icon={<Briefcase className="w-4 h-4" aria-hidden="true" />} placeholder="e.g. Software Engineering" />
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Current Year</label>
               <div className="relative">
@@ -620,7 +849,7 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
                   <option value="">Select…</option>
                   {CURRENT_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
-                <GraduationCap className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <GraduationCap className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" aria-hidden="true" />
               </div>
             </div>
             <div className="space-y-1.5">
@@ -630,7 +859,7 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
                   <option value="">Select…</option>
                   {GRADUATION_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
-                <BookOpen className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <BookOpen className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" aria-hidden="true" />
               </div>
             </div>
             <div className="space-y-1.5">
@@ -640,7 +869,7 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
                   <option value="">Select…</option>
                   {COMMITMENT_LEVELS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <Rocket className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <Rocket className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" aria-hidden="true" />
               </div>
             </div>
           </div>
@@ -650,26 +879,44 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
       )}
 
       {/* C — Skills */}
-      <EditSec title="Skills" icon={<Briefcase className="w-4 h-4" />}
+      <EditSec title="Skills" icon={<Briefcase className="w-4 h-4" aria-hidden="true" />}
         hint="AI uses your skills to find relevant mentors and co-founders.">
         <div className="flex flex-wrap gap-2 mb-3">
           {SKILL_CHIPS.map(s => (
-            <button key={s} type="button" onClick={() => togSkill(s)}
-              className={`text-xs font-semibold px-3 py-2 rounded-full border transition-all ${formData.skills.includes(s) ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-500'}`}>
+            <button
+              key={s}
+              type="button"
+              onClick={() => togSkill(s)}
+              className={`text-xs font-semibold px-3 py-2 rounded-full border transition-all ${formData.skills.includes(s) ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-indigo-200 hover:text-indigo-500'}`}
+              aria-pressed={formData.skills.includes(s)}
+            >
               {formData.skills.includes(s) ? '✓ ' : '+ '}{s}
             </button>
           ))}
         </div>
         <div className="flex gap-2">
-          <input className="inp flex-1" value={skillInput} onChange={e => setSkillInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSkill())} placeholder="Add a custom skill…" />
-          <button type="button" onClick={addSkill} className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all">Add</button>
+          <input
+            className="inp flex-1"
+            value={skillInput}
+            onChange={e => setSkillInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addSkill())}
+            placeholder="Add a custom skill…"
+            aria-label="Add custom skill"
+          />
+          <button
+            type="button"
+            onClick={addSkill}
+            className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all"
+            aria-label="Add skill"
+          >
+            Add
+          </button>
         </div>
         {formData.skills.filter(s => !SKILL_CHIPS.includes(s)).length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {formData.skills.filter(s => !SKILL_CHIPS.includes(s)).map((s, i) => (
               <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-semibold border border-indigo-100">
-                {s}<button type="button" onClick={() => togSkill(s)}><X className="w-3 h-3" /></button>
+                {s}<button type="button" onClick={() => togSkill(s)} aria-label={`Remove ${s}`}><X className="w-3 h-3" /></button>
               </span>
             ))}
           </div>
@@ -678,7 +925,7 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
 
       {/* C2 — Skill Levels */}
       {isStudent && formData.skills.length > 0 && (
-        <EditSec title="Skill Levels" icon={<Briefcase className="w-4 h-4" />}
+        <EditSec title="Skill Levels" icon={<Briefcase className="w-4 h-4" aria-hidden="true" />}
           hint="Rate your proficiency — helps AI find the right mentors and complementary co-founders.">
           <div className="space-y-3">
             {formData.skills.map(skill => {
@@ -694,6 +941,7 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
                       f('skills_with_levels', newLevels);
                     }}
                     className="sel w-40 text-sm"
+                    aria-label={`Proficiency level for ${skill}`}
                   >
                     <option value="Beginner">Beginner</option>
                     <option value="Intermediate">Intermediate</option>
@@ -708,26 +956,44 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
       )}
 
       {/* D — Interests */}
-      <EditSec title="Interests" icon={<Tag className="w-4 h-4" />}
+      <EditSec title="Interests" icon={<Tag className="w-4 h-4" aria-hidden="true" />}
         hint="Industries and areas you care about.">
         <div className="flex flex-wrap gap-2 mb-3">
           {INTEREST_CHIPS.map(s => (
-            <button key={s} type="button" onClick={() => togInterest(s)}
-              className={`text-xs font-semibold px-3 py-2 rounded-full border transition-all ${formData.interests.includes(s) ? 'bg-violet-50 text-violet-700 border-violet-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-violet-200 hover:text-violet-500'}`}>
+            <button
+              key={s}
+              type="button"
+              onClick={() => togInterest(s)}
+              className={`text-xs font-semibold px-3 py-2 rounded-full border transition-all ${formData.interests.includes(s) ? 'bg-violet-50 text-violet-700 border-violet-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-violet-200 hover:text-violet-500'}`}
+              aria-pressed={formData.interests.includes(s)}
+            >
               {formData.interests.includes(s) ? '✓ ' : '+ '}{s}
             </button>
           ))}
         </div>
         <div className="flex gap-2">
-          <input className="inp flex-1" value={interestInput} onChange={e => setInterestInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addInterest())} placeholder="Add a custom interest…" />
-          <button type="button" onClick={addInterest} className="px-4 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-bold hover:bg-violet-700 transition-all">Add</button>
+          <input
+            className="inp flex-1"
+            value={interestInput}
+            onChange={e => setInterestInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addInterest())}
+            placeholder="Add a custom interest…"
+            aria-label="Add custom interest"
+          />
+          <button
+            type="button"
+            onClick={addInterest}
+            className="px-4 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-bold hover:bg-violet-700 transition-all"
+            aria-label="Add interest"
+          >
+            Add
+          </button>
         </div>
         {formData.interests.filter(s => !INTEREST_CHIPS.includes(s)).length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2">
             {formData.interests.filter(s => !INTEREST_CHIPS.includes(s)).map((s, i) => (
               <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 text-violet-700 rounded-full text-xs font-semibold border border-violet-100">
-                {s}<button type="button" onClick={() => togInterest(s)}><X className="w-3 h-3" /></button>
+                {s}<button type="button" onClick={() => togInterest(s)} aria-label={`Remove ${s}`}><X className="w-3 h-3" /></button>
               </span>
             ))}
           </div>
@@ -736,14 +1002,19 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
 
       {/* E — Looking For */}
       {isStudent && (
-        <EditSec title="Looking For" icon={<Tag className="w-4 h-4" />}
+        <EditSec title="Looking For" icon={<Tag className="w-4 h-4" aria-hidden="true" />}
           hint="What are you here to find? This controls your visibility on Discover.">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {LOOKING_FOR_OPTS.map(opt => {
               const on = (formData.looking_for || []).includes(opt.val);
               return (
-                <button key={opt.val} type="button" onClick={() => togLookingFor(opt.val)}
-                  className={`flex flex-col items-center gap-2 py-4 px-2 rounded-2xl border-2 text-center transition-all ${on ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-200 hover:bg-indigo-50/50'}`}>
+                <button
+                  key={opt.val}
+                  type="button"
+                  onClick={() => togLookingFor(opt.val)}
+                  className={`flex flex-col items-center gap-2 py-4 px-2 rounded-2xl border-2 text-center transition-all ${on ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-200 hover:bg-indigo-50/50'}`}
+                  aria-pressed={on}
+                >
                   <span className="text-2xl">{opt.icon}</span>
                   <span className="text-xs font-bold ss">{opt.val}</span>
                   <span className="text-[10px] text-slate-400">{opt.desc}</span>
@@ -757,12 +1028,17 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
 
       {/* F — Help Needed */}
       {isStudent && (
-        <EditSec title="Help Needed" icon={<Heart className="w-4 h-4" />}
+        <EditSec title="Help Needed" icon={<Heart className="w-4 h-4" aria-hidden="true" />}
           hint="What do you need guidance on? Mentors see this to decide if they're a good fit.">
           <div className="flex flex-wrap gap-2 mb-3">
             {HELP_NEEDED_CHIPS.map(s => (
-              <button key={s} type="button" onClick={() => togHelpNeeded(s)}
-                className={`text-xs font-semibold px-3 py-2 rounded-full border transition-all ${formData.help_needed.includes(s) ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-rose-200 hover:text-rose-500'}`}>
+              <button
+                key={s}
+                type="button"
+                onClick={() => togHelpNeeded(s)}
+                className={`text-xs font-semibold px-3 py-2 rounded-full border transition-all ${formData.help_needed.includes(s) ? 'bg-rose-50 text-rose-700 border-rose-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-rose-200 hover:text-rose-500'}`}
+                aria-pressed={formData.help_needed.includes(s)}
+              >
                 {formData.help_needed.includes(s) ? '✓ ' : '+ '}{s}
               </button>
             ))}
@@ -772,7 +1048,7 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
 
       {/* G — Startup Idea */}
       {isStudent && (
-        <EditSec title="Startup Idea" icon={<Lightbulb className="w-4 h-4" />}
+        <EditSec title="Startup Idea" icon={<Lightbulb className="w-4 h-4" aria-hidden="true" />}
           hint="Describe what you're building or want to build. Mentors and co-founders use this to evaluate fit.">
           <FTxt label="Idea Description" value={formData.startup_idea_description} onChange={v => f('startup_idea_description', v)}
             placeholder="What problem are you solving? For whom? How does your solution work?"
@@ -783,7 +1059,7 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
 
       {/* H — Short Bio for Mentors */}
       {isStudent && (
-        <EditSec title="Short Bio for Mentors" icon={<Lightbulb className="w-4 h-4" />}
+        <EditSec title="Short Bio for Mentors" icon={<Lightbulb className="w-4 h-4" aria-hidden="true" />}
           hint="A focused pitch about who you are and what you're looking for. This appears on mentor match cards.">
           <FTxt label="Mentor Bio" value={formData.short_bio_for_mentors} onChange={v => f('short_bio_for_mentors', v)}
             placeholder="e.g. 3rd-year CS student with React skills, looking for a mentor to guide me through building an EdTech MVP."
@@ -793,7 +1069,7 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
       )}
 
       {/* I — Links */}
-      <EditSec title="Links" icon={<LinkIcon className="w-4 h-4" />}
+      <EditSec title="Links" icon={<LinkIcon className="w-4 h-4" aria-hidden="true" />}
         hint="Each link boosts your verification. Mentors check these before accepting.">
         <div className="grid md:grid-cols-2 gap-4">
           {[
@@ -803,10 +1079,17 @@ function EditMode({ formData, setFormData, isStudent, togSkill, togInterest, tog
           ].map(({ field, Icon, label, pts, ph }) => (
             <div key={field}>
               <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-                <Icon className="w-3.5 h-3.5" /> {label}
+                <Icon className="w-3.5 h-3.5" aria-hidden="true" /> {label}
                 <span className="ml-auto text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-full normal-case">+{pts}</span>
               </label>
-              <input type="url" placeholder={ph} value={formData[field] || ''} onChange={e => f(field, e.target.value)} className="inp" />
+              <input
+                type="url"
+                placeholder={ph}
+                value={formData[field] || ''}
+                onChange={e => f(field, e.target.value)}
+                className="inp"
+                aria-label={`${label} input`}
+              />
             </div>
           ))}
         </div>
@@ -838,9 +1121,15 @@ function FInp({ label, value, onChange, type = 'text', placeholder, required, di
       {label && <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">{label}</label>}
       <div className="relative">
         {icon && <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">{icon}</div>}
-        <input type={type} value={value || ''} onChange={e => onChange?.(e.target.value)}
-          placeholder={placeholder} required={required} disabled={disabled}
-          className={`inp ${icon ? 'pl-10' : ''}`} />
+        <input
+          type={type}
+          value={value || ''}
+          onChange={e => onChange?.(e.target.value)}
+          placeholder={placeholder}
+          required={required}
+          disabled={disabled}
+          className={`inp ${icon ? 'pl-10' : ''}`}
+        />
       </div>
     </div>
   );
@@ -849,22 +1138,59 @@ function FTxt({ label, value, onChange, placeholder, rows = 4, max }) {
   return (
     <div className="space-y-1.5">
       {label && <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">{label}</label>}
-      <textarea value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows} maxLength={max} className="ta" />
+      <textarea
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        maxLength={max}
+        className="ta"
+      />
     </div>
   );
 }
 function Empty({ label }) { return <p className="text-sm text-slate-400 italic py-2">{label}</p>; }
+
 function DeleteModal({ onCancel, onConfirm }) {
+  // 🔧 CHANGED: Added focus management for accessibility
+  useEffect(() => {
+    const firstBtn = document.querySelector('[data-modal-first-focus]');
+    firstBtn?.focus();
+    const handleKey = (e) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onCancel]);
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-modal-title"
+    >
       <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
         <div className="text-center">
-          <div className="h-16 w-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><AlertTriangle className="w-8 h-8" /></div>
-          <h2 className="text-2xl font-black text-slate-900 mb-2 ss">Delete Account?</h2>
+          <div className="h-16 w-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4" aria-hidden="true">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <h2 id="delete-modal-title" className="text-2xl font-black text-slate-900 mb-2 ss">Delete Account?</h2>
           <p className="text-slate-600 mb-6 text-sm">This is permanent. All your data will be deleted immediately.</p>
           <div className="flex gap-3">
-            <button onClick={onCancel} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200">Cancel</button>
-            <button onClick={onConfirm} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700">Delete Account</button>
+            <button
+              onClick={onCancel}
+              className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200"
+              data-modal-first-focus
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700"
+            >
+              Delete Account
+            </button>
           </div>
         </div>
       </div>
