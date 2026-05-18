@@ -9,8 +9,8 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import RoleNavbar from './components/landing-page/RoleNavbar';
 
 // ── MFA ──
-import MfaChallenge from './components/mfaChallenge';
-import MfaSetup from './components/mfaSetup';
+import MfaChallenge from './components/MfaChallenge';
+import MfaSetup from './components/MfaSetup';
 
 // ── Public Pages ──
 import LandingPage from './pages/LandingPage';
