@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const supabase = require('./supabase');
 const { createMessage, triggerAIReply } = require('../services/messaging.service');
+const { allowedOrigins } = require('./cors');
 
 let io;
 const onlineUsers = new Map();
@@ -25,11 +26,12 @@ async function getOtherParticipantId(convId, senderId) {
 
 exports.setupSocket = (server) => {
   const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    credentials: true,
-  },
-});
+    cors: {
+      origin: allowedOrigins,
+      credentials: true,
+      methods: ['GET', 'POST'],
+    },
+  });
 
   io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;

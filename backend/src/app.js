@@ -5,7 +5,9 @@ const helmet = require('helmet');
 const pinoHttp = require('pino-http');
 require('dotenv').config();
 
+const { corsOptions, allowedOrigins } = require('./config/cors');
 const { setupSocket } = require('./config/socket');
+
 const cofounderRoutes = require('./routes/cofounder.routes');
 const connectionRoutes = require('./routes/connection.routes');
 const conversationRoutes = require('./routes/conversation.routes');
@@ -13,54 +15,101 @@ const conversationRoutes = require('./routes/conversation.routes');
 const app = express();
 const server = http.createServer(app);
 
-// 🔒 Security middleware
-app.use(helmet());
-const allowedOrigins = [
-  'http://localhost:5173',
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+// Trust proxy for Render / reverse proxies
+app.set('trust proxy', 1);
 
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+// Security middleware
+app.use(
+  helmet({
+    crossOriginResourcePolicy: {
+      policy: 'cross-origin',
+    },
+  })
+);
 
-    return callback(new Error(`Not allowed by CORS: ${origin}`));
-  },
-  credentials: true,
-}));
+// CORS
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+console.log('Allowed CORS origins:', allowedOrigins);
+
+// Body parser
 app.use(express.json({ limit: '10mb' }));
-app.use(pinoHttp({ level: process.env.NODE_ENV === 'production' ? 'info' : 'debug' }));
 
-// 🛣️ Routes
-app.use('/api/cofounders', cofounderRoutes);
-app.use('/api/connections', connectionRoutes);
-app.use('/api/conversations', conversationRoutes);
+// Logger
+app.use(
+  pinoHttp({
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  })
+);
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
     service: 'ScaleScope API',
+    environment: process.env.NODE_ENV || 'development',
     time: new Date().toISOString(),
   });
 });
 
-// 🔌 Setup Socket.IO
+// API routes
+app.use('/api/cofounders', cofounderRoutes);
+app.use('/api/connections', connectionRoutes);
+app.use('/api/conversations', conversationRoutes);
+
+// Not found handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    path: req.originalUrl,
+  });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+
+  if (err.message?.startsWith('Not allowed by CORS')) {
+    return res.status(403).json({
+      error: 'CORS blocked',
+      message: err.message,
+    });
+  }
+
+  return res.status(err.status || 500).json({
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : err.message || 'Internal server error',
+  });
+});
+
+// Setup Socket.IO
 setupSocket(server);
 
-// 🚀 Start server
+// Start server
 const PORT = process.env.PORT || 3001;
+
 server.listen(PORT, () => {
-  console.log(`✅ Backend running on http://localhost:${PORT}`);
-  console.log(`🔌 Socket.IO ready`);
+  console.log(`Backend running on port ${PORT}`);
+  console.log('Socket.IO ready');
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('🛑 Shutting down...');
+  console.log('Shutting down...');
+
   server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('Interrupted. Shutting down...');
+
+  server.close(() => {
+    console.log('Server closed');
     process.exit(0);
   });
 });
