@@ -24,12 +24,12 @@ async function getOtherParticipantId(convId, senderId) {
 }
 
 exports.setupSocket = (server) => {
-  io = new Server(server, {
-    cors: {
-      origin: process.env.FRONTEND_URL,
-      credentials: true,
-    },
-  });
+  const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+});
 
   io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;
