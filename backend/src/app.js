@@ -29,7 +29,11 @@ app.use('/api/conversations', conversationRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: 'ScaleScope API',
+    time: new Date().toISOString(),
+  });
 });
 
 // 🔌 Setup Socket.IO
