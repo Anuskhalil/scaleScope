@@ -29,9 +29,9 @@ app.use(
 
 // CORS
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 console.log('Allowed CORS origins:', allowedOrigins);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
 
 // Body parser
 app.use(express.json({ limit: '10mb' }));

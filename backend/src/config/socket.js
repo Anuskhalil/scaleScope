@@ -1,7 +1,7 @@
 const { Server } = require('socket.io');
+const { allowedOrigins } = require('./cors');
 const supabase = require('./supabase');
 const { createMessage, triggerAIReply } = require('../services/messaging.service');
-const { allowedOrigins } = require('./cors');
 
 let io;
 const onlineUsers = new Map();
