@@ -1,79 +1,108 @@
 import React from 'react';
-import { Brain } from 'lucide-react';
-import { UserCheck } from 'lucide-react';
-import { Target } from 'lucide-react';
-import { TrendingUp } from 'lucide-react';
-import { Lightbulb } from 'lucide-react';
-import { MessageSquare } from 'lucide-react';
-import { BarChart3 } from 'lucide-react';
-import { Shield } from 'lucide-react';
+import {
+  Brain,
+  UserCheck,
+  Target,
+  TrendingUp,
+  Lightbulb,
+  MessageSquare,
+  BarChart3,
+  Shield,
+} from 'lucide-react';
 
 const features = [
   {
-    icon: <Brain className="w-6 h-6" />,
-    title: "AI-Powered Smart Matching",
-    description: "Our intelligent AI analyzes your profile, skills, goals, and startup vision to connect you with the perfect co-founders, mentors, and investors who align with your journey."
+    icon: Brain,
+    title: 'Explainable AI matching',
+    description:
+      'Matches are based on skills, help-needed areas, commitment, startup domain, profile completeness, and collaboration intent.',
   },
   {
-    icon: <UserCheck className="w-6 h-6" />,
-    title: "Find Your Ideal Co-Founder",
-    description: "Discover co-founders who complement your skills and share your passion. Our AI matches based on expertise, work style, commitment level, and vision alignment."
+    icon: UserCheck,
+    title: 'Co-founder discovery',
+    description:
+      'Students and founders can find people who complement their strengths and match their startup-building goals.',
   },
   {
-    icon: <Target className="w-6 h-6" />,
-    title: "Connect with Expert Mentors",
-    description: "Get paired with industry veterans and successful founders who understand your challenges. Schedule one-on-one sessions, group workshops, and ongoing guidance tailored to your needs."
+    icon: Target,
+    title: 'Mentor discovery',
+    description:
+      'Find mentors based on the exact areas you need help with, such as product strategy, validation, pitch deck, or growth.',
   },
   {
-    icon: <TrendingUp className="w-6 h-6" />,
-    title: "Meet the Right Investors",
-    description: "AI-driven introductions to investors actively seeking startups in your sector. Pitch directly, schedule meetings, and track your fundraising progress in real-time."
+    icon: TrendingUp,
+    title: 'Investor readiness',
+    description:
+      'Help promising ideas become discoverable to investors through stronger profiles, traction signals, and growth tracking.',
   },
   {
-    icon: <Lightbulb className="w-6 h-6" />,
-    title: "Idea Validation & Pitching",
-    description: "Share your startup ideas, get constructive feedback from the community, refine your pitch, and attract collaborators who believe in your vision."
+    icon: Lightbulb,
+    title: 'Startup idea profile',
+    description:
+      'Showcase your idea title, domain, stage, target audience, value proposition, and the help you need.',
   },
   {
-    icon: <MessageSquare className="w-6 h-6" />,
-    title: "Seamless Communication",
-    description: "Schedule meetings, conduct video calls, share documents, and collaborate in real-time. Everything you need to build relationships and move fast."
+    icon: MessageSquare,
+    title: 'Connection-first messaging',
+    description:
+      'Users can view profiles first, send requests, accept connections, and then start real-time conversations.',
   },
   {
-    icon: <BarChart3 className="w-6 h-6" />,
-    title: "Track Your Growth",
-    description: "Monitor your progress with real metrics. See connections made, meetings completed, feedback received, and milestones achieved on your entrepreneurial journey."
+    icon: BarChart3,
+    title: 'Role-based dashboard',
+    description:
+      'Each user sees relevant suggestions, connections, requests, messages, profile progress, and growth indicators.',
   },
   {
-    icon: <Shield className="w-6 h-6" />,
-    title: "Trust & Verification",
-    description: "Every user is verified. View ratings, past collaborations, and success stories. Build trust through transparent profiles and community endorsements."
-  }
+    icon: Shield,
+    title: 'Trust-focused flow',
+    description:
+      'Verified auth, profile completion, clear match reasons, and controlled messaging make the platform safer and more credible.',
+  },
 ];
 
 export default function Features() {
   return (
-    <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50">
+    <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl lg:text-5xl font-black text-slate-900 mb-4">
-            Powerful Features That Drive Real Results
+        <div className="text-center mb-14">
+          <span className="inline-flex px-4 py-2 rounded-full bg-[#98DE38]/20 text-[#1B2D7F] text-sm font-black mb-4">
+            Platform features
+          </span>
+
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-950 mb-4">
+            Built to create better startup matches
           </h2>
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-            Everything you need to find the right people, build trust, and grow your startup from idea to scale.
+
+          <p className="text-lg text-slate-600 max-w-3xl mx-auto">
+            Scale Scope focuses on realistic matching, trust, and actual collaboration
+            instead of random networking.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((feature, idx) => (
-            <div key={idx} className="bg-white rounded-2xl p-8 shadow-sm hover:shadow-xl transition-all border border-slate-100 group">
-              <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform">
-                {feature.icon}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {features.map((feature) => {
+            const Icon = feature.icon;
+
+            return (
+              <div
+                key={feature.title}
+                className="group bg-slate-50 rounded-3xl p-6 border border-slate-100 hover:bg-white hover:shadow-xl transition-all"
+              >
+                <div className="w-12 h-12 bg-[#1B2D7F] rounded-2xl flex items-center justify-center text-[#98DE38] mb-5 group-hover:scale-105 transition-transform">
+                  <Icon className="w-6 h-6" />
+                </div>
+
+                <h3 className="text-lg font-black text-slate-900 mb-2">
+                  {feature.title}
+                </h3>
+
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {feature.description}
+                </p>
               </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-3">{feature.title}</h3>
-              <p className="text-slate-600 leading-relaxed">{feature.description}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

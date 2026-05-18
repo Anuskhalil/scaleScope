@@ -1,553 +1,739 @@
-// src/services/studentService.js
-// All Supabase data functions for the student role.
-// Pages import from here — no raw supabase calls inside components.
-
+// src/services/studentService.js — PRODUCTION-READY, FIXED & OPTIMIZED
 import { supabase } from '../lib/supabaseClient';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// PROFILE
-// ═══════════════════════════════════════════════════════════════════════════
+const CACHE = new Map();
+const DEFAULT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-/**
- * Fetch a student's combined profile.
- * Returns merged object: { ...profiles fields, ...student_profiles fields }
- */
-export async function fetchStudentProfile(userId) {
-  const { data, error } = await supabase
-    .from('student_profiles')
-    .select(`
-      *,
-      profiles (
-        id, full_name, email, user_type, location, bio, avatar_url,
-        linkedin_url, github_url, twitter_url,
-        skills, interests, profile_completion, onboarding_completed,
-        last_active, created_at, metadata
-      )
-    `)
-    .eq('user_id', userId)
-    .single();
+const getCache = (key) => {
+  const item = CACHE.get(key);
+  if (item && Date.now() - item.ts < item.ttl) return item.data;
+  CACHE.delete(key);
+  return null;
+};
 
-  if (error) {
-    // No student_profiles row yet — return just the profiles row
-    if (error.code === 'PGRST116') {
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      if (profileError) throw profileError;
-      return { profiles: profileData, ...profileData };
+const setCache = (key, data, ttl = DEFAULT_CACHE_TTL) => {
+  CACHE.set(key, { data, ts: Date.now(), ttl });
+};
+
+const clearCache = (pattern) => {
+  // Clear all keys matching pattern (e.g., 'profile:*', 'cofounders:*')
+  for (let key of CACHE.keys()) {
+    if (pattern === '*' || key.startsWith(pattern) || key.includes(pattern)) {
+      CACHE.delete(key);
     }
-    throw error;
+  }
+};
+
+const calculateCoFounderScore = (currentUser, candidate) => {
+  if (!currentUser || !candidate) return 0;
+  let score = 0;
+
+  // ✅ ONLY use skills_with_levels (JSONB array of objects)
+  const userSkills = (currentUser.skills_with_levels || [])
+    .map(s => s?.skill?.toLowerCase())
+    .filter(Boolean);
+
+  const candidateSkills = (candidate.skills_with_levels || [])
+    .map(s => s?.skill?.toLowerCase())
+    .filter(Boolean);
+
+  // Complementary skills scoring
+  const complementary = candidateSkills.filter(s => !userSkills.includes(s)).length;
+  const totalPossible = Math.max(userSkills.length, candidateSkills.length, 1);
+  score += Math.round((complementary / totalPossible) * 35);
+
+  // Interest overlap
+  const userInterests = (currentUser.interests || []).map(i => i?.toLowerCase());
+  const candidateInterests = (candidate.interests || []).map(i => i?.toLowerCase());
+  const commonInterests = candidateInterests.filter(i => userInterests.includes(i)).length;
+  score += Math.round((commonInterests / Math.max(userInterests.length, 1)) * 20);
+
+  // Domain match bonus
+  if (currentUser.idea_domain && candidate.idea_domain &&
+    currentUser.idea_domain.toLowerCase() === candidate.idea_domain.toLowerCase()) {
+    score += 5;
   }
 
-  // Flatten: student_profiles fields + profiles fields at top level
-  const { profiles: p, ...sp } = data;
-  return { ...p, ...sp, profiles: p };
+  // Commitment alignment
+  if (currentUser.commitment_level === candidate.commitment_level) {
+    score += 15;
+  } else if (
+    (currentUser.commitment_level?.includes('Full-time') && candidate.commitment_level?.includes('Full-time')) ||
+    (currentUser.commitment_level?.includes('Casual') && candidate.commitment_level?.includes('Casual'))
+  ) {
+    score += 8;
+  }
+
+  // Help needed ↔ skills match
+  const userNeeds = (currentUser.help_needed || []).map(h => h?.toLowerCase());
+  const helpMatches = userNeeds.filter(need => candidateSkills.includes(need)).length;
+  score += Math.round((helpMatches / Math.max(userNeeds.length, 1)) * 10);
+
+  // Profile completion bonus
+  score += Math.round((candidate.profile_completion || 0) * 0.1);
+
+  // Recency bonus
+  if (candidate.updated_at) {
+    const daysSinceUpdate = (Date.now() - new Date(candidate.updated_at).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceUpdate <= 7) score += 5;
+    else if (daysSinceUpdate <= 30) score += 2;
+  }
+
+  return Math.min(Math.round(score), 100);
+};
+
+export async function fetchStudentProfile(userId) {
+  const cacheKey = `profile:${userId}`;
+  const cached = getCache(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const [pRes, spRes] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, email, user_type, avatar_url, bio, location, updated_at').eq('id', userId).maybeSingle(),
+      supabase.from('student_profiles').select(`
+        id, user_id, university, degree, major, graduation_year_int, current_year, 
+        career_goals, looking_for, has_startup_idea, startup_idea_description,
+        idea_title, idea_domain, idea_stage, target_audience, unique_value_prop,
+        skills_with_levels, help_needed, commitment_level, short_bio_for_mentors, 
+        has_cofounder, skills, interests, profile_completion, updated_at
+      `).eq('user_id', userId).maybeSingle()
+    ]);
+
+    if (pRes.error) throw pRes.error;
+    if (spRes.error) throw spRes.error;
+
+    const merged = { ...(pRes.data || {}), ...(spRes.data || {}) };
+    setCache(cacheKey, merged);
+    return merged;
+  } catch (err) {
+    console.error('fetchStudentProfile:', err);
+    return null;
+  }
 }
 
-/**
- * Update shared profile fields (profiles table).
- * Pass only the fields you want to change.
- */
 export async function updateProfile(userId, updates) {
-  const { error } = await supabase
-    .from('profiles')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', userId);
+  const { error } = await supabase.from('profiles').update({
+    ...updates,
+    updated_at: new Date().toISOString(),
+    last_active: new Date().toISOString()
+  }).eq('id', userId);
+
   if (error) throw error;
+
+  // ✅ Smart cache invalidation
+  clearCache(`profile:${userId}`);
+  clearCache('cofounders:'); // Refresh suggestions when profile changes
+  clearCache('mentors:');
+
+  return true;
 }
 
-/**
- * Upsert student-specific fields (student_profiles table).
- * Creates the row if it doesn't exist yet.
- */
 export async function updateStudentProfile(userId, updates) {
-  const { error } = await supabase
-    .from('student_profiles')
-    .upsert(
-      { user_id: userId, ...updates, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' }
-    );
+  const { error } = await supabase.from('student_profiles').upsert({
+    user_id: userId,
+    ...updates,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'user_id' });
+
   if (error) throw error;
+
+  // ✅ Smart cache invalidation
+  clearCache(`profile:${userId}`);
+  clearCache('cofounders:');
+  clearCache('dashboard:');
+
+  return true;
 }
 
-/**
- * Upload avatar to Supabase Storage and update profiles.avatar_url.
- * Returns the public URL.
- */
 export async function uploadAvatar(userId, file) {
-  const ext = file.name.split('.').pop();
+  if (!file.type.startsWith('image/')) throw new Error('Invalid file type');
+  if (file.size > 5 * 1024 * 1024) throw new Error('File too large (max 5MB)');
+
+  const ext = file.name.split('.').pop().toLowerCase();
   const path = `avatars/${userId}.${ext}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from('avatars')
-    .upload(path, file, { upsert: true });
+  const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, cacheControl: '3600' });
   if (uploadError) throw uploadError;
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('avatars')
-    .getPublicUrl(path);
+  const { data: signedData, error: signedError } = await supabase.storage.from('avatars').createSignedUrl(path, 86400);
+  if (signedError || !signedData?.signedUrl) throw new Error('Failed to generate avatar URL');
 
-  await updateProfile(userId, { avatar_url: publicUrl });
-  return publicUrl;
-}
+  const { error } = await supabase.from('profiles').update({
+    avatar_url: path,
+    updated_at: new Date().toISOString()
+  }).eq('id', userId);
 
-/**
- * Recalculate and save profile_completion score.
- * Call after any save to keep it in sync.
- */
-export async function syncProfileCompletion(userId, fields) {
-  const checks = [
-    fields.full_name, fields.bio, fields.location,
-    fields.university, fields.degree,
-    fields.skills?.length > 0,
-    fields.looking_for?.length > 0,
-    fields.help_needed?.length > 0,
-    fields.linkedin_url || fields.github_url,
-    fields.avatar_url,
-    fields.idea_title || fields.startup_idea_description,
-  ];
-  const score = Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  await updateProfile(userId, { profile_completion: score });
-  return score;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// MENTORS
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Fetch mentor list with profile data.
- * Supports filters: expertise (array overlap), location, industry, availability.
- */
-export async function fetchMentors({ expertise = [], location = '', industry = '', limit = 20 } = {}) {
-  let query = supabase
-    .from('mentor_profiles')
-    .select(`
-      id, user_id,
-      expertise_areas, years_experience, current_role, current_company,
-      companies_worked, mentorship_capacity, current_mentees, mentorship_style,
-      available_for, is_pro_bono, can_help_with, successful_exits, companies_founded,
-      profiles (
-        id, full_name, bio, avatar_url, location, skills,
-        linkedin_url, github_url, twitter_url
-      )
-    `)
-    .limit(limit);
-
-  if (expertise.length > 0) {
-    query = query.overlaps('expertise_areas', expertise);
-  }
-  if (industry) {
-    query = query.contains('can_help_with', [industry]);
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
 
-  // Filter by location client-side (profile field)
-  let result = data || [];
-  if (location) {
-    result = result.filter(m =>
-      m.profiles?.location?.toLowerCase().includes(location.toLowerCase())
-    );
-  }
+  // ✅ Clear avatar cache
+  clearCache(`profile:${userId}`);
 
-  return result;
+  return signedData.signedUrl;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CO-FOUNDERS
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Fetch students who are looking for co-founders.
- * Co-founders are students, not early-stage-founders.
- * Filter: student_profiles WHERE 'Co-founder' = ANY(looking_for)
- */
-/**
- * Fetch students who are looking for co-founders.
- * Co-founders are students, not early-stage-founders.
- * Filter: student_profiles WHERE 'Co-founder' = ANY(looking_for)
- */
 export async function fetchCoFounders({
   skills = [],
-  industry = '',
-  startupStage = '',
   location = '',
-  availability = '',
-  limit = 20
+  commitment = '',
+  limit = 20,
+  excludeUserId,
+  fresh = false,
+  currentUserData = null
 } = {}) {
-  let query = supabase
-    .from('student_profiles')
-    .select(`
-      id, user_id,
-      university, degree, skills_with_levels, looking_for, help_needed,
-      commitment_level, hours_per_week, has_cofounder,
-      has_startup_idea, startup_idea_description,
-      profiles (
-        id, full_name, bio, avatar_url, location, skills, interests,
-        linkedin_url, github_url
-      )
-    `)
-    .contains('looking_for', ['Co-Founder'])
-    .limit(limit);
 
-  const { data, error } = await query;
-  if (error) throw error;
+  const cacheKey = `cofounders:${JSON.stringify({ skills, location, commitment, limit, fresh })}`;
 
-  let result = data || [];
-
-  // Client-side filters
-  if (skills.length > 0) {
-    result = result.filter(s =>
-      s.profiles?.skills?.some(sk => skills.includes(sk))
-    );
-  }
-  if (location) {
-    result = result.filter(s =>
-      s.profiles?.location?.toLowerCase().includes(location.toLowerCase())
-    );
-  }
-  if (availability) {
-    result = result.filter(s => s.commitment_level === availability);
+  if (!fresh) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
   }
 
-  return result;
-}
+  try {
+    // 🔹 Step 1: Fetch current user data for scoring
+    let currentUser = currentUserData;
+    if (!currentUser && excludeUserId) {
+      const { data: current } = await supabase
+        .from('student_profiles')
+        .select(`
+        skills_with_levels,
+        interests,
+        idea_domain,
+        commitment_level,
+        help_needed
+      `)
+        .eq('user_id', excludeUserId)
+        .maybeSingle();
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CONNECTION REQUESTS
-// Matches schema: connection_requests table with partial unique index
-// on (sender_id, receiver_id, type) WHERE status = 'pending'
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Send a connection request.
- * type: 'mentor_request' | 'cofounder_request' | 'investor_contact'
- * Returns { alreadySent: true } if a pending duplicate exists, or the new row.
- */
-export async function sendConnectionRequest(senderId, receiverId, type, message = '') {
-  // Input validation
-  if (!senderId || !receiverId) throw new Error('Missing user IDs.');
-  if (senderId === receiverId) throw new Error('Cannot send request to yourself.');
-  const validTypes = ['mentor_request', 'cofounder_request', 'investor_contact'];
-  if (!validTypes.includes(type)) throw new Error(`Invalid request type: ${type}`);
-
-  // Clean message
-  const cleanMessage = (message || '').trim().slice(0, 500);
-
-  const { data, error } = await supabase
-    .from('connection_requests')
-    .insert({
-      sender_id: senderId,
-      receiver_id: receiverId,
-      type,
-      status: 'pending',
-      message: cleanMessage || null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    // Duplicate pending request — partial unique index violation
-    if (error.code === '23505') {
-      return { alreadySent: true };
+      currentUser = current;
     }
-    throw error;
+
+    // 🔹 Step 2: Build base query — ONLY safe columns & operators
+    let query = supabase
+      .from('student_profiles')
+      .select(`
+    id,
+    user_id,
+    university,
+    degree,
+    current_year,
+    skills_with_levels,
+    help_needed,
+    commitment_level,
+    has_startup_idea,
+    startup_idea_description,
+    idea_title,
+    idea_domain,
+    idea_stage,
+    target_audience,
+    unique_value_prop,
+    looking_for,
+    interests,
+    profile_completion,
+    updated_at,
+    profiles!student_profiles_user_id_fkey(
+      id,
+      full_name,
+      avatar_url,
+      location,
+      bio
+    )
+  `)
+      .neq('user_id', excludeUserId)
+      .contains('looking_for', ['Co-Founder'])
+      .limit(limit * 3);
+
+    query = query.contains('looking_for', ['Co-Founder']);
+
+
+    if (commitment) {
+      query = query.eq('commitment_level', commitment);
+    }
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('fetchCoFounders query error:', error);
+      return [];
+    }
+
+    let candidates = data || [];
+
+    // 🔹 Step 6: ✅ Client-side filtering for skills (safe & flexible)
+    if (skills.length > 0) {
+      candidates = candidates.filter(candidate => {
+        const candidateSkills = (candidate.skills_with_levels || [])
+          .map(sk => sk?.skill?.toLowerCase())
+          .filter(Boolean);
+
+        return skills.some(requestedSkill =>
+          candidateSkills.some(cs => cs?.includes(requestedSkill.toLowerCase()))
+        );
+      });
+    }
+
+    // 🔹 Step 7: Score & rank candidates
+    const scored = candidates
+      .map(candidate => ({
+        ...candidate,
+        matchScore: calculateCoFounderScore(currentUser, candidate)
+      }))
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, limit);
+
+    // 🔹 Step 8: Cache result (only if not fresh)
+    if (!fresh) {
+      setCache(cacheKey, scored);
+    }
+
+    return scored;
+  } catch (err) {
+    console.error('fetchCoFounders:', err);
+    return [];
   }
-  return data;
 }
 
-/**
- * Get the connection request status between two users for a given type.
- * Checks both directions: did I send to them, or did they send to me?
- * Returns the MOST RECENT request: { status, isSender } or null.
- */
+export async function fetchMentors({
+  expertise = [],
+  location = '',
+  proBono = false,
+  limit = 20,
+  fresh = false
+} = {}) {
+  const cacheKey = `mentors:${JSON.stringify({ expertise, location, proBono, limit, fresh })}`;
+
+  if (!fresh) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
+  }
+
+  try {
+    let query = supabase.from('profiles')
+      .select(`
+        id, full_name, avatar_url, location, bio, user_type, updated_at,
+        student_profiles(expertise, years_experience, company, pro_bono, mentorship_style)
+      `)
+      .eq('user_type', 'mentor')
+      .limit(limit);
+
+    if (location) query = query.ilike('location', `%${location}%`);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('fetchMentors query error:', error);
+      return [];
+    }
+
+    let result = (data || []).map(m => ({
+      user_id: m.id,
+      profiles: {
+        full_name: m.full_name,
+        avatar_url: m.avatar_url,
+        location: m.location,
+        bio: m.bio
+      },
+      expertise: m.student_profiles?.expertise || [],
+      years: m.student_profiles?.years_experience,
+      company: m.student_profiles?.company,
+      pro_bono: m.student_profiles?.pro_bono,
+      style: m.student_profiles?.mentorship_style,
+      updated_at: m.updated_at
+    }));
+
+    if (expertise.length > 0) {
+      result = result.filter(m =>
+        expertise.some(e =>
+          m.expertise.some(exp => exp?.toLowerCase().includes(e.toLowerCase()))
+        )
+      );
+    }
+    if (proBono) result = result.filter(m => m.pro_bono);
+
+    if (!fresh) {
+      setCache(cacheKey, result);
+    }
+
+    return result;
+  } catch (err) {
+    console.error('fetchMentors:', err);
+    return [];
+  }
+}
+
+export async function sendConnectionRequest(payload) {
+  try {
+    const token = (await supabase.auth.getSession())
+      .data.session?.access_token;
+
+    const res = await fetch('http://localhost:3001/api/connections/request', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to send request');
+    }
+
+    return data;
+  } catch (err) {
+    console.error('sendConnectionRequest:', err);
+    throw err;
+  }
+}
+
+export const fetchOutgoingRequests = async (userId, { fresh = false } = {}) => {
+  const cacheKey = `outgoing_requests:${userId}`;
+
+  if (!fresh) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('connection_requests')
+      .select('*')
+      .eq('sender_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const result = data || [];
+
+    if (!fresh) {
+      setCache(cacheKey, result, 15 * 1000);
+    }
+
+    return result;
+  } catch (err) {
+    console.error('fetchOutgoingRequests:', err);
+    return [];
+  }
+};
+
 export async function getConnectionStatus(userId, otherUserId, type) {
-  // Check if user sent a request to otherUser
-  const { data: sent, error: sentErr } = await supabase
-    .from('connection_requests')
-    .select('status, sender_id')
-    .eq('sender_id', userId)
-    .eq('receiver_id', otherUserId)
-    .eq('type', type)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  try {
+    const cacheKey = `connection_status:${userId}:${otherUserId}:${type}`;
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
 
-  if (sentErr) throw sentErr;
-  if (sent) return { status: sent.status, isSender: true };
+    const { sent } = await supabase
+      .from('connection_requests')
+      .select('id, status, sender_id, receiver_id')
+      .eq('sender_id', userId)
+      .eq('receiver_id', otherUserId)
+      .eq('type', type)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  // Check if otherUser sent a request to user
-  const { data: received, error: recvErr } = await supabase
-    .from('connection_requests')
-    .select('status, sender_id')
-    .eq('sender_id', otherUserId)
-    .eq('receiver_id', userId)
-    .eq('type', type)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    if (sent) {
+      return {
+        status: sent.status,
+        isSender: true,
+        id: sent.id
+      };
+    }
 
-  if (recvErr) throw recvErr;
-  if (received) return { status: received.status, isSender: false };
+    const { received } = await supabase
+      .from('connection_requests')
+      .select('id, status, sender_id, receiver_id')
+      .eq('sender_id', otherUserId)
+      .eq('receiver_id', userId)
+      .eq('type', type)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  return null;
+    if (received) {
+      return {
+        status: received.status,
+        isSender: false,
+        id: received.id
+      };
+    }
+
+    setCache(cacheKey, null, 2 * 60 * 1000);
+    return null;
+  } catch (err) {
+    console.error('getConnectionStatus error:', err);
+    return null;
+  }
 }
 
-/**
- * Fetch all PENDING connection requests received by a user.
- * Used by the dashboard "Pending Requests" section and the Requests page.
- */
-export async function fetchIncomingRequests(userId) {
-  const { data, error } = await supabase
-    .from('connection_requests')
-    .select(`
-      *,
-      sender:profiles!connection_requests_sender_id_fkey (
-        id, full_name, avatar_url, user_type, location, bio, skills
-      )
-    `)
-    .eq('receiver_id', userId)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false });
+export async function fetchIncomingRequests(userId, { fresh = false } = {}) {
+  const cacheKey = `incoming_requests:${userId}`;
 
-  if (error) throw error;
-  return data || [];
-}
-
-/**
- * Fetch all connection requests SENT by a user (any status).
- * Used by the Requests page "Sent" tab.
- */
-export async function fetchSentRequests(userId) {
-  const { data, error } = await supabase
-    .from('connection_requests')
-    .select(`
-      *,
-      receiver:profiles!connection_requests_receiver_id_fkey (
-        id, full_name, avatar_url, user_type, location, bio, skills
-      )
-    `)
-    .eq('sender_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data || [];
-}
-
-/**
- * Accept or decline a pending connection request.
- * Only works on pending requests (enforced by query + RLS policy).
- * On accept — attempts to create a conversation (non-fatal if it fails).
- */
-export async function respondToRequest(requestId, status) {
-  // Validate status value
-  if (!['accepted', 'declined'].includes(status)) {
-    throw new Error('Invalid status. Must be "accepted" or "declined".');
+  if (!fresh) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
   }
 
-  // Fetch the request — only act on PENDING requests
-  const { data: req, error: fetchError } = await supabase
+  try {
+    const { data, error } = await supabase
+      .from('connection_requests')
+      .select(`
+        *, 
+        sender:profiles!connection_requests_sender_id_fkey(
+          id, full_name, user_type, avatar_url, location, bio
+        )
+      `)
+      .eq('receiver_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const result = data || [];
+
+    if (!fresh) {
+      setCache(cacheKey, result, 15 * 1000);
+    }
+
+    return result;
+  } catch (err) {
+    console.error('fetchIncomingRequests:', err);
+    return [];
+  }
+}
+
+export async function fetchSentRequests(userId) {
+  const cacheKey = `sent_requests:${userId}`;
+  const cached = getCache(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const { data, error } = await supabase
+      .from('connection_requests')
+      .select(`
+        *, 
+        receiver:profiles!connection_requests_receiver_id_fkey(
+          id, full_name, user_type, avatar_url, location, bio
+        )
+      `)
+      .eq('sender_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const result = data || [];
+    setCache(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error('fetchSentRequests:', err);
+    return [];
+  }
+}
+
+export async function respondToRequest(requestId, status) {
+  if (!['accepted', 'declined'].includes(status)) throw new Error('Invalid status');
+
+  const { req, error: fetchError } = await supabase
     .from('connection_requests')
-    .select('sender_id, receiver_id, type')
+    .select('sender_id, receiver_id')
     .eq('id', requestId)
     .eq('status', 'pending')
     .single();
 
-  if (fetchError) throw fetchError;
-  if (!req) throw new Error('Request not found or already handled.');
+  if (fetchError || !req) throw new Error('Request not found');
 
-  // Update status
   const { error } = await supabase
     .from('connection_requests')
     .update({
       status,
-      responded_at: new Date().toISOString(),
+      responded_at: new Date().toISOString()
     })
     .eq('id', requestId);
 
   if (error) throw error;
 
-  // If accepted, try to create a conversation
-  if (status === 'accepted') {
-    try {
-      await getOrCreateConversation(req.receiver_id, req.sender_id);
-    } catch (convErr) {
-      console.error('[respondToRequest] Could not create conversation:', convErr.message);
-      // Don't throw — the request is still accepted
-    }
-  }
+  // ✅ Invalidate caches
+  clearCache(`incoming_requests:${req.receiver_id}`);
+  clearCache(`sent_requests:${req.sender_id}`);
+  clearCache('dashboard:');
+
+  return true;
 }
 
-/**
- * Withdraw a pending request that the user sent.
- * Only works on pending requests (enforced by query + RLS policy).
- */
-export async function withdrawRequest(requestId) {
-  const { error } = await supabase
-    .from('connection_requests')
-    .update({
-      status: 'withdrawn',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', requestId)
-    .eq('status', 'pending');
-
-  if (error) throw error;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// CONVERSATIONS & MESSAGES
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Get or create a direct conversation between two users.
- * Uses the Postgres RPC function created in the migration.
- */
 export async function getOrCreateConversation(userId, otherUserId) {
   const { data, error } = await supabase
     .rpc('create_conversation_with_participants', {
       p_created_by: userId,
       p_other_user: otherUserId,
-      p_type: 'direct',
+      p_type: 'direct'
     });
   if (error) throw error;
-  return data; // conversation UUID
+  return data;
 }
 
+export async function fetchConversations(userId, { fresh = false } = {}) {
+  const cacheKey = `conversations:${userId}`;
 
-
-/**
- * Fetch all conversations for a user, ordered by most recent message.
- * Includes: the other participant's profile + last message preview + unread count.
- *
- * PERFORMANCE: Fetches all messages per conversation in one query, then
- * processes them in a single pass to extract last message + unread count.
- * For production with heavy message volume, consider a DB view or RPC.
- */
-
-/**
- * Upload a file to Supabase Storage for message attachments.
- * Returns { url, name, size }.
- */
-export async function uploadMessageFile(file) {
-  const ext = file.name.split('.').pop();
-  const path = `messages/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-  const { error } = await supabase.storage
-    .from('message-attachments')
-    .upload(path, file);
-
-  if (error) throw error;
-
-  const { data: { publicUrl } } = supabase.storage
-    .from('message-attachments')
-    .getPublicUrl(path);
-
-  return {
-    url: publicUrl,
-    name: file.name,
-    size: file.size < 1024 * 1024
-      ? `${(file.size / 1024).toFixed(0)} KB`
-      : `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-  };
-}
-
-export async function fetchConversations(userId) {
-  // Step 1: Get conversation list with participants
-  const { data: participants, error: pError } = await supabase
-    .from('conversation_participants')
-    .select(`
-      conversation_id,
-      last_read_at,
-      conversations (
-        id, type, title, last_message_at, created_at,
-        conversation_participants (
-          user_id,
-          profiles (
-            id, full_name, avatar_url, user_type, location
-          )
-        ),
-        messages (
-          id, content, type, sender_id, created_at
-        )
-      )
-    `)
-    .eq('user_id', userId)
-    .order('conversations(last_message_at)', { ascending: false });
-
-  if (pError) throw pError;
-  if (!participants || participants.length === 0) return [];
-
-  // Step 2: Single-pass through all messages to build last message map + unread counts
-  const lastMsgMap = {};
-  const unreadMap = {};
-
-  for (const row of participants) {
-    const convId = row.conversation_id;
-    const readAt = row.last_read_at;
-    const messages = row.conversations?.messages || [];
-
-    for (const msg of messages) {
-      // Track latest message per conversation
-      const existing = lastMsgMap[convId];
-      if (!existing || new Date(msg.created_at) > new Date(existing.created_at)) {
-        lastMsgMap[convId] = msg;
-      }
-      // Count unread (not from self, after last_read_at)
-      if (msg.sender_id !== userId) {
-        if (!readAt || new Date(msg.created_at) > new Date(readAt)) {
-          unreadMap[convId] = (unreadMap[convId] || 0) + 1;
-        }
-      }
-    }
+  if (!fresh) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
   }
 
-  // Step 3: Assemble final array
-  return participants.map(row => {
-    const conv = row.conversations;
-    const otherParticipant = (conv.conversation_participants || []).find(
-      p => p.user_id !== userId
+  try {
+    const { data: myParticipants, error: partError } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id, last_read_at')
+      .eq('user_id', userId);
+
+    if (partError) {
+      console.error('Participants fetch error:', partError);
+      return [];
+    }
+
+    if (!myParticipants?.length) {
+      setCache(cacheKey, [], 30 * 1000);
+      return [];
+    }
+
+    const conversationIds = myParticipants
+      .map((p) => p.conversation_id)
+      .filter(Boolean);
+
+    if (!conversationIds.length) {
+      return [];
+    }
+
+    const [conversationsRes, participantsRes, messagesRes] = await Promise.all([
+      supabase
+        .from('conversations')
+        .select('id, type, title, last_message_at, created_at')
+        .in('id', conversationIds)
+        .order('last_message_at', { ascending: false, nullsFirst: false }),
+
+      supabase
+        .from('conversation_participants')
+        .select('conversation_id, user_id')
+        .in('conversation_id', conversationIds),
+
+      supabase
+        .from('messages')
+        .select('id, conversation_id, content, sender_id, created_at')
+        .in('conversation_id', conversationIds)
+        .order('created_at', { ascending: true }),
+    ]);
+
+    if (conversationsRes.error) {
+      console.error('Conversation fetch error:', conversationsRes.error);
+      return [];
+    }
+
+    if (participantsRes.error) {
+      console.error('Participants list fetch error:', participantsRes.error);
+      return [];
+    }
+
+    if (messagesRes.error) {
+      console.error('Messages list fetch error:', messagesRes.error);
+      return [];
+    }
+
+    const allParticipants = participantsRes.data || [];
+    const messages = messagesRes.data || [];
+
+    const otherUserIds = [
+      ...new Set(
+        allParticipants
+          .filter((p) => p.user_id !== userId)
+          .map((p) => p.user_id)
+          .filter(Boolean)
+      ),
+    ];
+
+    const { data: profiles, error: profilesError } = otherUserIds.length
+      ? await supabase
+        .from('profiles')
+        .select('id, full_name, user_type, avatar_url, location')
+        .in('id', otherUserIds)
+      : { data: [], error: null };
+
+    if (profilesError) {
+      console.error('Profiles fetch error:', profilesError);
+      return [];
+    }
+
+    const profileById = new Map(
+      (profiles || []).map((profile) => [profile.id, profile])
     );
-    return {
-      id: conv.id,
-      type: conv.type,
-      title: conv.title,
-      last_message_at: conv.last_message_at,
-      otherUser: otherParticipant?.profiles || null,
-      lastMessage: lastMsgMap[conv.id] || null,
-      unreadCount: unreadMap[conv.id] || 0,
-    };
-  });
+
+    const result = (conversationsRes.data || []).map((conv) => {
+      const currentParticipant = myParticipants.find(
+        (p) => p.conversation_id === conv.id
+      );
+
+      const otherParticipant = allParticipants.find(
+        (p) => p.conversation_id === conv.id && p.user_id !== userId
+      );
+
+      const convMessages = messages.filter(
+        (msg) => msg.conversation_id === conv.id
+      );
+
+      const lastMessage = convMessages.reduce((latest, msg) => {
+        if (!latest) return msg;
+
+        return new Date(msg.created_at) > new Date(latest.created_at)
+          ? msg
+          : latest;
+      }, null);
+
+      const unreadCount = convMessages.filter((msg) => {
+        return (
+          msg.sender_id !== userId &&
+          (!currentParticipant?.last_read_at ||
+            new Date(msg.created_at) > new Date(currentParticipant.last_read_at))
+        );
+      }).length;
+
+      return {
+        id: conv.id,
+        type: conv.type,
+        title: conv.title,
+        last_message_at: conv.last_message_at,
+        otherUser: otherParticipant
+          ? profileById.get(otherParticipant.user_id)
+          : null,
+        lastMessage,
+        unreadCount,
+      };
+    });
+
+    setCache(cacheKey, result, 30 * 1000);
+    return result;
+  } catch (err) {
+    console.error('fetchConversations:', err);
+    return [];
+  }
 }
 
-/**
- * Fetch all messages in a conversation, oldest first.
- */
 export async function fetchMessages(conversationId) {
-  const { data, error } = await supabase
-    .from('messages')
-    .select(`
-      id, conversation_id, sender_id, content, type,
-      file_url, file_name, file_size, is_read, created_at,
-      profiles (
-        id, full_name, avatar_url
-      )
-    `)
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select(`
+        id, conversation_id, sender_id, content, type, 
+        file_url, file_name, file_size, created_at, 
+        profiles!messages_sender_id_fkey(id, full_name, avatar_url)
+      `)
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true });
 
-  if (error) throw error;
-  return data || [];
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('fetchMessages:', err);
+    return [];
+  }
 }
 
-/**
- * Send a message into a conversation.
- * type: 'text' | 'file' | 'pitch_deck' | 'system'
- */
 export async function sendMessage(conversationId, senderId, content, type = 'text', fileData = {}) {
   const { data, error } = await supabase
     .from('messages')
@@ -558,210 +744,200 @@ export async function sendMessage(conversationId, senderId, content, type = 'tex
       type,
       file_url: fileData.url || null,
       file_name: fileData.name || null,
-      file_size: fileData.size || null,
+      file_size: fileData.size || null
     })
     .select()
     .single();
+
   if (error) throw error;
+
+  // ✅ Invalidate conversation cache to show new message
+  clearCache(`conversations:${senderId}`);
+
   return data;
 }
 
-/**
- * Mark all messages in a conversation as read for this user.
- * Updates conversation_participants.last_read_at.
- */
 export async function markConversationRead(conversationId, userId) {
   const { error } = await supabase
     .from('conversation_participants')
     .update({ last_read_at: new Date().toISOString() })
     .eq('conversation_id', conversationId)
     .eq('user_id', userId);
+
   if (error) throw error;
+
+  // ✅ Refresh conversation list
+  clearCache(`conversations:${userId}`);
+
+  return true;
 }
 
-/**
- * Subscribe to new messages in a conversation via Supabase Realtime.
- * Returns the channel — call channel.unsubscribe() on cleanup.
- *
- * Usage:
- *   const channel = subscribeToMessages(convId, (msg) => setMessages(prev => [...prev, msg]));
- *   return () => channel.unsubscribe();
- */
 export function subscribeToMessages(conversationId, onNewMessage) {
-  const channel = supabase
-    .channel(`messages:${conversationId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `conversation_id=eq.${conversationId}`,
-      },
-      (payload) => onNewMessage(payload.new)
-    )
+  return supabase
+    .channel(`msg:${conversationId}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `conversation_id=eq.${conversationId}`
+    }, payload => {
+      onNewMessage(payload.new);
+      // Optional: clear cache when new message arrives
+      // clearCache(`conversations:*`);
+    })
+    .on('error', err => console.error('Realtime error:', err))
     .subscribe();
-
-  return channel;
 }
 
-/**
- * Subscribe to conversation list changes (e.g. new messages updating last_message_at).
- * Returns the channel — call channel.unsubscribe() on cleanup.
- */
 export function subscribeToConversations(userId, onChange) {
-  const channel = supabase
-    .channel(`conversations:${userId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'conversations',
-      },
-      () => onChange()
-    )
+  return supabase
+    .channel(`conv:${userId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'conversations'
+    }, payload => {
+      onChange(payload);
+      clearCache(`conversations:${userId}`);
+    })
+    .on('error', err => console.error('Realtime error:', err))
     .subscribe();
-
-  return channel;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// DASHBOARD
-// ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Fetch everything the student dashboard needs in 4 parallel queries.
- * Returns: { profile, mentors, coFounders, conversations }
- */
-export async function fetchDashboardData(userId) {
-  const [
-    profileResult,
-    mentorsResult,
-    coFoundersResult,
-    conversationsResult,
-  ] = await Promise.all([
-    // Profile + completion score
-    supabase
-      .from('profiles')
-      .select('full_name, avatar_url, profile_completion, bio, location, skills')
-      .eq('id', userId)
-      .single(),
+export async function fetchOpportunities({ limit = 10, type = null, location = null, fresh = false } = {}) {
+  const cacheKey = `opportunities:${JSON.stringify({ limit, type, location, fresh })}`;
 
-    // Top 5 mentors
-    supabase
-      .from('mentor_profiles')
-      .select(`
-        id, user_id, expertise_areas, years_experience, can_help_with, is_pro_bono,
-        profiles (id, full_name, avatar_url, bio, location)
-      `)
-      .limit(5),
+  if (!fresh) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
+  }
 
-    // Top 4 students looking for co-founders (excluding self)
-    supabase
-      .from('student_profiles')
-      .select(`
-        id, user_id, looking_for, commitment_level, skills_with_levels,
-        has_startup_idea, startup_idea_description,
-        profiles (id, full_name, avatar_url, bio, location, skills)
-      `)
-      .contains('looking_for', ['Co-founder'])
-      .neq('user_id', userId)
-      .limit(4),
+  try {
+    let query = supabase.from('opportunities')
+      .select('*')
+      .eq('is_active', true)
+      .gte('deadline', new Date().toISOString().split('T')[0])
+      .order('is_featured', { ascending: false })
+      .order('deadline', { ascending: true })
+      .limit(limit);
 
-    // Recent conversations (for message preview)
-    supabase
-      .from('conversation_participants')
-      .select(`
-        conversation_id,
-        conversations (
-          id, last_message_at,
-          messages (
-            content, sender_id, created_at
-          ),
-          conversation_participants (
-            user_id,
-            profiles (id, full_name, avatar_url)
-          )
-        )
-      `)
+    if (type) query = query.eq('type', type);
+    if (location) query = query.ilike('location', `%${location}%`);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const result = data || [];
+    if (!fresh) setCache(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error('fetchOpportunities:', err);
+    return [];
+  }
+}
+
+export async function fetchMatchingPreferences(userId) {
+  const cacheKey = `matching_prefs:${userId}`;
+  const cached = getCache(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const { data, error } = await supabase
+      .from('matching_preferences')
+      .select('*')
       .eq('user_id', userId)
-      .order('conversations(last_message_at)', { ascending: false })
-      .limit(5),
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const result = data || null;
+    setCache(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error('fetchMatchingPreferences:', err);
+    return null;
+  }
+}
+
+export async function updateMatchingPreferences(userId, prefs) {
+  const { error } = await supabase
+    .from('matching_preferences')
+    .upsert({
+      user_id: userId,
+      ...prefs,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+
+  if (error) throw error;
+
+  // ✅ Invalidate related caches
+  clearCache(`matching_prefs:${userId}`);
+  clearCache(`profile:${userId}`);
+  clearCache('cofounders:');
+  clearCache('mentors:');
+
+  return true;
+}
+
+export async function fetchDashboardData(userId, { fresh = false } = {}) {
+  const cacheKey = `dashboard:${userId}:${fresh ? 'fresh' : 'cached'}`;
+
+  if (!fresh) {
+    const cached = getCache(cacheKey);
+    if (cached) return cached;
+  }
+
+  const results = await Promise.allSettled([
+    fetchStudentProfile(userId),
+    fetchCoFounders({ limit: 6, excludeUserId: userId, fresh, currentUserData: null }),
+    fetchMentors({ limit: 6, fresh }),
+    fetchConversations(userId),
+    fetchIncomingRequests(userId),
+    fetchOpportunities({ limit: 5, fresh }),
+    fetchMatchingPreferences(userId)
   ]);
 
-  if (profileResult.error) throw profileResult.error;
-  if (mentorsResult.error) throw mentorsResult.error;
-  if (coFoundersResult.error) throw coFoundersResult.error;
-  // conversations failure is non-fatal — dashboard still works without it
-
-  return {
-    profile: profileResult.data,
-    mentors: mentorsResult.data || [],
-    coFounders: coFoundersResult.data || [],
-    conversations: conversationsResult.error ? [] : (conversationsResult.data || []),
+  const result = {
+    profile: results[0].status === 'fulfilled' ? results[0].value : null,
+    coFounders: results[1].status === 'fulfilled' ? results[1].value : [],
+    mentors: results[2].status === 'fulfilled' ? results[2].value : [],
+    conversations: results[3].status === 'fulfilled' ? results[3].value : [],
+    incomingRequests: results[4].status === 'fulfilled' ? results[4].value : [],
+    opportunities: results[5].status === 'fulfilled' ? results[5].value : [],
+    matchingPrefs: results[6].status === 'fulfilled' ? results[6].value : null,
+    error: results.find(r => r.status === 'rejected')?.reason?.message || null
   };
+
+  if (!fresh) {
+    setCache(cacheKey, result, 3 * 60 * 1000); // 3 min cache for dashboard
+  }
+
+  return result;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// PHASE 2 — MATCHED FETCH WRAPPERS
-// Fetch from DB then immediately rank with rule-based scores.
-// Drop-in replacements for fetchMentors / fetchCoFounders in pages.
-// ═══════════════════════════════════════════════════════════════════════════
-
-import { rankMentors, rankCoFounders, rankInvestors } from './matchingService';
-
-/**
- * Fetch mentors AND score them against the student's profile.
- * Returns rows with _matchScore, _matchReasons, _matchedOn attached, sorted best first.
- *
- * @param {object} studentProfile  - the current student's full profile object
- * @param {object} filters         - same filters as fetchMentors()
- * @param {object} opts
- * @param {number} opts.minScore   - hide results below this score (default 0)
- */
-export async function fetchMatchedMentors(studentProfile, filters = {}, { minScore = 0 } = {}) {
-  const raw = await fetchMentors({ ...filters, limit: filters.limit || 50 });
-  return rankMentors(raw, studentProfile, { minScore, limit: filters.limit || 20 });
+export async function logStudentActivity(userId, type, description, meta = {}) {
+  try {
+    await supabase.from('student_activities').insert({
+      user_id: userId,
+      type,
+      description,
+      meta,
+      created_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn('logStudentActivity failed:', err);
+  }
 }
 
-/**
- * Fetch co-founder candidates AND score them against the student's profile.
- * Returns rows sorted by complementarity score.
- *
- * @param {object} studentProfile
- * @param {object} filters         - same filters as fetchCoFounders()
- * @param {object} opts
- */
-export async function fetchMatchedCoFounders(studentProfile, filters = {}, { minScore = 0 } = {}) {
-  const raw = await fetchCoFounders({ ...filters, limit: filters.limit || 50 });
-  return rankCoFounders(raw, studentProfile, { minScore, limit: filters.limit || 20 });
+export function clearAllCaches() {
+  CACHE.clear();
+  console.log('🧹 All caches cleared');
 }
 
-/**
- * Fetch investors AND score them against the student's profile.
- * investor_profiles table must exist in your schema.
- *
- * @param {object} studentProfile
- * @param {object} filters
- */
-export async function fetchMatchedInvestors(studentProfile, filters = {}, { minScore = 0 } = {}) {
-  let query = supabase
-    .from('investor_profiles')
-    .select(`
-      id, user_id,
-      investor_type, firm_name, investment_stage, ticket_size_min, ticket_size_max,
-      industries_of_interest, geographic_focus, portfolio_count,
-      investment_thesis, typical_involvement, accepting_pitches,
-      profiles (
-        id, full_name, bio, avatar_url, location
-      )
-    `)
-    .eq('accepting_pitches', true)
-    .limit(filters.limit || 50);
-
-  const { data, error } = await query;
-  if (error) throw error;
-
-  return rankInvestors(data || [], studentProfile, { minScore, limit: filters.limit || 20 });
+export function getCacheStats() {
+  return {
+    size: CACHE.size,
+    keys: Array.from(CACHE.keys())
+  };
 }

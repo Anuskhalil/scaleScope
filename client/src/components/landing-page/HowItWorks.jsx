@@ -1,66 +1,99 @@
 import React from 'react';
-import { Users } from 'lucide-react';
-import { Sparkles } from 'lucide-react';
-import { Rocket } from 'lucide-react';
-import { TrendingUp } from 'lucide-react';
-import { ArrowRight } from 'lucide-react';
+import {
+  Users,
+  Sparkles,
+  Rocket,
+  TrendingUp,
+  ArrowRight,
+  ShieldCheck,
+} from 'lucide-react';
 
 const howItWorks = [
   {
-    step: "01",
-    title: "Create Your Profile",
-    description: "Tell us about your skills, experience, startup idea, and what you're looking for. The more detailed, the better the matches.",
-    icon: <Users className="w-8 h-8" />
+    step: '01',
+    title: 'Create a detailed profile',
+    description:
+      'Add your education, skills, startup idea, looking-for goals, help-needed areas, and commitment level.',
+    icon: Users,
   },
   {
-    step: "02",
-    title: "AI Finds Your Matches",
-    description: "Our intelligent algorithm analyzes thousands of profiles to find co-founders, mentors, and investors who are perfect for you.",
-    icon: <Sparkles className="w-8 h-8" />
+    step: '02',
+    title: 'AI analyzes fit',
+    description:
+      'Scale Scope compares profile intent, skill gaps, help-needed areas, domain, and commitment to suggest realistic matches.',
+    icon: Sparkles,
   },
   {
-    step: "03",
-    title: "Connect & Collaborate",
-    description: "Review matches, schedule meetings, pitch your ideas, and start building meaningful relationships that drive your startup forward.",
-    icon: <Rocket className="w-8 h-8" />
+    step: '03',
+    title: 'Connect before messaging',
+    description:
+      'Review full profiles, send a connection request, and start messaging only after both users are connected.',
+    icon: ShieldCheck,
   },
   {
-    step: "04",
-    title: "Grow & Scale Together",
-    description: "Track progress, celebrate milestones, and watch your startup grow with the right team, guidance, and funding in place.",
-    icon: <TrendingUp className="w-8 h-8" />
-  }
+    step: '04',
+    title: 'Collaborate and grow',
+    description:
+      'Chat in real time, discover mentors and opportunities, and track growth from your role-based dashboard.',
+    icon: TrendingUp,
+  },
 ];
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+    <section id="how-it-works" className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl lg:text-5xl font-black text-slate-900 mb-4">
-            How Scale Scope Works
+        <div className="text-center mb-14">
+          <span className="inline-flex px-4 py-2 rounded-full bg-white border border-slate-200 text-[#1B2D7F] text-sm font-black mb-4">
+            How it works
+          </span>
+
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-950 mb-4">
+            From profile to trusted connection
           </h2>
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-            Our AI-powered platform makes finding the right connections simple, realistic, and effective.
+
+          <p className="text-lg text-slate-600 max-w-3xl mx-auto">
+            The platform is designed to reduce random networking and make every
+            suggestion explainable, relevant, and useful.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {howItWorks.map((item, idx) => (
-            <div key={idx} className="relative">
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-8 h-full">
-                <div className="text-6xl font-black text-indigo-200 mb-4">{item.step}</div>
-                <div className="text-indigo-600 mb-4">{item.icon}</div>
-                <h3 className="text-xl font-bold text-slate-900 mb-3">{item.title}</h3>
-                <p className="text-slate-600">{item.description}</p>
-              </div>
-              {idx < howItWorks.length - 1 && (
-                <div className="hidden lg:block absolute top-1/2 -right-4 transform -translate-y-1/2">
-                  <ArrowRight className="w-8 h-8 text-indigo-300" />
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {howItWorks.map((item, idx) => {
+            const Icon = item.icon;
+
+            return (
+              <div key={item.step} className="relative">
+                <div className="h-full bg-white rounded-3xl p-7 border border-slate-100 shadow-sm hover:shadow-xl transition-all">
+                  <div className="flex items-center justify-between mb-5">
+                    <span className="text-5xl font-black text-[#1B2D7F]/10">
+                      {item.step}
+                    </span>
+
+                    <div className="w-12 h-12 rounded-2xl bg-[#98DE38]/20 text-[#1B2D7F] flex items-center justify-center">
+                      <Icon className="w-6 h-6" />
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-black text-slate-900 mb-3">
+                    {item.title}
+                  </h3>
+
+                  <p className="text-slate-600 leading-relaxed">
+                    {item.description}
+                  </p>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {idx < howItWorks.length - 1 && (
+                  <div className="hidden lg:block absolute top-1/2 -right-4 -translate-y-1/2 z-10">
+                    <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center">
+                      <ArrowRight className="w-4 h-4 text-[#1B2D7F]" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

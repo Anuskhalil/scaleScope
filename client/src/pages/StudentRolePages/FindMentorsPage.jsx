@@ -1,4 +1,4 @@
-// src/pages/StudentRolePages/FindCoFounder.jsx
+// src/pages/FindMentorsPage.jsx
 import React, {
   useState,
   useEffect,
@@ -17,19 +17,22 @@ import {
   Loader,
   CheckCircle,
   Clock,
-  Lightbulb,
+  Coffee,
   Info,
   ArrowRight,
+  Award,
   SlidersHorizontal,
   Sparkles,
   ShieldCheck,
+  GraduationCap,
+  BookOpen,
+  Heart,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
-import { fetchCoFounders } from '../../services/studentService';
 
 const CSS = `
   :root {
@@ -49,8 +52,13 @@ const CSS = `
     background-size: 28px 28px;
   }
 
-  .g-brand { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
-  .g-sec { background: linear-gradient(135deg, var(--secondary), var(--secondary-light)); }
+  .g-brand {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  }
+
+  .g-sec {
+    background: linear-gradient(135deg, var(--secondary), var(--secondary-light));
+  }
 
   .lift {
     transition: transform .2s cubic-bezier(.22,.68,0,1.2), box-shadow .2s ease;
@@ -89,10 +97,15 @@ const CSS = `
   }
 
   @media (max-width: 768px) {
-    button, [role="button"] { min-height: 44px; min-width: 44px; }
+    button, [role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
   }
 
-  .tooltip-wrap { position: relative; }
+  .tooltip-wrap {
+    position: relative;
+  }
 
   .tooltip-wrap:focus-within .tooltip-box,
   .tooltip-wrap:hover .tooltip-box {
@@ -140,7 +153,9 @@ async function getCachedUrl(path) {
   const key = `av:${path}`;
   const cached = AVATAR_CACHE.get(key);
 
-  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.url;
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.url;
+  }
 
   try {
     const cleanPath = path.replace(/^avatars\//, '').replace(/^\/+/, '');
@@ -155,7 +170,11 @@ async function getCachedUrl(path) {
     }
 
     if (data?.signedUrl) {
-      AVATAR_CACHE.set(key, { url: data.signedUrl, ts: Date.now() });
+      AVATAR_CACHE.set(key, {
+        url: data.signedUrl,
+        ts: Date.now(),
+      });
+
       return data.signedUrl;
     }
   } catch (err) {
@@ -184,7 +203,7 @@ const AVATAR_GRADS = [
 ];
 
 const gradFor = (id = '') => {
-  const index = id ? String(id).charCodeAt(0) % AVATAR_GRADS.length : 0;
+  const index = id ? id.charCodeAt(0) % AVATAR_GRADS.length : 0;
   return AVATAR_GRADS[index] || AVATAR_GRADS[0];
 };
 
@@ -246,9 +265,30 @@ const normalizeProfile = (candidate) => {
       nestedProfile?.bio ||
       '',
     user_type:
-      candidate?.user_type || nestedProfile?.user_type || 'student',
-    skills: candidate?.skills || nestedProfile?.skills || [],
+      candidate?.user_type ||
+      nestedProfile?.user_type ||
+      'student',
+    skills:
+      candidate?.skills ||
+      nestedProfile?.skills ||
+      [],
   };
+};
+
+const hasLookingFor = (candidate, option) => {
+  const values =
+    candidate?.looking_for ||
+    candidate?.student_profile?.looking_for ||
+    candidate?.student_profiles?.looking_for ||
+    candidate?.profile?.looking_for ||
+    candidate?.profiles?.looking_for ||
+    [];
+
+  if (Array.isArray(values)) {
+    return values.includes(option);
+  }
+
+  return String(values || '').toLowerCase().includes(option.toLowerCase());
 };
 
 const getScore = (candidate) => {
@@ -261,27 +301,15 @@ const getScore = (candidate) => {
   );
 };
 
-const hasLookingFor = (candidate, option) => {
-  const values =
-    candidate?.looking_for ||
-    candidate?.student_profile?.looking_for ||
-    candidate?.student_profiles?.looking_for ||
-    candidate?.profile?.looking_for ||
-    candidate?.profiles?.looking_for ||
-    [];
-
-  if (Array.isArray(values)) return values.includes(option);
-
-  return normalizeText(values).includes(normalizeText(option));
-};
-
-function computeCoFounderMatch(currentUserProfile, candidate) {
-  if (!currentUserProfile || !candidate) {
-    return { matchScore: 10, reasons: ['Basic profile compatibility'] };
-  }
-
+function computeMentorMatchScore(currentUserProfile, candidate) {
   let score = 0;
   const reasons = [];
+
+  const currentHelpNeeded = new Set(
+    (currentUserProfile.help_needed || [])
+      .map(normalizeText)
+      .filter(Boolean)
+  );
 
   const currentSkills = new Set(
     (currentUserProfile.skills_with_levels || [])
@@ -293,12 +321,6 @@ function computeCoFounderMatch(currentUserProfile, candidate) {
   const candidateSkills = new Set(
     (candidate.skills_with_levels || [])
       .map(normalizeSkill)
-      .map(normalizeText)
-      .filter(Boolean)
-  );
-
-  const currentNeeds = new Set(
-    (currentUserProfile.help_needed || [])
       .map(normalizeText)
       .filter(Boolean)
   );
@@ -315,60 +337,59 @@ function computeCoFounderMatch(currentUserProfile, candidate) {
       .filter(Boolean)
   );
 
-  const needSkillMatches = [...candidateSkills].filter((skill) => {
-    return [...currentNeeds].some((need) => {
+  const needMatches = [...currentHelpNeeded].filter((need) => {
+    const tokens = need.split(/\s+|&|\//).filter((token) => token.length > 2);
+
+    return [...candidateSkills].some((skill) => {
       return (
-        need.includes(skill) ||
         skill.includes(need) ||
-        need.split(' ').some((word) => word.length > 2 && skill.includes(word))
+        need.includes(skill) ||
+        tokens.some((token) => skill.includes(token))
       );
     });
   });
 
-  if (needSkillMatches.length > 0) {
-    score += Math.min(25, needSkillMatches.length * 10);
-    reasons.push(`Matches your needs: ${needSkillMatches.slice(0, 2).join(', ')}`);
+  if (needMatches.length > 0) {
+    score += Math.min(30, needMatches.length * 10);
+    reasons.push(`Can support your needs: ${needMatches.slice(0, 2).join(', ')}`);
   }
 
-  const complementarySkills = [...candidateSkills].filter(
-    (skill) => !currentSkills.has(skill)
+  const skillOverlap = [...currentSkills].filter((skill) => candidateSkills.has(skill));
+  if (skillOverlap.length > 0) {
+    score += Math.min(15, skillOverlap.length * 5);
+    reasons.push(`Understands your skill area: ${skillOverlap.slice(0, 2).join(', ')}`);
+  }
+
+  const sharedInterests = [...currentInterests].filter((interest) =>
+    candidateInterests.has(interest)
   );
 
-  if (complementarySkills.length > 0) {
-    score += Math.min(20, complementarySkills.length * 5);
-    reasons.push(`Complementary skills: ${complementarySkills.slice(0, 2).join(', ')}`);
-  }
-
-  if (
-    currentUserProfile.commitment_level &&
-    candidate.commitment_level &&
-    currentUserProfile.commitment_level === candidate.commitment_level
-  ) {
-    score += 15;
-    reasons.push(`Same commitment level: ${candidate.commitment_level}`);
+  if (sharedInterests.length > 0) {
+    score += Math.min(15, sharedInterests.length * 5);
+    reasons.push(`Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`);
   }
 
   if (
     currentUserProfile.idea_domain &&
     candidate.idea_domain &&
-    normalizeText(currentUserProfile.idea_domain) === normalizeText(candidate.idea_domain)
+    currentUserProfile.idea_domain === candidate.idea_domain
   ) {
     score += 15;
     reasons.push(`Same startup domain: ${candidate.idea_domain}`);
-  } else {
-    const sharedInterests = [...currentInterests].filter((interest) =>
-      candidateInterests.has(interest)
-    );
-
-    if (sharedInterests.length > 0) {
-      score += Math.min(10, sharedInterests.length * 5);
-      reasons.push(`Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`);
-    }
   }
 
-  if (currentUserProfile.has_startup_idea && candidate.has_startup_idea) {
+  if (candidate.has_startup_idea) {
+    score += 5;
+    reasons.push('Also has startup-building context');
+  }
+
+  const completion = Number(candidate.profile_completion || 0);
+  if (completion >= 80) {
     score += 10;
-    reasons.push('Both are working on startup ideas');
+    reasons.push('Strong completed profile');
+  } else if (completion >= 50) {
+    score += 5;
+    reasons.push('Decent profile completion');
   }
 
   if (
@@ -380,26 +401,12 @@ function computeCoFounderMatch(currentUserProfile, candidate) {
     reasons.push('Same university network');
   }
 
-  const completion = Number(candidate.profile_completion || 0);
-
-  if (completion >= 80) {
-    score += 10;
-    reasons.push('Strong completed profile');
-  } else if (completion >= 50) {
-    score += 5;
-    reasons.push('Decent profile completion');
-  }
-
   const finalScore = Math.max(10, Math.min(100, Math.round(score)));
 
   return {
     matchScore: finalScore,
-    reasons: reasons.length ? reasons.slice(0, 3) : ['Basic profile compatibility'],
+    reasons: reasons.length ? reasons.slice(0, 3) : ['Basic mentor fit based on profile data'],
   };
-}
-
-function buildMatchReasons(currentUserProfile, candidate) {
-  return computeCoFounderMatch(currentUserProfile, candidate).reasons;
 }
 
 const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'md' }) => {
@@ -438,7 +445,9 @@ const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'm
     xl: 'w-14 h-14',
   }[size];
 
-  if (loading) return <div className={`${sizeClass} rounded-xl shimmer`} aria-hidden="true" />;
+  if (loading) {
+    return <div className={`${sizeClass} rounded-xl shimmer`} aria-hidden="true" />;
+  }
 
   if (url) {
     return (
@@ -462,30 +471,30 @@ const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'm
   );
 });
 
-const CoFounderCard = memo(function CoFounderCard({
-  candidate,
+const MentorCard = memo(function MentorCard({
+  mentor,
   currentUserProfile,
   connectionStatus,
   onConnect,
   onMessage,
   connecting,
 }) {
-  const personId = getPersonId(candidate);
-  const p = useMemo(() => normalizeProfile(candidate), [candidate]);
-  const score = getScore(candidate);
+  const personId = getPersonId(mentor);
+  const p = useMemo(() => normalizeProfile(mentor), [mentor]);
+  const score = getScore(mentor);
 
   const reasons = useMemo(() => {
-    return candidate.reasons?.length
-      ? candidate.reasons
-      : buildMatchReasons(currentUserProfile, candidate);
-  }, [currentUserProfile, candidate]);
+    return mentor.reasons?.length
+      ? mentor.reasons
+      : computeMentorMatchScore(currentUserProfile, mentor).reasons;
+  }, [currentUserProfile, mentor]);
 
   const skillNames = useMemo(() => {
     return [
       ...new Set(
         [
-          ...(candidate.skills_with_levels || []).map(normalizeSkill),
-          ...(candidate.skills || []),
+          ...(mentor.skills_with_levels || []).map(normalizeSkill),
+          ...(mentor.skills || []),
           ...(p.skills || []),
         ]
           .flat()
@@ -493,7 +502,7 @@ const CoFounderCard = memo(function CoFounderCard({
           .filter(Boolean)
       ),
     ].slice(0, 5);
-  }, [candidate, p.skills]);
+  }, [mentor, p.skills]);
 
   const buttonState = connecting || connectionStatus;
 
@@ -502,7 +511,12 @@ const CoFounderCard = memo(function CoFounderCard({
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="hidden sm:block w-1 rounded-full self-stretch g-brand" aria-hidden="true" />
 
-        <Avatar name={p.full_name} path={p.avatar_url} grad={gradFor(personId)} size="xl" />
+        <Avatar
+          name={p.full_name}
+          path={p.avatar_url}
+          grad={gradFor(personId)}
+          size="xl"
+        />
 
         <div className="flex-1 min-w-0">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
@@ -510,10 +524,10 @@ const CoFounderCard = memo(function CoFounderCard({
               <p className="font-bold text-gray-900 truncate">{p.full_name}</p>
 
               <p className="text-xs text-gray-500">
-                {candidate.university || 'University not added'}
-                {candidate.degree ? ` · ${candidate.degree}` : ''}
-                {candidate.major ? ` · ${candidate.major}` : ''}
-                {candidate.current_year ? ` · ${candidate.current_year}` : ''}
+                {mentor.university || 'University not added'}
+                {mentor.degree ? ` · ${mentor.degree}` : ''}
+                {mentor.major ? ` · ${mentor.major}` : ''}
+                {mentor.current_year ? ` · ${mentor.current_year}` : ''}
               </p>
             </div>
 
@@ -522,8 +536,8 @@ const CoFounderCard = memo(function CoFounderCard({
                 {score}% Match
               </span>
 
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700">
-                Co-Founder
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">
+                Mentor
               </span>
             </div>
           </div>
@@ -535,17 +549,21 @@ const CoFounderCard = memo(function CoFounderCard({
             </p>
           )}
 
-          {p.bio && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{p.bio}</p>}
+          {p.bio && (
+            <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+              {p.bio}
+            </p>
+          )}
 
-          {candidate.startup_idea_description && (
+          {mentor.startup_idea_description && (
             <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl mt-3">
               <p className="text-xs font-bold text-indigo-600 flex items-center gap-1 mb-1">
-                <Lightbulb className="w-3" />
-                Startup Idea
+                <BookOpen className="w-3" />
+                Background / Idea Context
               </p>
 
               <p className="text-sm text-gray-700 line-clamp-2">
-                {candidate.startup_idea_description}
+                {mentor.startup_idea_description}
               </p>
             </div>
           )}
@@ -555,7 +573,7 @@ const CoFounderCard = memo(function CoFounderCard({
               {skillNames.map((skill, index) => (
                 <span
                   key={`${skill}-${index}`}
-                  className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700"
+                  className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700"
                 >
                   {skill}
                 </span>
@@ -563,16 +581,17 @@ const CoFounderCard = memo(function CoFounderCard({
             </div>
           )}
 
-          {candidate.help_needed?.length > 0 && (
-            <p className="text-xs text-gray-500 mt-2">
-              Needs: {candidate.help_needed.slice(0, 3).join(', ')}
+          {mentor.help_needed?.length > 0 && (
+            <p className="text-xs text-gray-500 mt-2 flex items-start gap-1">
+              <Heart className="w-3 mt-0.5 flex-shrink-0" />
+              Areas: {mentor.help_needed.slice(0, 3).join(', ')}
             </p>
           )}
 
-          {candidate.commitment_level && (
+          {mentor.commitment_level && (
             <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
               <Clock className="w-3" />
-              {candidate.commitment_level}
+              {mentor.commitment_level}
             </p>
           )}
 
@@ -608,7 +627,9 @@ const CoFounderCard = memo(function CoFounderCard({
             <button
               type="button"
               onClick={() => {
-                if (connectionStatus === 'accepted') onMessage(personId);
+                if (connectionStatus === 'accepted') {
+                  onMessage(personId);
+                }
               }}
               disabled={connectionStatus !== 'accepted'}
               title={
@@ -647,7 +668,7 @@ const CoFounderCard = memo(function CoFounderCard({
             ) : (
               <button
                 type="button"
-                onClick={() => onConnect(candidate)}
+                onClick={() => onConnect(mentor)}
                 disabled={buttonState === true}
                 className="py-2 g-brand text-black rounded-xl text-xs font-black hover:opacity-90 transition flex items-center justify-center disabled:opacity-60"
               >
@@ -666,16 +687,25 @@ const CoFounderCard = memo(function CoFounderCard({
   );
 });
 
-export default function FindCoFoundersPage() {
+export default function FindMentorsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [state, setState] = useState({ loading: true, error: null });
-  const [data, setData] = useState({ profile: {}, coFounders: [], myConnections: [] });
+  const [state, setState] = useState({
+    loading: true,
+    error: null,
+  });
+
+  const [data, setData] = useState({
+    profile: {},
+    mentors: [],
+    myConnections: [],
+  });
 
   const [filters, setFilters] = useState({
     skill: 'All',
-    commitment: 'All',
+    location: 'All',
+    proBono: false,
     query: '',
     matchBand: 'all',
   });
@@ -686,12 +716,11 @@ export default function FindCoFoundersPage() {
   const normalizeCandidate = useCallback((candidate, currentProfile) => {
     const personId = getPersonId(candidate);
     const p = normalizeProfile(candidate);
-    const calculated = computeCoFounderMatch(currentProfile, candidate);
+    const calculated = computeMentorMatchScore(currentProfile, candidate);
 
     return {
       ...candidate,
       profile_id: personId,
-      user_id: candidate?.user_id || personId,
       full_name: p.full_name,
       avatar_url: p.avatar_url,
       location: p.location,
@@ -704,74 +733,30 @@ export default function FindCoFoundersPage() {
           candidate.ai_score ||
           calculated.matchScore
       ),
-      reasons: candidate.reasons?.length ? candidate.reasons : calculated.reasons,
+      reasons:
+        candidate.reasons?.length
+          ? candidate.reasons
+          : calculated.reasons,
     };
   }, []);
 
   const load = useCallback(async () => {
     if (!user?.id) return;
 
-    setState({ loading: true, error: null });
+    setState({
+      loading: true,
+      error: null,
+    });
 
     try {
-      const [profileRes, studentRes, serviceCoFoundersRes, myConnectionsRes] =
-        await Promise.allSettled([
-          supabase
-            .from('profiles')
-            .select('id, full_name, avatar_url, location, bio, user_type')
-            .eq('id', user.id)
-            .maybeSingle(),
+      const [profileRes, studentRes, myConnectionsRes] = await Promise.allSettled([
+        supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url, location, bio, user_type')
+          .eq('id', user.id)
+          .maybeSingle(),
 
-          supabase
-            .from('student_profiles')
-            .select(`
-              id,
-              user_id,
-              university,
-              degree,
-              major,
-              current_year,
-              skills_with_levels,
-              interests,
-              help_needed,
-              looking_for,
-              commitment_level,
-              has_startup_idea,
-              startup_idea_description,
-              idea_title,
-              idea_domain,
-              profile_completion
-            `)
-            .eq('user_id', user.id)
-            .maybeSingle(),
-
-          fetchCoFounders({
-            limit: 100,
-            excludeUserId: user.id,
-            fresh: true,
-          }),
-
-          backendApi.getMyConnections(),
-        ]);
-
-      const profileData =
-        profileRes.status === 'fulfilled' ? profileRes.value.data || {} : {};
-
-      const studentData =
-        studentRes.status === 'fulfilled' ? studentRes.value.data || {} : {};
-
-      const currentProfile = { ...profileData, ...studentData };
-
-      let coFounders = [];
-
-      if (serviceCoFoundersRes.status === 'fulfilled' && Array.isArray(serviceCoFoundersRes.value)) {
-        coFounders = serviceCoFoundersRes.value
-          .map((candidate) => normalizeCandidate(candidate, currentProfile))
-          .filter((candidate) => hasLookingFor(candidate, 'Co-Founder'));
-      }
-
-      if (!coFounders.length) {
-        const { data: fallbackData, error: fallbackError } = await supabase
+        supabase
           .from('student_profiles')
           .select(`
             id,
@@ -789,28 +774,70 @@ export default function FindCoFoundersPage() {
             startup_idea_description,
             idea_title,
             idea_domain,
-            profile_completion,
-            profiles!student_profiles_user_id_fkey(
-              id,
-              full_name,
-              avatar_url,
-              location,
-              bio,
-              user_type
-            )
+            profile_completion
           `)
-          .contains('looking_for', ['Co-Founder'])
-          .neq('user_id', user.id)
-          .limit(100);
+          .eq('user_id', user.id)
+          .maybeSingle(),
 
-        if (fallbackError) throw fallbackError;
+        backendApi.getMyConnections(),
+      ]);
 
-        coFounders = (fallbackData || [])
-          .map((candidate) => normalizeCandidate({ ...candidate, profile_id: candidate.user_id }, currentProfile))
-          .filter((candidate) => hasLookingFor(candidate, 'Co-Founder'));
-      }
+      const profileData =
+        profileRes.status === 'fulfilled' ? profileRes.value.data || {} : {};
 
-      coFounders = coFounders.sort((a, b) => getScore(b) - getScore(a));
+      const studentData =
+        studentRes.status === 'fulfilled' ? studentRes.value.data || {} : {};
+
+      const currentProfile = {
+        ...profileData,
+        ...studentData,
+      };
+
+      const { data: mentorRows, error: mentorsError } = await supabase
+        .from('student_profiles')
+        .select(`
+          id,
+          user_id,
+          university,
+          degree,
+          major,
+          current_year,
+          skills_with_levels,
+          interests,
+          help_needed,
+          looking_for,
+          commitment_level,
+          has_startup_idea,
+          startup_idea_description,
+          idea_title,
+          idea_domain,
+          profile_completion,
+          profiles(
+            id,
+            full_name,
+            avatar_url,
+            location,
+            bio,
+            user_type
+          )
+        `)
+        .contains('looking_for', ['Mentor'])
+        .neq('user_id', user.id)
+        .limit(80);
+
+      if (mentorsError) throw mentorsError;
+
+      const mentors = (mentorRows || [])
+        .map((candidate) =>
+          normalizeCandidate(
+            {
+              ...candidate,
+              profile_id: candidate.user_id,
+            },
+            currentProfile
+          )
+        )
+        .filter((candidate) => hasLookingFor(candidate, 'Mentor'));
 
       const myConnections =
         myConnectionsRes.status === 'fulfilled'
@@ -820,17 +847,32 @@ export default function FindCoFoundersPage() {
       const statusMap = {};
 
       myConnections.forEach((connection) => {
-        if (connection.otherUser?.id) statusMap[connection.otherUser.id] = 'accepted';
+        if (connection.otherUser?.id) {
+          statusMap[connection.otherUser.id] = 'accepted';
+        }
       });
 
       setConnStatusMap(statusMap);
 
-      setData({ profile: currentProfile, coFounders, myConnections });
-      setState({ loading: false, error: null });
+      setData({
+        profile: currentProfile,
+        mentors,
+        myConnections,
+      });
+
+      setState({
+        loading: false,
+        error: null,
+      });
     } catch (err) {
-      console.error('Find cofounders load failed:', err);
-      setState({ loading: false, error: err.message || 'Failed to load co-founders' });
-      toast.error('Failed to load co-founders');
+      console.error('Find mentors load failed:', err);
+
+      setState({
+        loading: false,
+        error: err.message || 'Failed to load mentors',
+      });
+
+      toast.error('Failed to load mentors');
     }
   }, [user?.id, normalizeCandidate]);
 
@@ -841,7 +883,7 @@ export default function FindCoFoundersPage() {
   const allSkills = useMemo(() => {
     const skills = new Set();
 
-    data.coFounders.forEach((candidate) => {
+    data.mentors.forEach((candidate) => {
       (candidate.skills_with_levels || []).forEach((skill) => {
         const name = normalizeSkill(skill);
         if (name) skills.add(name);
@@ -853,97 +895,138 @@ export default function FindCoFoundersPage() {
       });
     });
 
-    return ['All', ...Array.from(skills).slice(0, 14)];
-  }, [data.coFounders]);
+    return ['All', ...Array.from(skills).slice(0, 12)];
+  }, [data.mentors]);
+
+  const allLocations = useMemo(() => {
+    const locations = new Set();
+
+    data.mentors.forEach((candidate) => {
+      const p = normalizeProfile(candidate);
+      if (p.location) locations.add(p.location);
+    });
+
+    return ['All', ...Array.from(locations).slice(0, 12)];
+  }, [data.mentors]);
 
   const filtered = useMemo(() => {
-    const { query, skill, commitment, matchBand } = filters;
+    const { query, skill, location, proBono, matchBand } = filters;
 
-    return (data.coFounders || [])
-      .filter((candidate) => {
-        const personId = getPersonId(candidate);
+    return (data.mentors || [])
+      .filter((mentor) => {
+        const personId = getPersonId(mentor);
         if (!personId) return false;
-        if (!hasLookingFor(candidate, 'Co-Founder')) return false;
 
-        const p = normalizeProfile(candidate);
-        const score = getScore(candidate);
+        if (!hasLookingFor(mentor, 'Mentor')) return false;
+
+        const p = normalizeProfile(mentor);
+        const score = getScore(mentor);
 
         const skills = [
-          ...(candidate.skills_with_levels || []).map(normalizeSkill),
-          ...(candidate.skills || []),
+          ...(mentor.skills_with_levels || []).map(normalizeSkill),
+          ...(mentor.skills || []),
           ...(p.skills || []),
         ]
           .flat()
           .map(normalizeSkill)
-          .map(normalizeText)
+          .map((item) => String(item || '').toLowerCase())
           .filter(Boolean);
 
         const searchText = [
           p.full_name,
           p.bio,
           p.location,
-          candidate.university,
-          candidate.degree,
-          candidate.major,
-          candidate.current_year,
-          candidate.startup_idea_description,
-          candidate.idea_title,
-          candidate.idea_domain,
-          candidate.commitment_level,
+          mentor.university,
+          mentor.degree,
+          mentor.major,
+          mentor.current_year,
+          mentor.startup_idea_description,
+          mentor.idea_title,
+          mentor.idea_domain,
+          mentor.commitment_level,
           skills.join(' '),
+          (mentor.help_needed || []).join(' '),
+          (mentor.interests || []).join(' '),
         ]
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
 
         const matchQuery = !query || searchText.includes(query.toLowerCase());
-        const matchSkill = skill === 'All' || skills.some((item) => item.includes(skill.toLowerCase()));
-        const matchCommitment = commitment === 'All' || candidate.commitment_level === commitment;
+
+        const matchSkill =
+          skill === 'All' ||
+          skills.some((item) => item.includes(skill.toLowerCase()));
+
+        const matchLocation =
+          location === 'All' ||
+          p.location?.toLowerCase().includes(location.toLowerCase());
+
+        const matchProBono = !proBono || mentor.pro_bono === true;
+
         const matchBandOk =
           matchBand === 'all' ||
           (matchBand === 'below60' && score < 60) ||
           (matchBand === '60plus' && score >= 60);
 
-        return matchQuery && matchSkill && matchCommitment && matchBandOk;
+        return matchQuery && matchSkill && matchLocation && matchProBono && matchBandOk;
       })
       .sort((a, b) => getScore(b) - getScore(a));
-  }, [data.coFounders, filters]);
+  }, [data.mentors, filters]);
 
-  const handleConnect = async (candidate) => {
-    const targetUserId = getPersonId(candidate);
-    const p = normalizeProfile(candidate);
+  const handleConnect = async (mentor) => {
+    const targetUserId = getPersonId(mentor);
+    const p = normalizeProfile(mentor);
     const name = p.full_name || 'there';
 
     if (!targetUserId || connecting[targetUserId]) return;
 
-    setConnecting((prev) => ({ ...prev, [targetUserId]: true }));
+    setConnecting((prev) => ({
+      ...prev,
+      [targetUserId]: true,
+    }));
 
     try {
-      const score = getScore(candidate);
+      const score = getScore(mentor);
 
       const response = await backendApi.sendConnect(
         targetUserId,
-        `Hi ${name}, our profiles match ${score}%. I’d like to explore a co-founder fit with you.`,
-        'cofounder_request'
+        `Hi ${name}, our profiles match ${score}%. I would like to connect for mentorship guidance.`,
+        'mentor_request'
       );
 
       if (response.alreadyConnected || response.status === 'accepted') {
-        setConnStatusMap((prev) => ({ ...prev, [targetUserId]: 'accepted' }));
+        setConnStatusMap((prev) => ({
+          ...prev,
+          [targetUserId]: 'accepted',
+        }));
+
         toast.success('Already connected');
         return;
       }
 
-      setConnStatusMap((prev) => ({ ...prev, [targetUserId]: 'pending' }));
+      setConnStatusMap((prev) => ({
+        ...prev,
+        [targetUserId]: 'pending',
+      }));
 
       toast.success(
-        response.alreadyPending ? 'Request already pending' : 'Connection request sent',
-        { style: { background: '#98DE38', color: '#000' } }
+        response.alreadyPending ? 'Request already pending' : 'Mentor request sent',
+        {
+          style: {
+            background: '#98DE38',
+            color: '#000',
+          },
+        }
       );
     } catch (err) {
-      console.error('Connect failed:', err);
-      toast.error(err.message || 'Could not send request');
+      console.error('Mentor connect failed:', err);
+      toast.error(err.message || 'Could not send mentor request');
     } finally {
-      setConnecting((prev) => ({ ...prev, [targetUserId]: false }));
+      setConnecting((prev) => ({
+        ...prev,
+        [targetUserId]: false,
+      }));
     }
   };
 
@@ -961,15 +1044,22 @@ export default function FindCoFoundersPage() {
     try {
       const res = await backendApi.getOrCreateConversation(targetUserId);
       const convId = res.conversationId || res.id || res.data?.id;
+
       navigate(convId ? `/messages?conv=${convId}` : '/messages');
     } catch (err) {
-      console.error('Open message failed:', err);
+      console.error('Open mentor message failed:', err);
       toast.error('Could not open conversation');
     }
   };
 
   const resetFilters = () => {
-    setFilters({ skill: 'All', commitment: 'All', query: '', matchBand: 'all' });
+    setFilters({
+      skill: 'All',
+      location: 'All',
+      proBono: false,
+      query: '',
+      matchBand: 'all',
+    });
   };
 
   if (state.loading) {
@@ -984,9 +1074,13 @@ export default function FindCoFoundersPage() {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl border border-red-100 p-6 text-center max-w-md">
-          <p className="font-bold text-red-600 mb-2">Could not load co-founders</p>
+          <p className="font-bold text-red-600 mb-2">Could not load mentors</p>
           <p className="text-sm text-gray-500 mb-4">{state.error}</p>
-          <button type="button" onClick={load} className="px-4 py-2 g-brand text-black rounded-xl text-sm font-bold">
+          <button
+            type="button"
+            onClick={load}
+            className="px-4 py-2 g-brand text-black rounded-xl text-sm font-bold"
+          >
             Try again
           </button>
         </div>
@@ -994,20 +1088,22 @@ export default function FindCoFoundersPage() {
     );
   }
 
-  const totalCandidates = (data.coFounders || []).filter((candidate) => {
-    const id = getPersonId(candidate);
-    return id && hasLookingFor(candidate, 'Co-Founder');
+  const totalMentors = (data.mentors || []).filter((mentor) => {
+    const id = getPersonId(mentor);
+    return Boolean(id) && hasLookingFor(mentor, 'Mentor');
   }).length;
 
-  const below60Count = (data.coFounders || []).filter((candidate) => {
-    const id = getPersonId(candidate);
-    return id && hasLookingFor(candidate, 'Co-Founder') && getScore(candidate) < 60;
+  const below60Count = (data.mentors || []).filter((mentor) => {
+    const id = getPersonId(mentor);
+    return id && hasLookingFor(mentor, 'Mentor') && getScore(mentor) < 60;
   }).length;
 
-  const strongCount = (data.coFounders || []).filter((candidate) => {
-    const id = getPersonId(candidate);
-    return id && hasLookingFor(candidate, 'Co-Founder') && getScore(candidate) >= 60;
+  const strongCount = (data.mentors || []).filter((mentor) => {
+    const id = getPersonId(mentor);
+    return id && hasLookingFor(mentor, 'Mentor') && getScore(mentor) >= 60;
   }).length;
+
+  const { skill, location, proBono, query, matchBand } = filters;
 
   return (
     <>
@@ -1018,14 +1114,18 @@ export default function FindCoFoundersPage() {
           <header className="mb-8">
             <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
               <Users className="w-3.5" />
-              Find Co-Founders
+              Find Mentors
             </span>
 
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mt-3">
               <div>
-                <h1 className="text-3xl sm:text-4xl font-black text-gray-900">Build Together</h1>
+                <h1 className="text-3xl sm:text-4xl font-black text-gray-900">
+                  Expert Guidance
+                </h1>
+
                 <p className="text-gray-500 text-sm max-w-xl mt-2">
-                  Explore students who selected Co-Founder in Looking For. Best 60%+ matches appear on your dashboard.
+                  Discover students and builders who selected mentor guidance in their profile.
+                  Match quality is based on your help-needed areas, interests, skills, and startup context.
                 </p>
               </div>
 
@@ -1041,8 +1141,8 @@ export default function FindCoFoundersPage() {
 
           <section className="grid sm:grid-cols-3 gap-3 mb-6">
             <div className="bg-white rounded-2xl p-4 border border-gray-100">
-              <p className="text-xs text-gray-500">Available co-founder candidates</p>
-              <p className="text-2xl font-black text-gray-900">{totalCandidates}</p>
+              <p className="text-xs text-gray-500">Available mentor matches</p>
+              <p className="text-2xl font-black text-gray-900">{totalMentors}</p>
             </div>
 
             <div className="bg-white rounded-2xl p-4 border border-gray-100">
@@ -1062,17 +1162,27 @@ export default function FindCoFoundersPage() {
 
               <input
                 type="text"
-                value={filters.query}
-                onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))}
+                value={query}
+                onChange={(event) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    query: event.target.value,
+                  }))
+                }
                 placeholder="Search by name, skill, university, idea…"
                 className="flex-1 outline-none text-sm"
-                aria-label="Search co-founders"
+                aria-label="Search mentors"
               />
 
-              {filters.query && (
+              {query && (
                 <button
                   type="button"
-                  onClick={() => setFilters((prev) => ({ ...prev, query: '' }))}
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      query: '',
+                    }))
+                  }
                   className="p-1 hover:bg-gray-100 rounded"
                   aria-label="Clear search"
                 >
@@ -1081,12 +1191,20 @@ export default function FindCoFoundersPage() {
               )}
             </div>
 
-            <div className="grid md:grid-cols-4 gap-3 mt-4">
+            <div className="grid md:grid-cols-5 gap-3 mt-4">
               <div>
-                <label className="text-xs font-bold text-gray-500 mb-1 block">Match band</label>
+                <label className="text-xs font-bold text-gray-500 mb-1 block">
+                  Match band
+                </label>
+
                 <select
-                  value={filters.matchBand}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, matchBand: event.target.value }))}
+                  value={matchBand}
+                  onChange={(event) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      matchBand: event.target.value,
+                    }))
+                  }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm"
                 >
                   <option value="all">All matches</option>
@@ -1096,32 +1214,65 @@ export default function FindCoFoundersPage() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-gray-500 mb-1 block">Skill</label>
+                <label className="text-xs font-bold text-gray-500 mb-1 block">
+                  Skill
+                </label>
+
                 <select
-                  value={filters.skill}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, skill: event.target.value }))}
+                  value={skill}
+                  onChange={(event) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      skill: event.target.value,
+                    }))
+                  }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm"
                 >
-                  {allSkills.map((skill) => (
-                    <option key={skill} value={skill}>{skill}</option>
+                  {allSkills.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-gray-500 mb-1 block">Commitment</label>
+                <label className="text-xs font-bold text-gray-500 mb-1 block">
+                  Location
+                </label>
+
                 <select
-                  value={filters.commitment}
-                  onChange={(event) => setFilters((prev) => ({ ...prev, commitment: event.target.value }))}
+                  value={location}
+                  onChange={(event) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      location: event.target.value,
+                    }))
+                  }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm"
                 >
-                  <option value="All">All</option>
-                  <option value="Exploring">Exploring</option>
-                  <option value="Casual (2–5 hrs/week)">Casual (2–5 hrs/week)</option>
-                  <option value="Serious (5–15 hrs/week)">Serious (5–15 hrs/week)</option>
-                  <option value="Full-time (15–30 hrs/week)">Full-time (15–30 hrs/week)</option>
+                  {allLocations.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
                 </select>
               </div>
+
+              <label className="flex items-end gap-2 text-sm pb-2">
+                <input
+                  type="checkbox"
+                  checked={proBono}
+                  onChange={(event) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      proBono: event.target.checked,
+                    }))
+                  }
+                  className="rounded"
+                />
+                Pro-bono only
+              </label>
 
               <div className="flex items-end">
                 <button
@@ -1138,19 +1289,25 @@ export default function FindCoFoundersPage() {
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <p className="text-sm text-gray-500">
-              Showing <span className="font-bold text-gray-900">{filtered.length}</span> results
+              Showing{' '}
+              <span className="font-bold text-gray-900">{filtered.length}</span>{' '}
+              results
             </p>
-            <p className="text-xs text-gray-400">Message unlocks after accepted connection.</p>
+
+            <p className="text-xs text-gray-400">
+              Message unlocks after accepted connection.
+            </p>
           </div>
 
           {filtered.length > 0 ? (
             <div className="grid lg:grid-cols-2 gap-4" aria-live="polite">
-              {filtered.map((candidate) => {
-                const id = getPersonId(candidate);
+              {filtered.map((mentor) => {
+                const id = getPersonId(mentor);
+
                 return (
-                  <CoFounderCard
-                    key={id || candidate.id}
-                    candidate={candidate}
+                  <MentorCard
+                    key={id || mentor.id}
+                    mentor={mentor}
                     currentUserProfile={data.profile}
                     connectionStatus={connStatusMap[id]}
                     connecting={connecting[id]}
@@ -1165,9 +1322,20 @@ export default function FindCoFoundersPage() {
               <div className="w-14 h-14 rounded-full bg-gray-50 mx-auto mb-4 flex items-center justify-center">
                 <Sparkles className="w-6 text-gray-400" />
               </div>
-              <p className="font-bold text-gray-800">No co-founders match your filters.</p>
-              <p className="text-sm text-gray-500 mt-1">Try changing match band, skill, or search query.</p>
-              <button type="button" onClick={resetFilters} className="mt-4 px-4 py-2 g-brand text-black rounded-xl text-sm font-black">
+
+              <p className="font-bold text-gray-800">
+                No mentor matches found.
+              </p>
+
+              <p className="text-sm text-gray-500 mt-1">
+                Try changing filters or ask users to select Mentor in their profile.
+              </p>
+
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mt-4 px-4 py-2 g-brand text-black rounded-xl text-sm font-black"
+              >
                 Clear filters
               </button>
             </div>
@@ -1180,10 +1348,13 @@ export default function FindCoFoundersPage() {
             </h3>
 
             <p className="text-sm text-gray-600">
-              Add skills, help-needed fields, commitment level, startup idea details, and interests to improve AI matching quality.
+              Add help-needed areas, skills, interests, and startup idea context to get better mentor matches.
             </p>
 
-            <Link to="/profile" className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 mt-3 hover:underline">
+            <Link
+              to="/profile"
+              className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 mt-3 hover:underline"
+            >
               Edit Profile <ArrowRight className="w-3" />
             </Link>
           </aside>
