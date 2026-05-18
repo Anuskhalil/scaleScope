@@ -41,6 +41,7 @@ export default function RoleNavbar() {
           avatar_url
         `)
         .eq('id', user.id)
+<<<<<<< HEAD
         .maybeSingle();
   
       if (error) throw error;
@@ -64,6 +65,30 @@ export default function RoleNavbar() {
           setAvatarUrl(urlData?.signedUrl || cleanPath);
         } else {
           setAvatarUrl(avatarPath);
+=======
+        .single();
+      
+      if (data) {
+        setProfileData(data);
+
+        // ✅ Generate signed URL for private bucket
+        if (data.avatar_url) {
+          let cleanPath = data.avatar_url;
+          if (cleanPath.startsWith('avatars/')) {
+            cleanPath = cleanPath.replace('avatars/', '');
+          }
+          if (cleanPath.startsWith('http')) {
+            // Already a full URL (signed or old format)
+            setAvatarUrl(cleanPath);
+          } else {
+            const { data: urlData } = await supabase.storage
+              .from('avatars')
+              .createSignedUrl(cleanPath, 3600);
+            if (urlData?.signedUrl) {
+              setAvatarUrl(urlData.signedUrl);
+            }
+          }
+>>>>>>> 236542ff5c8b1c13469939b6a0bde2bae8b5b45f
         }
       }
     } catch (error) {
@@ -130,6 +155,10 @@ export default function RoleNavbar() {
     }
   };
 
+<<<<<<< HEAD
+=======
+  // ✅ FIXED: Use the resolved avatarUrl state
+>>>>>>> 236542ff5c8b1c13469939b6a0bde2bae8b5b45f
   const getAvatarDisplay = () => {
     if (avatarUrl) {
       return <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover rounded-full" />;

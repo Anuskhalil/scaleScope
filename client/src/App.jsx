@@ -49,12 +49,54 @@ import InvestorDashboard from './pages/InvestorRolePages/InvestorDashboard';
 import InvestorProfilePage from './pages/InvestorProfile';
 import FindStartupsPage from './pages/InvestorRolePages/FindStartupsPage';
 
+<<<<<<< HEAD
 function LoadingScreen() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
         <div className="w-8 h-8 border-4 border-[#1B2D7F] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
         <p className="text-sm text-gray-500 font-medium">Loading...</p>
+=======
+import { Toaster } from 'react-hot-toast';
+
+// ─── Dashboard: routes by role ────────────────────────────────────────────
+function DashboardRouter() {
+  const { user } = useAuth()
+  const role = user?.user_metadata?.user_type
+
+  if (role === 'student') return <StudentDashboard />
+  if (role === 'early-stage-founder') return <FounderDashboard />
+  if (role === 'mentor') return <MentorDashboard />
+  if (role === 'investor') return <InvestorDashboard />
+
+  return <Navigate to="/profile" replace />
+}
+
+// ─── Profile: routes by role ──────────────────────────────────────────────
+function ProfileRouter() {
+  const { user } = useAuth()
+  const role = user?.user_metadata?.user_type
+
+  if (role === 'early-stage-founder') return <FounderProfilePage />
+  if (role === 'mentor') return <MentorProfilePage />
+  if (role === 'investor') return <InvestorProfilePage />
+  return <ProfilePage />   // student, other
+}
+
+// ─── RoleRoute: guards a route to specific roles ──────────────────────────
+function RoleRoute({ children, allowedRoles }) {
+  const { user, session, loading } = useAuth()
+
+  if (loading) return <div>Loading...</div>
+  if (!session) return <Navigate to="/login" replace />
+
+  // session exists but email not confirmed yet
+  if (session && !user) {
+    return (
+      <div className="p-10 text-center">
+        <h2 className="text-xl font-bold">Please Verify Your Email</h2>
+        <p>Check your inbox to activate your account.</p>
+>>>>>>> 236542ff5c8b1c13469939b6a0bde2bae8b5b45f
       </div>
     </div>
   );
@@ -246,6 +288,13 @@ function AppLayout({ children }) {
 export default function App() {
   return (
     <AuthProvider>
+       <Toaster 
+        position="top-right" 
+        toastOptions={{ 
+          duration: 4000,
+          style: { background: '#1e293b', color: '#fff' },
+        }} 
+      />
       <AppLayout>
         <Routes>
           {/* Public landing only */}
