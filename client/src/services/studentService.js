@@ -713,24 +713,6 @@ export async function fetchConversations(userId, { fresh = false } = {}) {
     return [];
   }
 }
-
-<<<<<<< HEAD
-=======
-export async function fetchOpportunities({ limit = 5 } = {}) {
-  const { data, error } = await supabase
-    .from('opportunities')
-    .select('*')
-    .eq('is_active', true)
-    .order('deadline', { ascending: true })
-    .limit(limit);
-  if (error) throw error;
-  return data || [];
-}
-
-/**
- * Fetch all messages in a conversation, oldest first.
- */
->>>>>>> 236542ff5c8b1c13469939b6a0bde2bae8b5b45f
 export async function fetchMessages(conversationId) {
   try {
     const { data, error } = await supabase
