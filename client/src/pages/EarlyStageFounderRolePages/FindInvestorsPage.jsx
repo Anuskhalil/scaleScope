@@ -48,32 +48,32 @@ const CSS = `
   .verify-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:#ecfdf5;color:#059669;border:1.5px solid #6ee7b7}
 `;
 
-const STAGE_OPTS    = ['Pre-seed','Seed','Series A','Series B','Series B+'];
-const INDUSTRY_OPTS = ['EdTech','HealthTech','FinTech','SaaS','AgriTech','CleanTech','LegalTech','HRTech','E-commerce','AI / ML','Social Impact'];
-const LOCATION_OPTS = ['Pakistan','Dubai','Singapore','USA','UK','Remote'];
+const STAGE_OPTS = ['Pre-seed', 'Seed', 'Series A', 'Series B', 'Series B+'];
+const INDUSTRY_OPTS = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'E-commerce', 'AI / ML', 'Social Impact'];
+const LOCATION_OPTS = ['Pakistan', 'Dubai', 'Singapore', 'USA', 'UK', 'Remote'];
 
 function initials(name) {
   if (!name) return '?';
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 function gradFor(id) {
-  const g = ['from-emerald-500 to-teal-500','from-blue-500 to-indigo-500',
-             'from-violet-500 to-indigo-500','from-amber-500 to-orange-500',
-             'from-cyan-500 to-teal-500','from-rose-500 to-pink-500'];
+  const g = ['from-emerald-500 to-teal-500', 'from-blue-500 to-indigo-500',
+    'from-violet-500 to-indigo-500', 'from-amber-500 to-orange-500',
+    'from-cyan-500 to-teal-500', 'from-rose-500 to-pink-500'];
   return g[((id || '').charCodeAt?.(0) || 0) % g.length];
 }
 
 // ── Investor Card ─────────────────────────────────────────────────────────
 function InvestorCard({ investor, onPitch, onMessage, pitchState }) {
-  const p      = investor.profiles || {};
+  const p = investor.profiles || {};
   const stages = investor.preferred_stages || investor.investment_stage || [];
-  const inds   = investor.preferred_industries || investor.industries_of_interest || [];
+  const inds = investor.preferred_industries || investor.industries_of_interest || [];
   const ticket = investor.check_range_min || investor.check_range_max
     ? formatCheckSize(investor.check_range_min, investor.check_range_max)
     : investor.ticket_size_min || investor.ticket_size_max
       ? formatCheckSize(investor.ticket_size_min, investor.ticket_size_max)
       : null;
-  const uid    = investor.profile_id || investor.user_id;
+  const uid = investor.profile_id || investor.user_id;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm lift">
@@ -181,14 +181,13 @@ function InvestorCard({ investor, onPitch, onMessage, pitchState }) {
             <MessageSquare className="w-3.5 h-3.5" /> Message
           </button>
           <button onClick={onPitch} disabled={pitchState === 'sent' || pitchState === 'sending'}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              pitchState === 'sent'    ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
-              pitchState === 'sending' ? 'g-em text-white opacity-70 cursor-wait' :
-              'g-em text-white hover:opacity-90'
-            }`}>
-            {pitchState === 'sent'    ? <><CheckCircle className="w-3.5 h-3.5" />Pitched</> :
-             pitchState === 'sending' ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
-             <><Send className="w-3.5 h-3.5" />Send Pitch</>}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${pitchState === 'sent' ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
+                pitchState === 'sending' ? 'g-em text-white opacity-70 cursor-wait' :
+                  'g-em text-white hover:opacity-90'
+              }`}>
+            {pitchState === 'sent' ? <><CheckCircle className="w-3.5 h-3.5" />Pitched</> :
+              pitchState === 'sending' ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
+                <><Send className="w-3.5 h-3.5" />Send Pitch</>}
           </button>
         </div>
       </div>
@@ -198,21 +197,21 @@ function InvestorCard({ investor, onPitch, onMessage, pitchState }) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 export default function FindInvestorsPage() {
-  const { user }  = useAuth();
-  const navigate  = useNavigate();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [investors,  setInvestors]  = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState('');
-  const [search,     setSearch]     = useState('');
-  const [stageF,     setStageF]     = useState('');
-  const [industryF,  setIndustryF]  = useState('');
-  const [locationF,  setLocationF]  = useState('');
-  const [pitchStates,setPitchStates]= useState({});
+  const [investors, setInvestors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [stageF, setStageF] = useState('');
+  const [industryF, setIndustryF] = useState('');
+  const [locationF, setLocationF] = useState('');
+  const [pitchStates, setPitchStates] = useState({});
   const [pitchModal, setPitchModal] = useState(null); // investor
-  const [pitchText,  setPitchText]  = useState('');
-  const [sending,    setSending]    = useState(false);
-  const [showFilters,setShowFilters]= useState(false);
+  const [pitchText, setPitchText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const load = useCallback(async (stage = stageF, industry = industryF) => {
     setLoading(true); setError('');
@@ -238,8 +237,9 @@ export default function FindInvestorsPage() {
     try {
       await sendConnectionRequest(user.id, uid, 'investor_contact', pitchText.trim());
       setPitchStates(p => ({ ...p, [uid]: 'sent' }));
-      setPitchModal(null); setPitchText('');
-      navigate('/messages');
+      setPitchModal(null);
+      setPitchText('');
+      alert('Pitch sent. You can message once the investor accepts your request.');
     } catch (e) {
       if (!e.message?.includes('23505')) alert(e.message);
       else { setPitchModal(null); navigate('/messages'); }
@@ -265,9 +265,9 @@ export default function FindInvestorsPage() {
     if (search) {
       const q = search.toLowerCase();
       const searchable = [p.full_name, inv.fund_name, inv.firm_name,
-        ...(inv.preferred_industries || inv.industries_of_interest || []),
-        ...(inv.preferred_stages || inv.investment_stage || []),
-        inv.investment_thesis, inv.what_i_look_for,
+      ...(inv.preferred_industries || inv.industries_of_interest || []),
+      ...(inv.preferred_stages || inv.investment_stage || []),
+      inv.investment_thesis, inv.what_i_look_for,
       ].filter(Boolean).join(' ').toLowerCase();
       if (!searchable.includes(q)) return false;
     }
@@ -309,11 +309,10 @@ export default function FindInvestorsPage() {
                   <div className="space-y-1.5">
                     {['', ...STAGE_OPTS].map(s => (
                       <button key={s} onClick={() => { setStageF(s); load(s, industryF); }}
-                        className={`w-full text-left text-sm py-2 px-3 rounded-xl transition-all font-medium ${
-                          stageF === s
+                        className={`w-full text-left text-sm py-2 px-3 rounded-xl transition-all font-medium ${stageF === s
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold'
                             : 'text-slate-600 hover:bg-slate-50'
-                        }`}>
+                          }`}>
                         {s || 'All Stages'}
                       </button>
                     ))}

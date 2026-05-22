@@ -21,7 +21,7 @@ import AuthCallbackPage from './auth/AuthCallbackPage';
 
 // ── Profile Pages ──
 import ProfilePage from './pages/StudentRolePages/ProfilePage';
-import FounderProfilePage from './pages/FounderProfile';
+import FounderProfilePage from './pages/EarlyStageFounderRolePages/FounderProfile';
 
 // ── Shared Protected Pages ──
 import DiscoverPage from './pages/StudentRolePages/DiscoverPage';
@@ -35,9 +35,9 @@ import ConnectionRequestsPage from './pages/StudentRolePages/ConnectionRequestsP
 import StudentViewProfilePage from './pages/StudentRolePages/StudentViewProfile';
 
 // ── Founder Pages ──
-import FounderDashboard from './pages/EarlyStageFoundeRolerPages/EarlyStageDashboard';
-import FindTeamPage from './pages/EarlyStageFoundeRolerPages/FindTeamPage';
-import FindInvestorsPage from './pages/EarlyStageFoundeRolerPages/FindInvestorsPage';
+import FounderDashboard from './pages/EarlyStageFounderRolePages/EarlyStageDashboard';
+import FindTeamPage from './pages/EarlyStageFounderRolePages/FindTeamPage';
+import FindInvestorsPage from './pages/EarlyStageFounderRolePages/FindInvestorsPage';
 
 // ── Mentor Pages ──
 import MentorDashboard from './pages/MentorRolePages/MentorDashboard';
@@ -112,6 +112,33 @@ function getUserRole(user, profile) {
   );
 }
 
+function getRoleBasePath(role) {
+  switch (role) {
+    case 'student':
+      return '/student';
+
+    case 'early-stage-founder':
+      return '/founder';
+
+    case 'mentor':
+      return '/mentor';
+
+    case 'investor':
+      return '/investor';
+
+    default:
+      return '/student';
+  }
+}
+
+function getRoleDashboardPath(role) {
+  return `${getRoleBasePath(role)}/dashboard`;
+}
+
+function getRoleProfilePath(role) {
+  return `${getRoleBasePath(role)}/profile`;
+}
+
 function DashboardRouter() {
   const { user, profile } = useAuth();
   const role = getUserRole(user, profile);
@@ -121,7 +148,7 @@ function DashboardRouter() {
   if (role === 'mentor') return <MentorDashboard />;
   if (role === 'investor') return <InvestorDashboard />;
 
-  return <Navigate to="/profile" replace />;
+  return <Navigate to="/student/profile" replace />;
 }
 
 function ProfileRouter() {
@@ -135,7 +162,53 @@ function ProfileRouter() {
   return <ProfilePage />;
 }
 
-function ProtectedPage({ children, allowMfaSetup = false, allowMfaChallenge = false }) {
+function DashboardRedirect() {
+  const { user, profile } = useAuth();
+  const role = getUserRole(user, profile);
+
+  return <Navigate to={getRoleDashboardPath(role)} replace />;
+}
+
+function ProfileRedirect() {
+  const { user, profile } = useAuth();
+  const role = getUserRole(user, profile);
+
+  return <Navigate to={getRoleProfilePath(role)} replace />;
+}
+
+function RolePathRedirect({ page }) {
+  const { user, profile } = useAuth();
+  const location = useLocation();
+  const role = getUserRole(user, profile);
+
+  return (
+    <Navigate
+      to={`${getRoleBasePath(role)}/${page}${location.search || ''}`}
+      replace
+    />
+  );
+}
+
+function RoleMentorRedirect() {
+  const { user, profile } = useAuth();
+  const role = getUserRole(user, profile);
+
+  if (role === 'student') {
+    return <Navigate to="/student/find-mentors" replace />;
+  }
+
+  if (role === 'early-stage-founder') {
+    return <Navigate to="/founder/find-mentors" replace />;
+  }
+
+  return <Navigate to={getRoleDashboardPath(role)} replace />;
+}
+
+function ProtectedPage({
+  children,
+  allowMfaSetup = false,
+  allowMfaChallenge = false,
+}) {
   const {
     session,
     user,
@@ -184,13 +257,24 @@ function RolePage({ children, allowedRoles }) {
 
   return (
     <ProtectedPage>
-      {allowedRoles.includes(role) ? children : <Navigate to="/dashboard" replace />}
+      {allowedRoles.includes(role) ? (
+        children
+      ) : (
+        <Navigate to={getRoleDashboardPath(role)} replace />
+      )}
     </ProtectedPage>
   );
 }
 
 function PublicOnlyPage({ children }) {
-  const { session, user, loading, emailVerified, needsMfa } = useAuth();
+  const {
+    session,
+    user,
+    profile,
+    loading,
+    emailVerified,
+    needsMfa,
+  } = useAuth();
 
   if (loading) return children;
 
@@ -199,7 +283,8 @@ function PublicOnlyPage({ children }) {
   }
 
   if (session && user && emailVerified && !needsMfa) {
-    return <Navigate to="/dashboard" replace />;
+    const role = getUserRole(user, profile);
+    return <Navigate to={getRoleDashboardPath(role)} replace />;
   }
 
   return children;
@@ -247,13 +332,17 @@ function AppLayout({ children }) {
 export default function App() {
   return (
     <AuthProvider>
-       <Toaster 
-        position="top-right" 
-        toastOptions={{ 
+      <Toaster
+        position="top-right"
+        toastOptions={{
           duration: 4000,
-          style: { background: '#1e293b', color: '#fff' },
-        }} 
+          style: {
+            background: '#1e293b',
+            color: '#fff',
+          },
+        }}
       />
+
       <AppLayout>
         <Routes>
           {/* Public landing only */}
@@ -308,26 +397,246 @@ export default function App() {
             }
           />
 
-          {/* Dashboard */}
+          {/* ───────────────────────────────────────────── */}
+          {/* New role-prefixed student routes */}
+          {/* ───────────────────────────────────────────── */}
           <Route
-            path="/dashboard"
+            path="/student/dashboard"
             element={
-              <ProtectedPage>
-                <DashboardRouter />
-              </ProtectedPage>
+              <RolePage allowedRoles={['student']}>
+                <StudentDashboard />
+              </RolePage>
             }
           />
 
-          {/* Profiles */}
           <Route
-            path="/profile"
+            path="/student/profile"
             element={
-              <ProtectedPage>
-                <ProfileRouter />
-              </ProtectedPage>
+              <RolePage allowedRoles={['student']}>
+                <ProfilePage />
+              </RolePage>
             }
           />
 
+          <Route
+            path="/student/discover"
+            element={
+              <RolePage allowedRoles={['student']}>
+                <DiscoverPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/student/messages"
+            element={
+              <RolePage allowedRoles={['student']}>
+                <MessagesPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/student/find-mentors"
+            element={
+              <RolePage allowedRoles={['student']}>
+                <FindMentorsPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/student/find-cofounders"
+            element={
+              <RolePage allowedRoles={['student']}>
+                <FindCoFoundersPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/student/connection-requests"
+            element={
+              <RolePage allowedRoles={['student']}>
+                <ConnectionRequestsPage />
+              </RolePage>
+            }
+          />
+
+          {/* ───────────────────────────────────────────── */}
+          {/* New role-prefixed founder routes */}
+          {/* ───────────────────────────────────────────── */}
+          <Route
+            path="/founder/dashboard"
+            element={
+              <RolePage allowedRoles={['early-stage-founder']}>
+                <FounderDashboard />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/founder/profile"
+            element={
+              <RolePage allowedRoles={['early-stage-founder']}>
+                <FounderProfilePage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/founder/discover"
+            element={
+              <RolePage allowedRoles={['early-stage-founder']}>
+                <DiscoverPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/founder/messages"
+            element={
+              <RolePage allowedRoles={['early-stage-founder']}>
+                <MessagesPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/founder/find-team"
+            element={
+              <RolePage allowedRoles={['early-stage-founder']}>
+                <FindTeamPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/founder/find-investors"
+            element={
+              <RolePage allowedRoles={['early-stage-founder']}>
+                <FindInvestorsPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/founder/find-mentors"
+            element={
+              <RolePage allowedRoles={['early-stage-founder']}>
+                <FindMentorsPage />
+              </RolePage>
+            }
+          />
+
+          {/* ───────────────────────────────────────────── */}
+          {/* New role-prefixed mentor routes */}
+          {/* ───────────────────────────────────────────── */}
+          <Route
+            path="/mentor/dashboard"
+            element={
+              <RolePage allowedRoles={['mentor']}>
+                <MentorDashboard />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/mentor/profile"
+            element={
+              <RolePage allowedRoles={['mentor']}>
+                <MentorProfilePage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/mentor/discover"
+            element={
+              <RolePage allowedRoles={['mentor']}>
+                <DiscoverPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/mentor/messages"
+            element={
+              <RolePage allowedRoles={['mentor']}>
+                <MessagesPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/mentor/find-founders"
+            element={
+              <RolePage allowedRoles={['mentor']}>
+                <FindFoundersPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/mentor/my-mentees"
+            element={
+              <RolePage allowedRoles={['mentor']}>
+                <MyMenteesPage />
+              </RolePage>
+            }
+          />
+
+          {/* ───────────────────────────────────────────── */}
+          {/* New role-prefixed investor routes */}
+          {/* ───────────────────────────────────────────── */}
+          <Route
+            path="/investor/dashboard"
+            element={
+              <RolePage allowedRoles={['investor']}>
+                <InvestorDashboard />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/investor/profile"
+            element={
+              <RolePage allowedRoles={['investor']}>
+                <InvestorProfilePage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/investor/discover"
+            element={
+              <RolePage allowedRoles={['investor']}>
+                <DiscoverPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/investor/messages"
+            element={
+              <RolePage allowedRoles={['investor']}>
+                <MessagesPage />
+              </RolePage>
+            }
+          />
+
+          <Route
+            path="/investor/find-startups"
+            element={
+              <RolePage allowedRoles={['investor']}>
+                <FindStartupsPage />
+              </RolePage>
+            }
+          />
+
+          {/* ───────────────────────────────────────────── */}
+          {/* Shared profile viewer */}
+          {/* ───────────────────────────────────────────── */}
           <Route
             path="/user-profile/:userId"
             element={
@@ -337,21 +646,33 @@ export default function App() {
             }
           />
 
+          {/* ───────────────────────────────────────────── */}
+          {/* Backward-compatible old routes */}
+          {/* Keep these so deployed old URLs do not break */}
+          {/* ───────────────────────────────────────────── */}
           <Route
-            path="/founder-profile"
+            path="/dashboard"
             element={
-              <RolePage allowedRoles={['early-stage-founder']}>
-                <FounderProfilePage />
-              </RolePage>
+              <ProtectedPage>
+                <DashboardRedirect />
+              </ProtectedPage>
             }
           />
 
-          {/* Shared protected */}
+          <Route
+            path="/profile"
+            element={
+              <ProtectedPage>
+                <ProfileRedirect />
+              </ProtectedPage>
+            }
+          />
+
           <Route
             path="/discover"
             element={
               <ProtectedPage>
-                <DiscoverPage />
+                <RolePathRedirect page="discover" />
               </ProtectedPage>
             }
           />
@@ -360,7 +681,7 @@ export default function App() {
             path="/messages"
             element={
               <ProtectedPage>
-                <MessagesPage />
+                <RolePathRedirect page="messages" />
               </ProtectedPage>
             }
           />
@@ -369,94 +690,70 @@ export default function App() {
             path="/find-mentors"
             element={
               <ProtectedPage>
-                <FindMentorsPage />
+                <RoleMentorRedirect />
               </ProtectedPage>
             }
           />
 
-          {/* Student only */}
           <Route
             path="/find-cofounders"
-            element={
-              <RolePage allowedRoles={['student']}>
-                <FindCoFoundersPage />
-              </RolePage>
-            }
+            element={<Navigate to="/student/find-cofounders" replace />}
           />
 
           <Route
             path="/connection-requests"
-            element={
-              <RolePage allowedRoles={['student']}>
-                <ConnectionRequestsPage />
-              </RolePage>
-            }
+            element={<Navigate to="/student/connection-requests" replace />}
           />
 
-          {/* Founder only */}
+          <Route
+            path="/founder-profile"
+            element={<Navigate to="/founder/profile" replace />}
+          />
+
           <Route
             path="/find-team"
-            element={
-              <RolePage allowedRoles={['early-stage-founder']}>
-                <FindTeamPage />
-              </RolePage>
-            }
+            element={<Navigate to="/founder/find-team" replace />}
           />
 
           <Route
             path="/find-investors"
-            element={
-              <RolePage allowedRoles={['early-stage-founder']}>
-                <FindInvestorsPage />
-              </RolePage>
-            }
+            element={<Navigate to="/founder/find-investors" replace />}
           />
 
-          {/* Mentor only */}
           <Route
             path="/mentor-profile"
-            element={
-              <RolePage allowedRoles={['mentor']}>
-                <MentorProfilePage />
-              </RolePage>
-            }
+            element={<Navigate to="/mentor/profile" replace />}
           />
 
           <Route
             path="/find-founders"
-            element={
-              <RolePage allowedRoles={['mentor']}>
-                <FindFoundersPage />
-              </RolePage>
-            }
+            element={<Navigate to="/mentor/find-founders" replace />}
           />
 
           <Route
             path="/my-mentees"
-            element={
-              <RolePage allowedRoles={['mentor']}>
-                <MyMenteesPage />
-              </RolePage>
-            }
+            element={<Navigate to="/mentor/my-mentees" replace />}
           />
 
-          {/* Investor only */}
           <Route
             path="/investor-profile"
-            element={
-              <RolePage allowedRoles={['investor']}>
-                <InvestorProfilePage />
-              </RolePage>
-            }
+            element={<Navigate to="/investor/profile" replace />}
           />
 
           <Route
             path="/find-startups"
-            element={
-              <RolePage allowedRoles={['investor']}>
-                <FindStartupsPage />
-              </RolePage>
-            }
+            element={<Navigate to="/investor/find-startups" replace />}
+          />
+
+          {/* Optional legacy investor aliases */}
+          <Route
+            path="/deal-flow"
+            element={<Navigate to="/investor/find-startups" replace />}
+          />
+
+          <Route
+            path="/startups"
+            element={<Navigate to="/investor/find-startups" replace />}
           />
 
           {/* Catch-all */}

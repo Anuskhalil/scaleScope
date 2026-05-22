@@ -1,12 +1,20 @@
 const supabase = require('../config/supabase');
 
+const VALID_REQUEST_TYPES = [
+  'mentor_request',
+  'cofounder_request',
+  'investor_contact',
+  'team_invite',
+];
+
 exports.sendRequest = async (senderId, receiverId, type, message) => {
+  if (!senderId) throw new Error('Sender is required');
   if (!receiverId) throw new Error('Receiver is required');
   if (senderId === receiverId) throw new Error('Cannot request yourself');
 
   const requestType = type || 'cofounder_request';
 
-  if (!['mentor_request', 'cofounder_request', 'investor_contact'].includes(requestType)) {
+  if (!VALID_REQUEST_TYPES.includes(requestType)) {
     throw new Error('Invalid request type');
   }
 
@@ -29,6 +37,7 @@ exports.sendRequest = async (senderId, receiverId, type, message) => {
       alreadyPending: true,
       senderId: existing.sender_id,
       receiverId: existing.receiver_id,
+      type: existing.type,
     };
   }
 
@@ -39,6 +48,7 @@ exports.sendRequest = async (senderId, receiverId, type, message) => {
       alreadyConnected: true,
       senderId: existing.sender_id,
       receiverId: existing.receiver_id,
+      type: existing.type,
     };
   }
 
@@ -49,20 +59,28 @@ exports.sendRequest = async (senderId, receiverId, type, message) => {
       receiver_id: receiverId,
       type: requestType,
       status: 'pending',
-      message: message?.slice(0, 300) || null,
+      message: message?.slice(0, 500) || null,
+      created_at: new Date().toISOString(),
     })
-    .select('id, status, created_at')
+    .select('id, status, sender_id, receiver_id, type, created_at')
     .single();
 
   if (error) throw error;
 
-  return data;
+  return {
+    id: data.id,
+    status: data.status,
+    senderId: data.sender_id,
+    receiverId: data.receiver_id,
+    type: data.type,
+  };
 };
 
 exports.respondRequest = async (requestId, action, userId) => {
   const normalizedAction =
     action === 'accepted' ? 'accept' :
     action === 'declined' ? 'decline' :
+    action === 'rejected' ? 'decline' :
     action;
 
   if (!['accept', 'decline'].includes(normalizedAction)) {
@@ -96,6 +114,7 @@ exports.respondRequest = async (requestId, action, userId) => {
     .update({
       status: newStatus,
       responded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
     .eq('id', requestId);
 
@@ -133,6 +152,7 @@ exports.respondRequest = async (requestId, action, userId) => {
     );
 
     if (convErr) throw convErr;
+
     conversationId = convId;
   }
 

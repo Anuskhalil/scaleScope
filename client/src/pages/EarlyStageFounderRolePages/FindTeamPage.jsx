@@ -46,29 +46,29 @@ const CSS = `
 `;
 
 const ROLE_FILTERS = [
-  { val: 'Co-Founder', icon: <Rocket className="w-3 h-3" />,    col: 'from-amber-500 to-orange-500'  },
-  { val: 'Startup',    icon: <Zap className="w-3 h-3" />,       col: 'from-indigo-500 to-violet-500' },
-  { val: 'Developer',  icon: <Code className="w-3 h-3" />,      col: 'from-blue-500 to-indigo-500'   },
-  { val: 'Marketer',   icon: <BarChart2 className="w-3 h-3" />, col: 'from-green-500 to-emerald-500' },
-  { val: 'Designer',   icon: <Palette className="w-3 h-3" />,   col: 'from-rose-500 to-pink-500'     },
+  { val: 'Co-Founder', icon: <Rocket className="w-3 h-3" />, col: 'from-amber-500 to-orange-500' },
+  { val: 'Startup', icon: <Zap className="w-3 h-3" />, col: 'from-indigo-500 to-violet-500' },
+  { val: 'Developer', icon: <Code className="w-3 h-3" />, col: 'from-blue-500 to-indigo-500' },
+  { val: 'Marketer', icon: <BarChart2 className="w-3 h-3" />, col: 'from-green-500 to-emerald-500' },
+  { val: 'Designer', icon: <Palette className="w-3 h-3" />, col: 'from-rose-500 to-pink-500' },
 ];
-const COMMITMENT_FILTERS = ['Full-time','Part-time','Flexible'];
-const SKILL_SUGGESTIONS  = ['Python','React','Node.js','Marketing','Design','Data Science','Sales','Finance','Content'];
+const COMMITMENT_FILTERS = ['Full-time', 'Part-time', 'Flexible'];
+const SKILL_SUGGESTIONS = ['Python', 'React', 'Node.js', 'Marketing', 'Design', 'Data Science', 'Sales', 'Finance', 'Content'];
 
 function initials(name) {
   if (!name) return '?';
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 function gradFor(uid) {
-  const g = ['from-amber-500 to-orange-500','from-violet-500 to-indigo-500',
-             'from-emerald-500 to-teal-500','from-rose-500 to-pink-500',
-             'from-blue-500 to-indigo-500','from-cyan-500 to-teal-500'];
+  const g = ['from-amber-500 to-orange-500', 'from-violet-500 to-indigo-500',
+    'from-emerald-500 to-teal-500', 'from-rose-500 to-pink-500',
+    'from-blue-500 to-indigo-500', 'from-cyan-500 to-teal-500'];
   return g[((uid || '').charCodeAt?.(0) || 0) % g.length];
 }
 function lfBadge(val) {
   const map = {
     'Co-Founder': 'bg-amber-50 text-amber-700 border border-amber-200',
-    'Startup':    'bg-indigo-50 text-indigo-700 border border-indigo-200',
+    'Startup': 'bg-indigo-50 text-indigo-700 border border-indigo-200',
   };
   return map[val] || 'bg-slate-50 text-slate-600 border border-slate-200';
 }
@@ -76,7 +76,7 @@ function lfBadge(val) {
 // ── Candidate Card ────────────────────────────────────────────────────────
 function CandidateCard({ candidate, onInvite, onMessage, inviteState, isTop }) {
   const skills = candidate.skills || [];
-  const lf     = candidate.looking_for || [];
+  const lf = candidate.looking_for || [];
   return (
     <div className={`bg-white rounded-2xl border shadow-sm lift transition-all ${isTop ? 'border-amber-200 bg-gradient-to-br from-white to-amber-50/40' : 'border-slate-100'}`}>
       <div className="p-5">
@@ -144,17 +144,16 @@ function CandidateCard({ candidate, onInvite, onMessage, inviteState, isTop }) {
         <div className="flex gap-2">
           <button onClick={onMessage}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border-2 border-slate-200 text-slate-600 hover:border-amber-200 hover:text-amber-600 rounded-xl text-xs font-bold transition-all">
-            <MessageSquare className="w-3.5 h-3.5" /> Message
+            <MessageSquare className="w-3.5 h-3.5" /> Invite Message
           </button>
           <button onClick={onInvite} disabled={inviteState === 'sent' || inviteState === 'sending'}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              inviteState === 'sent'    ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${inviteState === 'sent' ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
               inviteState === 'sending' ? 'g-found text-white opacity-70 cursor-wait' :
-              'g-found text-white hover:opacity-90'
-            }`}>
-            {inviteState === 'sent'    ? <><CheckCircle className="w-3.5 h-3.5" />Invited</> :
-             inviteState === 'sending' ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
-             <><UserPlus className="w-3.5 h-3.5" />Invite to Team</>}
+                'g-found text-white hover:opacity-90'
+              }`}>
+            {inviteState === 'sent' ? <><CheckCircle className="w-3.5 h-3.5" />Invited</> :
+              inviteState === 'sending' ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
+                <><UserPlus className="w-3.5 h-3.5" />Invite to Team</>}
           </button>
         </div>
       </div>
@@ -164,21 +163,21 @@ function CandidateCard({ candidate, onInvite, onMessage, inviteState, isTop }) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 export default function FindTeamPage() {
-  const { user }  = useAuth();
-  const navigate  = useNavigate();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [candidates, setCandidates] = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState('');
-  const [search,     setSearch]     = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [commFilter, setCommFilter] = useState('');
-  const [skillFilter,setSkillFilter]= useState('');
-  const [invStates,  setInvStates]  = useState({});
-  const [msgModal,   setMsgModal]   = useState(null); // candidate
-  const [msgText,    setMsgText]    = useState('');
-  const [sending,    setSending]    = useState(false);
-  const [showFilters,setShowFilters]= useState(false);
+  const [skillFilter, setSkillFilter] = useState('');
+  const [invStates, setInvStates] = useState({});
+  const [msgModal, setMsgModal] = useState(null); // candidate
+  const [msgText, setMsgText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const load = useCallback(async (role = roleFilter) => {
     setLoading(true); setError('');
@@ -214,8 +213,9 @@ export default function FindTeamPage() {
     try {
       await sendConnectionRequest(user.id, msgModal.user_id, 'team_invite', msgText.trim());
       setInvStates(p => ({ ...p, [msgModal.user_id]: 'sent' }));
-      setMsgModal(null); setMsgText('');
-      navigate('/messages');
+      setMsgModal(null);
+      setMsgText('');
+      alert('Invite sent. You can message once they accept your request.');
     } catch (e) {
       if (!e.message?.includes('23505')) alert(e.message);
       else { setMsgModal(null); navigate('/messages'); }
@@ -227,8 +227,8 @@ export default function FindTeamPage() {
     if (search) {
       const q = search.toLowerCase();
       if (!(c.name || '').toLowerCase().includes(q) &&
-          !(c.bio  || '').toLowerCase().includes(q) &&
-          !(c.skills || []).some(s => s.toLowerCase().includes(q))) return false;
+        !(c.bio || '').toLowerCase().includes(q) &&
+        !(c.skills || []).some(s => s.toLowerCase().includes(q))) return false;
     }
     if (commFilter && c.commitment !== commFilter) return false;
     if (skillFilter) {
@@ -271,13 +271,12 @@ export default function FindTeamPage() {
                 <div className="filter-panel">
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Looking For Role</p>
                   <div className="space-y-1.5">
-                    {[{val:'',label:'All Candidates'},...ROLE_FILTERS.map(r=>({val:r.val,label:r.val}))].map(({ val, label }) => (
+                    {[{ val: '', label: 'All Candidates' }, ...ROLE_FILTERS.map(r => ({ val: r.val, label: r.val }))].map(({ val, label }) => (
                       <button key={val} onClick={() => { setRoleFilter(val); load(val); }}
-                        className={`w-full text-left text-sm py-2 px-3 rounded-xl transition-all font-medium ${
-                          roleFilter === val
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200 font-bold'
-                            : 'text-slate-600 hover:bg-stone-50'
-                        }`}>
+                        className={`w-full text-left text-sm py-2 px-3 rounded-xl transition-all font-medium ${roleFilter === val
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200 font-bold'
+                          : 'text-slate-600 hover:bg-stone-50'
+                          }`}>
                         {label}
                       </button>
                     ))}

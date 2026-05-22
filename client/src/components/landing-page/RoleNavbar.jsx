@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabaseClient';
 import ScalScopeLogo from '../../assets/Anus Tech logo.png';
 
 export default function RoleNavbar() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -19,7 +19,11 @@ export default function RoleNavbar() {
   // ✅ NEW: Separate state for the resolved avatar URL
   const [avatarUrl, setAvatarUrl] = useState(null);
 
-  const userRole = user?.user_metadata?.user_type;
+  const userRole =
+    profileData?.user_type ||
+    profile?.user_type ||
+    user?.user_metadata?.user_type ||
+    'student';
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -30,6 +34,27 @@ export default function RoleNavbar() {
   useEffect(() => {
     if (user) fetchProfile();
   }, [user]);
+
+  const getRoleBasePath = (role) => {
+    switch (role) {
+      case 'student':
+        return '/student';
+
+      case 'early-stage-founder':
+        return '/founder';
+
+      case 'mentor':
+        return '/mentor';
+
+      case 'investor':
+        return '/investor';
+
+      default:
+        return '/student';
+    }
+  };
+
+  const roleBase = getRoleBasePath(userRole);
 
   const fetchProfile = async () => {
     try {
@@ -42,25 +67,25 @@ export default function RoleNavbar() {
         `)
         .eq('id', user.id)
         .maybeSingle();
-  
+
       if (error) throw error;
-  
+
       if (data) {
         setProfileData({
           full_name: data.full_name,
           user_type: data.user_type,
           avatar_url: data.avatar_url,
         });
-  
+
         const avatarPath = data.avatar_url;
-  
+
         if (avatarPath && !avatarPath.startsWith('http')) {
           let cleanPath = avatarPath.replace(/^avatars\//, '');
-  
+
           const { data: urlData } = await supabase.storage
             .from('avatars')
             .createSignedUrl(cleanPath, 3600);
-  
+
           setAvatarUrl(urlData?.signedUrl || cleanPath);
         } else {
           setAvatarUrl(avatarPath);
@@ -78,39 +103,38 @@ export default function RoleNavbar() {
 
   const getRoleNavItems = () => {
     const baseItems = [
-      { icon: <Home className="w-4 h-4" />, label: 'Dashboard', path: '/dashboard' },
-      { icon: <Search className="w-4 h-4" />, label: 'Discover', path: '/discover' },
-      { icon: <MessageSquare className="w-4 h-4" />, label: 'Messages', path: '/messages' },
+      { icon: <Home className="w-4 h-4" />, label: 'Dashboard', path: `${roleBase}/dashboard` },
+      { icon: <Search className="w-4 h-4" />, label: 'Discover', path: `${roleBase}/discover` },
+      { icon: <MessageSquare className="w-4 h-4" />, label: 'Messages', path: `${roleBase}/messages` },
     ];
 
     switch (userRole) {
       case 'student':
         return [
           ...baseItems,
-          { icon: <Users className="w-4 h-4" />, label: 'Find Mentors', path: '/find-mentors' },
-          { icon: <Rocket className="w-4 h-4" />, label: 'Find Co-Founders', path: '/find-cofounders' },
+          { icon: <Users className="w-4 h-4" />, label: 'Find Mentors', path: '/student/find-mentors' },
+          { icon: <Rocket className="w-4 h-4" />, label: 'Find Co-Founders', path: '/student/find-cofounders' },
         ];
 
       case 'early-stage-founder':
         return [
           ...baseItems,
-          { icon: <Users className="w-4 h-4" />, label: 'Find Team', path: '/find-team' },
-          { icon: <Briefcase className="w-4 h-4" />, label: 'Find Investors', path: '/find-investors' },
-          { icon: <UserCheck className="w-4 h-4" />, label: 'Find Mentors', path: '/find-mentors' },
+          { icon: <Users className="w-4 h-4" />, label: 'Find Team', path: '/founder/find-team' },
+          { icon: <Briefcase className="w-4 h-4" />, label: 'Find Investors', path: '/founder/find-investors' },
+          { icon: <UserCheck className="w-4 h-4" />, label: 'Find Mentors', path: '/founder/find-mentors' },
         ];
 
       case 'mentor':
         return [
           ...baseItems,
-          { icon: <GraduationCap className="w-4 h-4" />, label: 'My Mentees', path: '/my-mentees' },
-          { icon: <Users className="w-4 h-4" />, label: 'Find Founders', path: '/find-founders' },
+          { icon: <GraduationCap className="w-4 h-4" />, label: 'My Mentees', path: '/mentor/my-mentees' },
+          { icon: <Users className="w-4 h-4" />, label: 'Find Founders', path: '/mentor/find-founders' },
         ];
 
       case 'investor':
         return [
           ...baseItems,
-          { icon: <TrendingUp className="w-4 h-4" />, label: 'Deal Flow', path: '/deal-flow' },
-          { icon: <Rocket className="w-4 h-4" />, label: 'Startups', path: '/startups' },
+          { icon: <TrendingUp className="w-4 h-4" />, label: 'Startups', path: '/investor/find-startups' },
         ];
 
       default:
@@ -146,7 +170,7 @@ export default function RoleNavbar() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center mt-5">
-            <Link to="/dashboard" className="flex items-center gap-2 group">
+            <Link to={`${roleBase}/dashboard`} className="flex items-center gap-2 group">
               <img
                 src={ScalScopeLogo}
                 alt="Scale Scope Logo"
@@ -211,7 +235,7 @@ export default function RoleNavbar() {
                     </div>
 
                     <Link
-                      to="/profile"
+                      to={`${roleBase}/profile`}
                       onClick={() => setShowProfileMenu(false)}
                       className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 transition-all"
                     >
