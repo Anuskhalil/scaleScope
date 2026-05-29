@@ -1,5 +1,5 @@
 const { Server } = require('socket.io');
-const { allowedOrigins } = require('./cors');
+const { corsOptions } = require('./cors');
 const supabase = require('./supabase');
 const { createMessage, triggerAIReply } = require('../services/messaging.service');
 
@@ -28,7 +28,7 @@ async function getOtherParticipantId(convId, senderId) {
 exports.setupSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: allowedOrigins,
+      origin: corsOptions.origin,
       credentials: true,
       methods: ['GET', 'POST'],
     },
