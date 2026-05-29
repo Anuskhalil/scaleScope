@@ -11,6 +11,8 @@ const { setupSocket } = require('./config/socket');
 const cofounderRoutes = require('./routes/cofounder.routes');
 const connectionRoutes = require('./routes/connection.routes');
 const conversationRoutes = require('./routes/conversation.routes');
+const opportunityRoutes = require('./routes/opportunity.routes');
+const meetingRoutes = require('./routes/meeting.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -57,6 +59,8 @@ app.get('/health', (req, res) => {
 app.use('/api/cofounders', cofounderRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/conversations', conversationRoutes);
+app.use('/api/opportunities', opportunityRoutes);
+app.use('/api/meetings', meetingRoutes);
 
 // Not found handler
 app.use((req, res) => {

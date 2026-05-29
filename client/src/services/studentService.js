@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 
 const CACHE = new Map();
 const DEFAULT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 const getCache = (key) => {
   const item = CACHE.get(key);
@@ -95,7 +96,7 @@ export async function fetchStudentProfile(userId) {
         career_goals, looking_for, has_startup_idea, startup_idea_description,
         idea_title, idea_domain, idea_stage, target_audience, unique_value_prop,
         skills_with_levels, help_needed, commitment_level, short_bio_for_mentors, 
-        has_cofounder, skills, interests, profile_completion, updated_at
+        has_cofounder, interests, profile_completion, updated_at
       `).eq('user_id', userId).maybeSingle()
     ]);
 
@@ -248,14 +249,61 @@ export async function fetchCoFounders({
     if (commitment) {
       query = query.eq('commitment_level', commitment);
     }
-    const { data, error } = await query;
+    const [studentsRes, foundersRes] = await Promise.all([
+      query,
+      supabase
+        .from('founder_profiles')
+        .select(`
+          id,
+          user_id,
+          company_name,
+          idea_title,
+          industry,
+          startup_stage,
+          commitment_level,
+          help_needed,
+          looking_for,
+          founder_skills,
+          skills_needed,
+          profile_completion,
+          updated_at,
+          profiles!founder_profiles_user_id_fkey(
+            id,
+            full_name,
+            avatar_url,
+            location,
+            bio,
+            user_type
+          )
+        `)
+        .neq('user_id', excludeUserId)
+        .contains('looking_for', ['Co-Founder'])
+        .limit(limit * 2),
+    ]);
 
-    if (error) {
-      console.error('fetchCoFounders query error:', error);
+    if (studentsRes.error) {
+      console.error('fetchCoFounders student query error:', studentsRes.error);
       return [];
     }
 
-    let candidates = data || [];
+    if (foundersRes.error) {
+      console.warn('fetchCoFounders founder query error:', foundersRes.error);
+    }
+
+    const founderCandidates = (foundersRes.data || []).map((founder) => ({
+      ...founder,
+      candidate_type: 'founder',
+      has_startup_idea: true,
+      startup_idea_description: founder.company_name
+        ? `${founder.company_name}: ${founder.idea_title || founder.industry || 'Startup'}`
+        : founder.idea_title,
+      idea_domain: founder.industry,
+      idea_stage: founder.startup_stage,
+      skills_with_levels: (founder.founder_skills || []).map((skill) => ({ skill })),
+      interests: [founder.industry].filter(Boolean),
+    }));
+
+    let candidates = [...(studentsRes.data || []), ...founderCandidates];
 
     // 🔹 Step 6: ✅ Client-side filtering for skills (safe & flexible)
     if (skills.length > 0) {
@@ -363,7 +411,7 @@ export async function sendConnectionRequest(payload) {
     const token = (await supabase.auth.getSession())
       .data.session?.access_token;
 
-    const res = await fetch('http://localhost:3001/api/connections/request', {
+    const res = await fetch(`${BASE}/api/connections/request`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -421,7 +469,7 @@ export async function getConnectionStatus(userId, otherUserId, type) {
     const cached = getCache(cacheKey);
     if (cached) return cached;
 
-    const { sent } = await supabase
+    const { data: sent } = await supabase
       .from('connection_requests')
       .select('id, status, sender_id, receiver_id')
       .eq('sender_id', userId)
@@ -439,7 +487,7 @@ export async function getConnectionStatus(userId, otherUserId, type) {
       };
     }
 
-    const { received } = await supabase
+    const { data: received } = await supabase
       .from('connection_requests')
       .select('id, status, sender_id, receiver_id')
       .eq('sender_id', otherUserId)
@@ -532,7 +580,7 @@ export async function fetchSentRequests(userId) {
 export async function respondToRequest(requestId, status) {
   if (!['accepted', 'declined'].includes(status)) throw new Error('Invalid status');
 
-  const { req, error: fetchError } = await supabase
+  const { data: req, error: fetchError } = await supabase
     .from('connection_requests')
     .select('sender_id, receiver_id')
     .eq('id', requestId)

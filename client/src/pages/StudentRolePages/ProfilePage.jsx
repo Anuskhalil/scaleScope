@@ -126,7 +126,7 @@ const makeEmpty = (user, role) => ({
 });
 
 // 🔧 Helpers
-const slugify = (text) => (text || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+const slugify = (text) => (text || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
@@ -227,7 +227,8 @@ export default function ProfilePage() {
   }, [user?.id, STORAGE_KEY, SESSION_KEY]);
 
   const clearDraft = useCallback(() => {
-    try { localStorage.removeItem(STORAGE_KEY); sessionStorage.removeItem(SESSION_KEY); } catch (e) { }
+    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
   }, [STORAGE_KEY, SESSION_KEY]);
 
   useEffect(() => {
@@ -699,7 +700,7 @@ function ViewMode({ formData, isStudent, onEditClick }) {
 }
 
 // ─── EDIT MODE COMPONENT ───
-function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInterest, toggleArrayField, skillInput, setSkillInput, interestInput, setInterestInput, addCustomSkill, addCustomInterest, onSave, saving, updateField }) {
+function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInterest, toggleArrayField, skillInput, setSkillInput, interestInput, setInterestInput, addCustomSkill, addCustomInterest, updateField }) {
   const completion = calcCompletionWithBreakdown(formData);
   return (
     <form onSubmit={(e) => { e.preventDefault(); }} className="space-y-10 dm">

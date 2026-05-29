@@ -718,8 +718,8 @@ export default function FounderProfile() {
     try {
       localStorage.removeItem(STORAGE_KEY);
       sessionStorage.removeItem(SESSION_KEY);
-    } catch (e) {
-      // ignore
+    } catch {
+      return;
     }
   }, [STORAGE_KEY, SESSION_KEY]);
 

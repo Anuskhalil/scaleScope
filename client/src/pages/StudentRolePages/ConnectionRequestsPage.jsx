@@ -36,7 +36,9 @@ async function getCachedUrl(path) {
         const { data, error } = await supabase.storage.from('avatars').createSignedUrl(path.replace(/^avatars\//, ''), 3600);
         if (error) return null;
         if (data?.signedUrl) { AVATAR_CACHE.set(key, { url: data.signedUrl, ts: Date.now() }); return data.signedUrl; }
-    } catch { }
+    } catch {
+        return null;
+    }
     return null;
 }
 const initials = (n) => n ? n.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';

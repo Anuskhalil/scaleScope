@@ -265,10 +265,13 @@ const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'm
 });
 
 // 🔜 FUTURE ROLE PLACEHOLDER
-const RolePlaceholder = ({ role, icon: Icon }) => (
-  <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">
+const RolePlaceholder = ({ role, icon }) => {
+  const RoleIcon = icon;
+
+  return (
+    <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">
     <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-gray-50 flex items-center justify-center">
-      <Icon className="w-6 h-6 text-gray-400" />
+      <RoleIcon className="w-6 h-6 text-gray-400" />
     </div>
 
     <h3 className="font-bold text-gray-900 mb-2 capitalize">
@@ -285,8 +288,9 @@ const RolePlaceholder = ({ role, icon: Icon }) => (
     >
       Coming Soon
     </button>
-  </div>
-);
+    </div>
+  );
+};
 
 // ✅ LINKEDIN-STYLE ACTION NOTICE
 function ConnectionActionNotice({ notice, onClose, onMessage, onFeedback }) {
@@ -870,7 +874,7 @@ export default function StudentDashboard() {
   });
 
   const [connStatusMap, setConnStatusMap] = useState({});
-  const [activeConvId, setActiveConvId] = useState(null);
+  const [, setActiveConvId] = useState(null);
   const [actionNotice, setActionNotice] = useState(null);
 
   const [data, setData] = useState({

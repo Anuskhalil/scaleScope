@@ -34,7 +34,6 @@ import toast from 'react-hot-toast';
 import {
   fetchFounderDashboardData,
   calcFounderCompletion,
-  formatCheckSize,
 } from '../../services/founderService';
 
 // 🎨 SAME BRAND CSS AS STUDENT DASHBOARD
@@ -836,7 +835,7 @@ export default function FounderDashboard() {
   });
 
   const [connStatusMap, setConnStatusMap] = useState({});
-  const [activeConvId, setActiveConvId] = useState(null);
+  const [, setActiveConvId] = useState(null);
   const [actionNotice, setActionNotice] = useState(null);
 
   const [data, setData] = useState({

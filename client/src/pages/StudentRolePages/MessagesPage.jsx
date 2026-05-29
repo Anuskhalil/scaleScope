@@ -1,10 +1,9 @@
 // src/pages/MessagesPage.jsx
 import React, { useState, useEffect, useCallback, memo, useRef, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { getSocket, initSocket } from '../../lib/socketClient';
-import { sendMessage } from '../../services/studentService';
 import { backendApi } from '../../lib/backendApi';
 import {
   Search,
@@ -13,12 +12,15 @@ import {
   X,
   Loader,
   CheckCheck,
-  Clock,
   MessageSquare,
   ArrowLeft,
   GraduationCap,
   DollarSign,
   Bot,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  Video,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -215,22 +217,61 @@ const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'm
   );
 });
 
-const MsgBubble = memo(({ msg, isMe }) => (
-  <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-2`}>
-    <div className={`max-w-[75%] px-4 py-3 text-sm rounded-2xl ${isMe ? 'bbl-out' : 'bbl-in'}`}>
+const MsgBubble = memo(({ msg, isMe, onEdit, onDelete }) => (
+  <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-2 group`}>
+    <div className={`relative max-w-[75%] px-4 py-3 text-sm rounded-2xl ${isMe ? 'bbl-out' : 'bbl-in'}`}>
+      {isMe && !msg.is_ai_generated && (
+        <div className="absolute -left-10 top-2 opacity-0 group-hover:opacity-100 transition">
+          <div className="relative">
+            <button
+              type="button"
+              className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-gray-800"
+              aria-label="Message actions"
+            >
+              <MoreVertical className="w-4" />
+            </button>
+
+            <div className="absolute right-0 top-8 hidden group-hover:block bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-10 min-w-28">
+              <button
+                type="button"
+                onClick={() => onEdit(msg)}
+                className="w-full px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Pencil className="w-3.5" /> Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(msg)}
+                className="w-full px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+              >
+                <Trash2 className="w-3.5" /> Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <p className="whitespace-pre-wrap break-words">
         {msg.content}
       </p>
 
+      {msg.updated_at && msg.updated_at !== msg.created_at && (
+        <span className="text-[10px] opacity-60">
+          edited
+        </span>
+      )}
+
       {msg.is_ai_generated && (
         <div className="ai-badge mt-1">
-          <Bot className="w-3" /> Auto-reply while away
+          <Bot className="w-3" /> Auto-reply while user was away
         </div>
       )}
 
       <p className={`text-xs mt-1 opacity-70 flex items-center gap-1 ${isMe ? 'justify-end' : ''}`}>
         {formatTime(msg.created_at)}
-        {isMe && msg.status === 'read' && <CheckCheck className="w-3 h-3" />}
+        {isMe && (
+          <CheckCheck className={`w-3 h-3 ${msg.seen_by_other ? 'text-[#98DE38]' : 'opacity-50'}`} />
+        )}
       </p>
     </div>
   </div>
@@ -239,6 +280,7 @@ const MsgBubble = memo(({ msg, isMe }) => (
 // 🚀 MAIN COMPONENT
 export default function MessagesPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const convIdFromUrl = searchParams.get('conv');
 
@@ -256,6 +298,8 @@ export default function MessagesPage() {
 
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [meetingStarting, setMeetingStarting] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({
     cat: 'All',
     query: '',
@@ -286,7 +330,7 @@ export default function MessagesPage() {
 
     socket.emit('join:conv', conversationId);
 
-    const handler = (newMsg) => {
+    const newHandler = (newMsg) => {
       if (newMsg.conversation_id !== conversationId) return;
 
       setData((prev) => {
@@ -309,13 +353,100 @@ export default function MessagesPage() {
         };
       });
 
+      if (newMsg.sender_id !== user.id) {
+        backendApi.markConversationRead(conversationId).catch((err) => {
+          console.warn('Auto mark read failed:', err);
+        });
+      }
+
       scrollToBottom();
     };
 
-    socket.on('msg:new', handler);
+    const updateHandler = (updatedMsg) => {
+      if (updatedMsg.conversation_id !== conversationId) return;
+
+      setData((prev) => ({
+        ...prev,
+        messages: prev.messages.map((message) =>
+          message.id === updatedMsg.id
+            ? { ...message, ...updatedMsg }
+            : message
+        ),
+        convos: prev.convos.map((convo) =>
+          convo.id === conversationId && convo.lastMessage?.id === updatedMsg.id
+            ? { ...convo, lastMessage: { ...convo.lastMessage, ...updatedMsg } }
+            : convo
+        ),
+      }));
+    };
+
+    const deleteHandler = (deletedMsg) => {
+      if (deletedMsg.conversation_id !== conversationId) return;
+
+      setData((prev) => ({
+        ...prev,
+        messages: prev.messages.filter((message) => message.id !== deletedMsg.id),
+        convos: prev.convos.map((convo) =>
+          convo.id === conversationId && convo.lastMessage?.id === deletedMsg.id
+            ? { ...convo, lastMessage: null }
+            : convo
+        ),
+      }));
+    };
+
+    const readHandler = (payload) => {
+      if (payload.conversation_id !== conversationId || payload.reader_id === user.id) return;
+
+      setData((prev) => ({
+        ...prev,
+        messages: prev.messages.map((message) =>
+          message.sender_id === user.id && new Date(message.created_at) <= new Date(payload.read_at)
+            ? { ...message, seen_by_other: true }
+            : message
+        ),
+      }));
+    };
+
+    const presenceHandler = (payload) => {
+      setData((prev) => {
+        if (prev.active?.otherUser?.id !== payload.userId) return prev;
+
+        return {
+          ...prev,
+          active: {
+            ...prev.active,
+            otherUser: {
+              ...prev.active.otherUser,
+              isOnline: payload.online,
+            },
+          },
+          convos: prev.convos.map((convo) =>
+            convo.otherUser?.id === payload.userId
+              ? {
+                ...convo,
+                otherUser: {
+                  ...convo.otherUser,
+                  isOnline: payload.online,
+                },
+              }
+              : convo
+          ),
+        };
+      });
+    };
+
+    socket.on('msg:new', newHandler);
+    socket.on('msg:updated', updateHandler);
+    socket.on('msg:deleted', deleteHandler);
+    socket.on('conv:read', readHandler);
+    socket.on('presence:update', presenceHandler);
 
     return () => {
-      socket.off('msg:new', handler);
+      socket.off('msg:new', newHandler);
+      socket.off('msg:updated', updateHandler);
+      socket.off('msg:deleted', deleteHandler);
+      socket.off('conv:read', readHandler);
+      socket.off('presence:update', presenceHandler);
     };
   }, [user?.id, scrollToBottom]);
 
@@ -339,10 +470,18 @@ export default function MessagesPage() {
     try {
       const response = await backendApi.getConversationMessages(conversation.id);
       const msgs = response.data || [];
+      const meta = response.meta || {};
 
       setData((prev) => ({
         ...prev,
-        active: conversation,
+        active: {
+          ...conversation,
+          otherUser: {
+            ...(conversation.otherUser || {}),
+            isOnline: Boolean(meta.otherUserOnline ?? conversation.otherUser?.isOnline),
+            last_read_at: meta.otherLastReadAt || conversation.otherUser?.last_read_at,
+          },
+        },
         messages: msgs,
         convos: prev.convos.map((item) =>
           item.id === conversation.id
@@ -433,6 +572,34 @@ export default function MessagesPage() {
     };
   }, []);
 
+  const startMeeting = async () => {
+    const activeConversation = data.active;
+    const targetUser = activeConversation?.otherUser;
+
+    if (!activeConversation?.id || meetingStarting) {
+      toast.error('Open a conversation first');
+      return;
+    }
+
+    try {
+      setMeetingStarting(true);
+      const response = await backendApi.createMeeting({
+        conversationId: activeConversation.id,
+        title: `Meeting with ${targetUser?.full_name || 'ScaleScope user'}`,
+      });
+
+      const meetingId = response.data?.id;
+      if (!meetingId) throw new Error('Meeting was created without an id');
+
+      navigate(`/meetings/${meetingId}`);
+    } catch (err) {
+      console.error('Create meeting failed:', err);
+      toast.error(err.message || 'Could not start meeting');
+    } finally {
+      setMeetingStarting(false);
+    }
+  };
+
   const sendMsg = async () => {
     const text = input.trim();
 
@@ -441,6 +608,29 @@ export default function MessagesPage() {
     setSending(true);
 
     try {
+      if (editing) {
+        const response = await backendApi.editConversationMessage(data.active.id, editing.id, text);
+        const updatedMsg = response.data;
+
+        setData((prev) => ({
+          ...prev,
+          messages: prev.messages.map((message) =>
+            message.id === updatedMsg.id
+              ? { ...message, ...updatedMsg }
+              : message
+          ),
+          convos: prev.convos.map((convo) =>
+            convo.id === data.active.id && convo.lastMessage?.id === updatedMsg.id
+              ? { ...convo, lastMessage: { ...convo.lastMessage, ...updatedMsg } }
+              : convo
+          ),
+        }));
+
+        setEditing(null);
+        setInput('');
+        return;
+      }
+
       const socket = getSocket();
 
       if (socket?.connected) {
@@ -449,7 +639,8 @@ export default function MessagesPage() {
           content: text,
         });
       } else {
-        const newMsg = await sendMessage(data.active.id, user.id, text, 'text');
+        const response = await backendApi.sendConversationMessage(data.active.id, text);
+        const newMsg = response.data;
 
         setData((prev) => ({
           ...prev,
@@ -473,6 +664,42 @@ export default function MessagesPage() {
       toast.error('Failed to send');
     } finally {
       setSending(false);
+    }
+  };
+
+  const startEdit = (message) => {
+    setEditing(message);
+    setInput(message.content || '');
+  };
+
+  const cancelEdit = () => {
+    setEditing(null);
+    setInput('');
+  };
+
+  const deleteMessage = async (message) => {
+    if (!data.active?.id || !message?.id) return;
+
+    const confirmed = window.confirm('Delete this message?');
+    if (!confirmed) return;
+
+    try {
+      await backendApi.deleteConversationMessage(data.active.id, message.id);
+
+      setData((prev) => ({
+        ...prev,
+        messages: prev.messages.filter((item) => item.id !== message.id),
+        convos: prev.convos.map((convo) =>
+          convo.id === data.active.id && convo.lastMessage?.id === message.id
+            ? { ...convo, lastMessage: null }
+            : convo
+        ),
+      }));
+
+      toast.success('Message deleted');
+    } catch (err) {
+      console.error('Delete message failed:', err);
+      toast.error(err.message || 'Could not delete message');
     }
   };
 
@@ -682,18 +909,34 @@ export default function MessagesPage() {
                     </p>
 
                     <p className="text-xs text-gray-500 flex items-center gap-1">
-                      <Clock className="w-3" />
-                      {active.otherUser?.location || 'Online'}
+                      <span
+                        className={`w-2 h-2 rounded-full ${active.otherUser?.isOnline ? 'bg-green-500' : 'bg-gray-300'}`}
+                        aria-hidden="true"
+                      />
+                      {active.otherUser?.isOnline ? 'Online' : active.otherUser?.location || 'Offline'}
                     </p>
                   </div>
 
-                  <Link
-                    to="/dashboard"
-                    className="ml-auto text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-                  >
-                    <ArrowLeft className="w-4" />
-                    Back
-                  </Link>
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={startMeeting}
+                      disabled={meetingStarting}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition g-brand text-black hover:opacity-90 disabled:opacity-60"
+                      title="Start a LiveKit meeting room"
+                    >
+                      {meetingStarting ? <Loader className="w-4 animate-spin" /> : <Video className="w-4" />}
+                      {meetingStarting ? 'Starting' : 'Meeting'}
+                    </button>
+
+                    <Link
+                      to="/dashboard"
+                      className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                    >
+                      <ArrowLeft className="w-4" />
+                      Back
+                    </Link>
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-2" role="log" aria-live="polite">
@@ -708,6 +951,8 @@ export default function MessagesPage() {
                           key={msg.id}
                           msg={msg}
                           isMe={msg.sender_id === user?.id}
+                          onEdit={startEdit}
+                          onDelete={deleteMessage}
                         />
                       ))}
 
@@ -729,6 +974,23 @@ export default function MessagesPage() {
                     </>
                   )}
                 </div>
+
+                {editing && (
+                  <div className="px-4 py-2 border-t border-gray-100 bg-indigo-50 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-indigo-700">Editing message</p>
+                      <p className="text-xs text-indigo-600 truncate">{editing.content}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="p-1.5 rounded-lg hover:bg-white/70 text-indigo-700"
+                      aria-label="Cancel editing"
+                    >
+                      <X className="w-4" />
+                    </button>
+                  </div>
+                )}
 
                 <div className="p-4 border-t border-gray-100 flex items-end gap-2">
                   <button
@@ -767,7 +1029,7 @@ export default function MessagesPage() {
                     {sending ? (
                       <Loader className="w-4 animate-spin" />
                     ) : (
-                      <Send className="w-4" />
+                      editing ? <Pencil className="w-4" /> : <Send className="w-4" />
                     )}
                   </button>
                 </div>

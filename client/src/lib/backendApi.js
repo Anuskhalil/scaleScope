@@ -157,6 +157,53 @@ export const backendApi = {
         return data;
     },
 
+    sendConversationMessage: async (conversationId, content) => {
+        const res = await fetch(`${BASE}/api/conversations/${conversationId}/messages`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({ content }),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to send message');
+        }
+
+        return data;
+    },
+
+    editConversationMessage: async (conversationId, messageId, content) => {
+        const res = await fetch(`${BASE}/api/conversations/${conversationId}/messages/${messageId}`, {
+            method: 'PUT',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({ content }),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to edit message');
+        }
+
+        return data;
+    },
+
+    deleteConversationMessage: async (conversationId, messageId) => {
+        const res = await fetch(`${BASE}/api/conversations/${conversationId}/messages/${messageId}`, {
+            method: 'DELETE',
+            headers: await getAuthHeaders(),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to delete message');
+        }
+
+        return data;
+    },
+
     markConversationRead: async (conversationId) => {
         const res = await fetch(`${BASE}/api/conversations/${conversationId}/read`, {
             method: 'POST',
@@ -167,6 +214,97 @@ export const backendApi = {
 
         if (!res.ok) {
             throw new Error(data.error || 'Failed to mark conversation read');
+        }
+
+        return data;
+    },
+
+    createMeeting: async ({ conversationId, title, scheduledAt } = {}) => {
+        if (!conversationId) {
+            throw new Error('conversationId is required');
+        }
+
+        const res = await fetch(`${BASE}/api/meetings`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({
+                conversationId,
+                title,
+                scheduledAt: scheduledAt || null,
+            }),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to create meeting');
+        }
+
+        return data;
+    },
+
+    getMeeting: async (meetingId) => {
+        const res = await fetch(`${BASE}/api/meetings/${meetingId}`, {
+            headers: await getAuthHeaders(),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to load meeting');
+        }
+
+        return data;
+    },
+
+    getMeetingToken: async (meetingId) => {
+        const res = await fetch(`${BASE}/api/meetings/${meetingId}/token`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to join meeting');
+        }
+
+        return data;
+    },
+
+    endMeeting: async (meetingId) => {
+        const res = await fetch(`${BASE}/api/meetings/${meetingId}/end`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to end meeting');
+        }
+
+        return data;
+    },
+
+    getOpportunities: async (filters = {}) => {
+        const params = new URLSearchParams();
+
+        Object.entries(filters).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '' && value !== 'All') {
+                params.set(key, value);
+            }
+        });
+
+        const suffix = params.toString() ? `?${params.toString()}` : '';
+        const res = await fetch(`${BASE}/api/opportunities${suffix}`, {
+            headers: await getAuthHeaders(),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to fetch opportunities');
         }
 
         return data;

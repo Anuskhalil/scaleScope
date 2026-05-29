@@ -749,7 +749,7 @@ export default function FindMentorsPage() {
     });
 
     try {
-      const [profileRes, studentRes, myConnectionsRes] = await Promise.allSettled([
+      const [profileRes, studentRes, founderRes, myConnectionsRes] = await Promise.allSettled([
         supabase
           .from('profiles')
           .select('id, full_name, avatar_url, location, bio, user_type')
@@ -779,6 +779,12 @@ export default function FindMentorsPage() {
           .eq('user_id', user.id)
           .maybeSingle(),
 
+        supabase
+          .from('founder_profiles')
+          .select('user_id, industry, founder_skills, help_needed, commitment_level, looking_for')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+
         backendApi.getMyConnections(),
       ]);
 
@@ -787,10 +793,21 @@ export default function FindMentorsPage() {
 
       const studentData =
         studentRes.status === 'fulfilled' ? studentRes.value.data || {} : {};
+      const founderData =
+        founderRes.status === 'fulfilled' ? founderRes.value.data || {} : {};
 
       const currentProfile = {
         ...profileData,
         ...studentData,
+        ...(founderData.user_id ? {
+          idea_domain: founderData.industry,
+          skills_with_levels: (founderData.founder_skills || []).map((skill) => ({ skill })),
+          help_needed: founderData.help_needed || [],
+          commitment_level: founderData.commitment_level,
+          looking_for: founderData.looking_for || [],
+          interests: [founderData.industry].filter(Boolean),
+          has_startup_idea: true,
+        } : {}),
       };
 
       const { data: mentorRows, error: mentorsError } = await supabase

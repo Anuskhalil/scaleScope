@@ -29,6 +29,9 @@ export default function CofounderCard({
     return c?.full_name || c?.name || c?.profiles?.full_name || 'there';
   };
 
+  const targetId = getUserId();
+  const buttonState = loading ? 'sending' : localStatus;
+
   const setStatusEverywhere = (targetId, status) => {
     setLocalStatus(status);
     onStatusChange?.(targetId, status);
@@ -102,51 +105,6 @@ export default function CofounderCard({
     }
   };
 
-  const renderConnectButton = () => {
-    if (localStatus === 'accepted') {
-      return (
-        <button
-          type="button"
-          disabled
-          className="flex-1 py-2 bg-green-50 border border-green-200 text-green-700 rounded-xl text-xs font-bold flex items-center justify-center cursor-default"
-        >
-          <CheckCircle className="w-3.5 mr-1" /> Connected
-        </button>
-      );
-    }
-
-    if (localStatus === 'pending') {
-      return (
-        <button
-          type="button"
-          disabled
-          className="flex-1 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-xs font-bold flex items-center justify-center cursor-default"
-        >
-          <Clock className="w-3.5 mr-1" /> Pending
-        </button>
-      );
-    }
-
-    return (
-      <button
-        type="button"
-        onClick={handleConnect}
-        disabled={loading}
-        className="flex-1 py-2 bg-[#98DE38] text-black rounded-xl text-xs font-bold hover:opacity-90 transition flex items-center justify-center disabled:opacity-60"
-      >
-        {loading ? (
-          <>
-            <Loader className="w-3.5 mr-1 animate-spin" /> Sending...
-          </>
-        ) : (
-          <>
-            <UserPlus className="w-3.5 mr-1" /> Connect
-          </>
-        )}
-      </button>
-    );
-  };
-
   return (
     <div className="bg-white rounded-2xl p-4 border border-gray-100 hover:shadow-md transition lift">
       <div className="flex items-center gap-3 mb-3">
@@ -176,7 +134,7 @@ export default function CofounderCard({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
         <Link
-          to={`/user-profile/${personId}`}
+          to={`/user-profile/${targetId || ''}`}
           className="py-2 border-2 border-indigo-100 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold hover:bg-indigo-100 transition flex items-center justify-center"
         >
           View Profile
@@ -184,24 +142,20 @@ export default function CofounderCard({
 
         <button
           type="button"
-          onClick={() => {
-            if (connectionStatus === 'accepted') {
-              onMessage(personId);
-            }
-          }}
-          disabled={connectionStatus !== 'accepted'}
+          onClick={handleMsg}
+          disabled={localStatus !== 'accepted'}
           title={
-            connectionStatus === 'accepted'
+            localStatus === 'accepted'
               ? 'Message this connection'
               : 'Connect first to send messages'
           }
-          className={`py-2 border-2 rounded-xl text-xs font-bold transition flex items-center justify-center ${connectionStatus === 'accepted'
+          className={`py-2 border-2 rounded-xl text-xs font-bold transition flex items-center justify-center ${localStatus === 'accepted'
               ? 'border-gray-200 hover:border-gray-300 text-gray-800'
               : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
             }`}
         >
           <MessageSquare className="w-3.5 mr-1" />
-          {connectionStatus === 'accepted' ? 'Message' : 'Connect first'}
+          {localStatus === 'accepted' ? 'Message' : 'Connect first'}
         </button>
 
         {buttonState === 'accepted' ? (
@@ -225,16 +179,16 @@ export default function CofounderCard({
         ) : (
           <button
             type="button"
-            onClick={() => onConnect(candidate)}
-            disabled={buttonState === true}
+            onClick={handleConnect}
+            disabled={buttonState === 'sending'}
             className="py-2 g-brand text-black rounded-xl text-xs font-black hover:opacity-90 transition flex items-center justify-center disabled:opacity-60"
           >
-            {buttonState === true ? (
+            {buttonState === 'sending' ? (
               <Loader className="w-3.5 animate-spin mr-1" />
             ) : (
               <UserPlus className="w-3.5 mr-1" />
             )}
-            {buttonState === true ? 'Sending...' : 'Connect'}
+            {buttonState === 'sending' ? 'Sending...' : 'Connect'}
           </button>
         )}
       </div>

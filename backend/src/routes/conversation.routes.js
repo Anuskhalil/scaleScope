@@ -1,6 +1,8 @@
 const express = require('express');
 const auth = require('../middlewares/auth.middleware');
 const supabase = require('../config/supabase');
+const { getIO, isUserOnline } = require('../config/socket');
+const { createMessage } = require('../services/messaging.service');
 
 const router = express.Router();
 
@@ -19,6 +21,20 @@ router.post('/with/:otherUserId', async (req, res) => {
       return res.status(400).json({ error: 'Cannot create conversation with yourself' });
     }
 
+    const { data: connection, error: connectionError } = await supabase
+      .from('connections')
+      .select('id')
+      .or(
+        `and(user_1.eq.${currentUserId},user_2.eq.${otherUserId}),and(user_1.eq.${otherUserId},user_2.eq.${currentUserId})`
+      )
+      .maybeSingle();
+
+    if (connectionError) throw connectionError;
+
+    if (!connection) {
+      return res.status(403).json({ error: 'Connect first before opening a conversation' });
+    }
+
     const { data, error } = await supabase.rpc(
       'create_conversation_with_participants',
       {
@@ -28,7 +44,11 @@ router.post('/with/:otherUserId', async (req, res) => {
       }
     );
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(
+        `Conversation setup failed. Please run the create_conversation_with_participants SQL function. ${error.message}`
+      );
+    }
 
     res.json({
       success: true,
@@ -68,12 +88,12 @@ router.get('/', async (req, res) => {
 
       supabase
         .from('conversation_participants')
-        .select('conversation_id, user_id')
+        .select('conversation_id, user_id, last_read_at')
         .in('conversation_id', conversationIds),
 
       supabase
         .from('messages')
-        .select('id, conversation_id, content, sender_id, created_at, is_ai_generated')
+        .select('id, conversation_id, content, sender_id, created_at, updated_at, is_ai_generated')
         .in('conversation_id', conversationIds)
         .order('created_at', { ascending: true }),
     ]);
@@ -139,7 +159,11 @@ router.get('/', async (req, res) => {
         title: conv.title,
         last_message_at: conv.last_message_at,
         otherUser: otherParticipant
-          ? profileById.get(otherParticipant.user_id)
+          ? {
+              ...profileById.get(otherParticipant.user_id),
+              isOnline: isUserOnline(otherParticipant.user_id),
+              last_read_at: otherParticipant.last_read_at,
+            }
           : null,
         lastMessage,
         unreadCount,
@@ -160,7 +184,7 @@ router.get('/:conversationId/messages', async (req, res) => {
 
     const { data: membership, error: memberError } = await supabase
       .from('conversation_participants')
-      .select('conversation_id')
+      .select('conversation_id, user_id, last_read_at')
       .eq('conversation_id', conversationId)
       .eq('user_id', userId)
       .maybeSingle();
@@ -170,6 +194,15 @@ router.get('/:conversationId/messages', async (req, res) => {
     if (!membership) {
       return res.status(403).json({ error: 'You are not a participant in this conversation' });
     }
+
+    const { data: participants, error: participantsError } = await supabase
+      .from('conversation_participants')
+      .select('user_id, last_read_at')
+      .eq('conversation_id', conversationId);
+
+    if (participantsError) throw participantsError;
+
+    const otherParticipant = (participants || []).find((p) => p.user_id !== userId);
 
     const { data, error } = await supabase
       .from('messages')
@@ -183,16 +216,132 @@ router.get('/:conversationId/messages', async (req, res) => {
         file_name,
         file_size,
         is_ai_generated,
-        created_at
+        created_at,
+        updated_at
       `)
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
 
-    res.json({ success: true, data: data || [] });
+    const messages = (data || []).map((message) => ({
+      ...message,
+      seen_by_other:
+        message.sender_id === userId &&
+        Boolean(otherParticipant?.last_read_at) &&
+        new Date(otherParticipant.last_read_at) >= new Date(message.created_at),
+    }));
+
+    res.json({
+      success: true,
+      data: messages,
+      meta: {
+        otherUserId: otherParticipant?.user_id || null,
+        otherUserOnline: otherParticipant?.user_id ? isUserOnline(otherParticipant.user_id) : false,
+        otherLastReadAt: otherParticipant?.last_read_at || null,
+      },
+    });
   } catch (e) {
     console.error('Fetch conversation messages error:', e);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.post('/:conversationId/messages', async (req, res) => {
+  try {
+    const message = await createMessage(
+      req.params.conversationId,
+      req.user.id,
+      req.body?.content
+    );
+
+    res.status(201).json({ success: true, data: message });
+  } catch (e) {
+    console.error('Create conversation message error:', e);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.put('/:conversationId/messages/:messageId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId, messageId } = req.params;
+    const content = String(req.body?.content || '').trim();
+
+    if (!content) return res.status(400).json({ error: 'message content is required' });
+    if (content.length > 2000) return res.status(400).json({ error: 'message content is too long' });
+
+    const { data: membership, error: memberError } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (memberError) throw memberError;
+    if (!membership) return res.status(403).json({ error: 'You are not a participant in this conversation' });
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('messages')
+      .update({ content, updated_at: now })
+      .eq('id', messageId)
+      .eq('conversation_id', conversationId)
+      .eq('sender_id', userId)
+      .eq('is_ai_generated', false)
+      .select('id, conversation_id, sender_id, content, type, file_url, file_name, file_size, is_ai_generated, created_at, updated_at')
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Message not found or not editable' });
+
+    getIO()?.to(`conv:${conversationId}`).emit('msg:updated', data);
+    res.json({ success: true, data });
+  } catch (e) {
+    console.error('Edit message error:', e);
+    res.status(400).json({ error: e.message });
+  }
+});
+
+router.delete('/:conversationId/messages/:messageId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId, messageId } = req.params;
+
+    const { data: membership, error: memberError } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (memberError) throw memberError;
+    if (!membership) return res.status(403).json({ error: 'You are not a participant in this conversation' });
+
+    const { data: existing, error: existingError } = await supabase
+      .from('messages')
+      .select('id')
+      .eq('id', messageId)
+      .eq('conversation_id', conversationId)
+      .eq('sender_id', userId)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (!existing) return res.status(404).json({ error: 'Message not found or not deletable' });
+
+    const { error } = await supabase
+      .from('messages')
+      .delete()
+      .eq('id', messageId)
+      .eq('conversation_id', conversationId)
+      .eq('sender_id', userId);
+
+    if (error) throw error;
+
+    getIO()?.to(`conv:${conversationId}`).emit('msg:deleted', { id: messageId, conversation_id: conversationId });
+    res.json({ success: true, data: { id: messageId, conversation_id: conversationId } });
+  } catch (e) {
+    console.error('Delete message error:', e);
     res.status(400).json({ error: e.message });
   }
 });
@@ -201,14 +350,21 @@ router.post('/:conversationId/read', async (req, res) => {
   try {
     const userId = req.user.id;
     const conversationId = req.params.conversationId;
+    const readAt = new Date().toISOString();
 
     const { error } = await supabase
       .from('conversation_participants')
-      .update({ last_read_at: new Date().toISOString() })
+      .update({ last_read_at: readAt })
       .eq('conversation_id', conversationId)
       .eq('user_id', userId);
 
     if (error) throw error;
+
+    getIO()?.to(`conv:${conversationId}`).emit('conv:read', {
+      conversation_id: conversationId,
+      reader_id: userId,
+      read_at: readAt,
+    });
 
     res.json({ success: true });
   } catch (e) {

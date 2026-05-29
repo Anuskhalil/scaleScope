@@ -268,20 +268,6 @@ const normalizeProfile = (item) => {
   };
 };
 
-const getScore = (item) => {
-  return Number(item?.matchScore || item?.match_score || item?.score || item?.ai_score || 0);
-};
-
-const getConnectionUserId = (connection) => {
-  return (
-    connection?.otherUser?.id ||
-    connection?.other_user?.id ||
-    connection?.receiver_id ||
-    connection?.sender_id ||
-    connection?.user_id
-  );
-};
-
 const timeLeft = (deadline) => {
   if (!deadline) return null;
 
@@ -309,11 +295,21 @@ const oppBadge = (type) => {
 const OPP_ICONS = {
   internship: GraduationCap,
   event: Rocket,
+  workshop: Briefcase,
   funding: Gift,
   hackathon: Zap,
   accelerator: Rocket,
   grant: Gift,
+  competition: Zap,
+  bootcamp: GraduationCap,
 };
+
+const OPPORTUNITY_TYPES = ['All', 'internship', 'event', 'workshop', 'hackathon', 'bootcamp', 'competition', 'accelerator', 'grant'];
+const OPPORTUNITY_CITIES = ['All', 'Karachi', 'Lahore', 'Islamabad', 'Remote', 'Global'];
+const OPPORTUNITY_AREAS = ['All', 'Gulshan', 'DHA', 'Clifton', 'PECHS', 'Shahrah-e-Faisal', 'North Nazimabad', 'Remote'];
+const OPPORTUNITY_DOMAINS = ['All', 'AI', 'Web Dev', 'Mobile App', 'Cybersecurity', 'Data Science', 'Cloud', 'Startup', 'Product'];
+const OPPORTUNITY_INDUSTRIES = ['All', 'SaaS', 'FinTech', 'EdTech', 'HealthTech', 'E-commerce', 'AI / ML', 'Social Impact'];
+const OPPORTUNITY_MODES = ['All', 'online', 'offline', 'hybrid'];
 
 const DEFAULT_OPPORTUNITIES = [
   {
@@ -324,6 +320,12 @@ const DEFAULT_OPPORTUNITIES = [
     description: 'Find teammates, validate a problem, and build a working prototype with other students.',
     deadline: null,
     link: '',
+    city: 'Karachi',
+    area: 'Remote',
+    domain: 'Startup',
+    industry: 'SaaS',
+    mode: 'hybrid',
+    tags: ['tech', 'startup'],
     is_active: true,
     is_featured: true,
   },
@@ -335,6 +337,12 @@ const DEFAULT_OPPORTUNITIES = [
     description: 'Explore startup internships where students can learn product, growth, design, or engineering.',
     deadline: null,
     link: '',
+    city: 'Karachi',
+    area: 'All',
+    domain: 'Web Dev',
+    industry: 'SaaS',
+    mode: 'offline',
+    tags: ['tech', 'internship'],
     is_active: true,
     is_featured: false,
   },
@@ -526,6 +534,7 @@ const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'm
 
 const PeopleCard = memo(function PeopleCard({ person, onConnect, onMessage, connectionStatus, connecting }) {
   const isMentor = person._type === 'mentor';
+  const isFounder = person._type === 'founder';
   const isConnected = connectionStatus === 'accepted';
   const isPending = connectionStatus === 'pending' || connectionStatus === 'sent';
   const busy = connecting === true;
@@ -553,12 +562,12 @@ const PeopleCard = memo(function PeopleCard({ person, onConnect, onMessage, conn
                 className={`text-xs font-bold px-2.5 py-1 rounded-full ${isMentor ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'
                   }`}
               >
-                {isMentor ? 'Mentor Match' : 'Co-Founder Match'}
+                {isMentor ? 'Mentor Match' : isFounder ? 'Founder Match' : 'Co-Founder Match'}
               </span>
 
-              <span className="text-xs font-black px-2.5 py-1 rounded-full bg-[#98DE38]/20 text-[#1B2D7F]">
+              {/* <span className="text-xs font-black px-2.5 py-1 rounded-full bg-[#98DE38]/20 text-[#1B2D7F]">
                 {person.matchScore}% Match
-              </span>
+              </span> */}
             </div>
           </div>
 
@@ -734,6 +743,11 @@ export default function DiscoverPage() {
     tab: 'people',
     role: 'All',
     oppType: 'All',
+    oppCity: 'All',
+    oppArea: 'All',
+    oppDomain: 'All',
+    oppIndustry: 'All',
+    oppMode: 'All',
     query: '',
   });
 
@@ -749,7 +763,7 @@ export default function DiscoverPage() {
     });
 
     try {
-      const [profileRes, studentRes, studentsRes, connectionsRes, prefsRes] = await Promise.allSettled([
+      const [profileRes, studentRes, founderRes, studentsRes, foundersRes, connectionsRes, prefsRes] = await Promise.allSettled([
         supabase
           .from('profiles')
           .select('id, full_name, avatar_url, location, bio, user_type')
@@ -777,6 +791,24 @@ export default function DiscoverPage() {
             idea_stage,
             target_audience,
             unique_value_prop,
+            profile_completion
+          `)
+          .eq('user_id', user.id)
+          .maybeSingle(),
+
+        supabase
+          .from('founder_profiles')
+          .select(`
+            user_id,
+            company_name,
+            idea_title,
+            industry,
+            startup_stage,
+            commitment_level,
+            help_needed,
+            looking_for,
+            founder_skills,
+            skills_needed,
             profile_completion
           `)
           .eq('user_id', user.id)
@@ -817,6 +849,35 @@ export default function DiscoverPage() {
           .neq('user_id', user.id)
           .limit(100),
 
+        supabase
+          .from('founder_profiles')
+          .select(`
+            id,
+            user_id,
+            company_name,
+            idea_title,
+            industry,
+            startup_stage,
+            solution_description,
+            unique_value_proposition,
+            target_audience,
+            looking_for,
+            help_needed,
+            commitment_level,
+            founder_skills,
+            profile_completion,
+            profiles!founder_profiles_user_id_fkey(
+              id,
+              full_name,
+              avatar_url,
+              location,
+              bio,
+              user_type
+            )
+          `)
+          .neq('user_id', user.id)
+          .limit(100),
+
         backendApi.getMyConnections(),
 
         supabase
@@ -826,12 +887,23 @@ export default function DiscoverPage() {
           .maybeSingle(),
       ]);
 
+      const currentFounder = founderRes.status === 'fulfilled' ? founderRes.value.data || {} : {};
       const profile = {
         ...(profileRes.status === 'fulfilled' ? profileRes.value.data || {} : {}),
         ...(studentRes.status === 'fulfilled' ? studentRes.value.data || {} : {}),
+        ...(currentFounder.user_id ? {
+          idea_domain: currentFounder.industry,
+          commitment_level: currentFounder.commitment_level,
+          help_needed: currentFounder.help_needed || [],
+          looking_for: currentFounder.looking_for || [],
+          skills_with_levels: (currentFounder.founder_skills || []).map((skill) => ({ skill })),
+          interests: [currentFounder.industry].filter(Boolean),
+          has_startup_idea: true,
+        } : {}),
       };
 
       const rawStudents = studentsRes.status === 'fulfilled' ? studentsRes.value.data || [] : [];
+      const rawFounders = foundersRes.status === 'fulfilled' ? foundersRes.value.data || [] : [];
 
       const connections =
         connectionsRes.status === 'fulfilled'
@@ -914,23 +986,81 @@ export default function DiscoverPage() {
         }
       });
 
+      rawFounders.forEach((founder) => {
+        const p = normalizeProfile(founder);
+        const founderMatchShape = {
+          ...founder,
+          idea_domain: founder.industry,
+          idea_stage: founder.startup_stage,
+          has_startup_idea: true,
+          startup_idea_description: founder.solution_description,
+          skills_with_levels: (founder.founder_skills || []).map((skill) => ({ skill })),
+          interests: [founder.industry].filter(Boolean),
+        };
+        const skills = (founder.founder_skills || []).filter(Boolean);
+
+        if (founder.idea_title || founder.company_name) {
+          startups.push({
+            user_id: founder.user_id,
+            founderName: p.full_name,
+            avatar: p.avatar_url,
+            location: p.location,
+            idea_title: founder.idea_title || founder.company_name,
+            idea_domain: founder.industry,
+            idea_stage: founder.startup_stage,
+            target_audience: founder.target_audience,
+            description: founder.solution_description,
+            unique_value_prop: founder.unique_value_proposition,
+          });
+        }
+
+        if (hasLookingFor(founder, 'Co-Founder')) {
+          const match = computeDiscoverMatch(profile, founderMatchShape, 'cofounder');
+
+          people.push({
+            _type: 'founder',
+            id: `founder-${founder.user_id}`,
+            user_id: founder.user_id,
+            name: p.full_name,
+            avatar: p.avatar_url,
+            location: p.location,
+            bio: p.bio || founder.solution_description || founder.idea_title,
+            role: 'Founder',
+            org: founder.company_name,
+            skills: skills.slice(0, 5),
+            commitment: founder.commitment_level,
+            has_idea: true,
+            matchScore: match.score,
+            reasons: match.reasons,
+          });
+        }
+      });
+
       let opportunities = [];
 
       try {
-        const today = new Date().toISOString().split('T')[0];
-        const { data: oppData, error: oppError } = await supabase
-          .from('opportunities')
-          .select('*')
-          .eq('is_active', true)
-          .gte('deadline', today)
-          .order('is_featured', { ascending: false })
-          .limit(30);
+        const response = await backendApi.getOpportunities({ limit: 80 });
+        opportunities = response.data || [];
+      } catch (apiErr) {
+        console.warn('Backend opportunities unavailable, using Supabase fallback:', apiErr?.message || apiErr);
 
-        if (oppError) throw oppError;
-        opportunities = oppData || [];
-      } catch (oppErr) {
-        console.warn('Opportunities table unavailable or empty:', oppErr?.message || oppErr);
-        opportunities = DEFAULT_OPPORTUNITIES;
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          const { data: oppData, error: oppError } = await supabase
+            .from('opportunities')
+            .select('*')
+            .eq('is_active', true)
+            .or(`deadline.is.null,deadline.gte.${today}`)
+            .order('is_featured', { ascending: false })
+            .order('deadline', { ascending: true, nullsFirst: false })
+            .limit(80);
+
+          if (oppError) throw oppError;
+          opportunities = oppData || [];
+        } catch (oppErr) {
+          console.warn('Opportunities table unavailable or empty:', oppErr?.message || oppErr);
+          opportunities = DEFAULT_OPPORTUNITIES;
+        }
       }
 
       setConnStatusMap(statusMap);
@@ -977,7 +1107,8 @@ export default function DiscoverPage() {
       const matchRole =
         role === 'All' ||
         (role === 'Mentor' && person._type === 'mentor') ||
-        (role === 'Co-Founder' && person._type === 'cofounder');
+        (role === 'Co-Founder' && person._type === 'cofounder') ||
+        (role === 'Founder' && person._type === 'founder');
 
       return matchQuery && matchRole;
     });
@@ -998,20 +1129,39 @@ export default function DiscoverPage() {
   }, [data.startups, filters.query]);
 
   const filteredOpps = useMemo(() => {
-    const { query, oppType } = filters;
+    const { query, oppType, oppCity, oppArea, oppDomain, oppIndustry, oppMode } = filters;
     const q = query.toLowerCase();
 
     return data.opportunities.filter((opp) => {
+      const haystack = [
+        opp.title,
+        opp.description,
+        opp.organiser,
+        opp.organization,
+        opp.location,
+        opp.city,
+        opp.area,
+        opp.domain,
+        opp.industry,
+        opp.mode,
+        ...(Array.isArray(opp.tags) ? opp.tags : []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
       const matchQuery =
         !query ||
-        opp.title?.toLowerCase().includes(q) ||
-        opp.description?.toLowerCase().includes(q) ||
-        opp.organiser?.toLowerCase().includes(q) ||
-        opp.organization?.toLowerCase().includes(q);
+        haystack.includes(q);
 
       const matchType = oppType === 'All' || opp.type === oppType;
+      const matchCity = oppCity === 'All' || normalizeLower(opp.city || opp.location).includes(normalizeLower(oppCity));
+      const matchArea = oppArea === 'All' || normalizeLower(opp.area || opp.location).includes(normalizeLower(oppArea));
+      const matchDomain = oppDomain === 'All' || normalizeLower(opp.domain || opp.tags?.join(' ')).includes(normalizeLower(oppDomain));
+      const matchIndustry = oppIndustry === 'All' || normalizeLower(opp.industry || opp.tags?.join(' ')).includes(normalizeLower(oppIndustry));
+      const matchMode = oppMode === 'All' || normalizeLower(opp.mode || '').includes(normalizeLower(oppMode));
 
-      return matchQuery && matchType;
+      return matchQuery && matchType && matchCity && matchArea && matchDomain && matchIndustry && matchMode;
     });
   }, [data.opportunities, filters]);
 
@@ -1087,6 +1237,11 @@ export default function DiscoverPage() {
       tab: 'people',
       role: 'All',
       oppType: 'All',
+      oppCity: 'All',
+      oppArea: 'All',
+      oppDomain: 'All',
+      oppIndustry: 'All',
+      oppMode: 'All',
       query: '',
     });
   };
@@ -1114,7 +1269,7 @@ export default function DiscoverPage() {
   }
 
   const { people, opportunities, startups } = data;
-  const { tab, role, oppType, query } = filters;
+  const { tab, role, oppType, oppCity, oppArea, oppDomain, oppIndustry, oppMode, query } = filters;
 
   return (
     <>
@@ -1232,7 +1387,7 @@ export default function DiscoverPage() {
                     </div>
 
                     <div className="flex gap-2">
-                      {['All', 'Mentor', 'Co-Founder'].map((item) => (
+                      {['All', 'Mentor', 'Co-Founder', 'Founder'].map((item) => (
                         <button
                           key={item}
                           type="button"
@@ -1298,22 +1453,54 @@ export default function DiscoverPage() {
                 <section>
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                     <div>
-                      <h2 className="font-bold text-gray-900">Opportunities</h2>
-                      <p className="text-xs text-gray-400">Internships, hackathons, funding, events, accelerators, and grants.</p>
+                      <h2 className="font-bold text-gray-900">Tech Opportunities</h2>
+                      <p className="text-xs text-gray-400">Internships, tech events, workshops, hackathons, bootcamps, and startup programs.</p>
                     </div>
+                  </div>
 
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                      {['All', 'internship', 'event', 'funding', 'hackathon', 'accelerator', 'grant'].map((item) => (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => setFilters((prev) => ({ ...prev, oppType: item }))}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-xl capitalize whitespace-nowrap ${oppType === item ? 'g-brand text-black' : 'bg-white border border-gray-200 text-gray-600'
-                            }`}
-                        >
-                          {item}
-                        </button>
-                      ))}
+                  <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <label className="space-y-1">
+                        <span className="text-xs font-bold text-gray-500">Type</span>
+                        <select value={oppType} onChange={(event) => setFilters((prev) => ({ ...prev, oppType: event.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white capitalize">
+                          {OPPORTUNITY_TYPES.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                      </label>
+
+                      <label className="space-y-1">
+                        <span className="text-xs font-bold text-gray-500">City</span>
+                        <select value={oppCity} onChange={(event) => setFilters((prev) => ({ ...prev, oppCity: event.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white">
+                          {OPPORTUNITY_CITIES.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                      </label>
+
+                      <label className="space-y-1">
+                        <span className="text-xs font-bold text-gray-500">Area</span>
+                        <select value={oppArea} onChange={(event) => setFilters((prev) => ({ ...prev, oppArea: event.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white">
+                          {OPPORTUNITY_AREAS.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                      </label>
+
+                      <label className="space-y-1">
+                        <span className="text-xs font-bold text-gray-500">Domain</span>
+                        <select value={oppDomain} onChange={(event) => setFilters((prev) => ({ ...prev, oppDomain: event.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white">
+                          {OPPORTUNITY_DOMAINS.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                      </label>
+
+                      <label className="space-y-1">
+                        <span className="text-xs font-bold text-gray-500">Industry</span>
+                        <select value={oppIndustry} onChange={(event) => setFilters((prev) => ({ ...prev, oppIndustry: event.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white">
+                          {OPPORTUNITY_INDUSTRIES.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                      </label>
+
+                      <label className="space-y-1">
+                        <span className="text-xs font-bold text-gray-500">Mode</span>
+                        <select value={oppMode} onChange={(event) => setFilters((prev) => ({ ...prev, oppMode: event.target.value }))} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white capitalize">
+                          {OPPORTUNITY_MODES.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                      </label>
                     </div>
                   </div>
 
@@ -1323,6 +1510,13 @@ export default function DiscoverPage() {
                         const tl = timeLeft(opp.deadline);
                         const Icon = OPP_ICONS[opp.type] || Gift;
                         const organiser = opp.organiser || opp.organization || 'ScaleScope';
+                        const place = [opp.area, opp.city].filter(Boolean).join(', ') || opp.location;
+                        const tags = [
+                          opp.domain,
+                          opp.industry,
+                          opp.mode,
+                          ...(Array.isArray(opp.tags) ? opp.tags.slice(0, 3) : []),
+                        ].filter(Boolean);
 
                         return (
                           <article key={opp.id} className="bg-white rounded-2xl p-4 border border-gray-100 lift">
@@ -1337,6 +1531,11 @@ export default function DiscoverPage() {
                                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize ${oppBadge(opp.type)}`}>
                                     {opp.type || 'opportunity'}
                                   </span>
+                                  {Number.isFinite(Number(opp.recommendation_score)) && (
+                                    <span className="text-xs font-black px-2 py-0.5 rounded-full bg-[#98DE38]/20 text-[#1B2D7F]">
+                                      {Math.round(opp.recommendation_score)}% fit
+                                    </span>
+                                  )}
                                 </div>
 
                                 {organiser && (
@@ -1358,10 +1557,10 @@ export default function DiscoverPage() {
 
                                   {tl && <span className={`font-semibold ${tl.cls}`}>{tl.label}</span>}
 
-                                  {opp.location && (
+                                  {place && (
                                     <span className="text-gray-500 flex items-center gap-1">
                                       <MapPin className="w-3" />
-                                      {opp.location}
+                                      {place}
                                     </span>
                                   )}
 
@@ -1378,6 +1577,22 @@ export default function DiscoverPage() {
                                     <span className="ml-auto text-xs text-gray-400 font-semibold">Coming soon</span>
                                   )}
                                 </div>
+
+                                {tags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 mt-3">
+                                    {[...new Set(tags)].slice(0, 5).map((tag) => (
+                                      <span key={`${opp.id}-${tag}`} className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-600 border border-gray-100 capitalize">
+                                        {tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {Array.isArray(opp.recommendation_reasons) && opp.recommendation_reasons.length > 0 && (
+                                  <p className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2 mt-3">
+                                    {opp.recommendation_reasons.join(' · ')}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </article>
@@ -1472,6 +1687,7 @@ export default function DiscoverPage() {
                   {[
                     { label: 'Mentor-seeking Students', value: people.filter((person) => person._type === 'mentor').length, cls: 'text-indigo-600' },
                     { label: 'Co-Founder Seekers', value: people.filter((person) => person._type === 'cofounder').length, cls: 'text-purple-600' },
+                    { label: 'Founder Collaborators', value: people.filter((person) => person._type === 'founder').length, cls: 'text-amber-600' },
                     { label: 'Startup Ideas', value: startups.length, cls: 'text-amber-600' },
                     { label: 'Opportunities', value: opportunities.length, cls: 'text-green-600' },
                   ].map((stat) => (
@@ -1488,8 +1704,8 @@ export default function DiscoverPage() {
                   <Briefcase className="w-4 text-[#1B2D7F]" /> Opportunity Flow
                 </h3>
                 <p className="text-sm text-gray-600">
-                  Opportunities come from the <span className="font-bold">opportunities</span> table. Admins can add internships,
-                  events, funding, hackathons, accelerators, and grants with deadline, type, organiser, and apply link.
+                  Opportunities come from the backend filtered <span className="font-bold">opportunities</span> feed. Add city,
+                  area, domain, industry, mode, tags, deadline, organiser, and apply link for clean tech discovery.
                 </p>
               </div>
             </aside>

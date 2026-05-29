@@ -1,5 +1,8 @@
-const supabase = require('../config/supabase');
+﻿const supabase = require('../config/supabase');
 const gemini = require('../config/gemini');
+
+const AUTO_REPLY_RECENT_AI_WINDOW_MS = Number(process.env.AUTO_REPLY_RECENT_AI_WINDOW_MS || 5 * 60 * 1000);
+const AUTO_REPLY_RECENT_HUMAN_WINDOW_MS = Number(process.env.AUTO_REPLY_RECENT_HUMAN_WINDOW_MS || 2 * 60 * 1000);
 
 async function getOtherParticipant(conversationId, senderId) {
     const { data, error } = await supabase
@@ -14,21 +17,11 @@ async function getOtherParticipant(conversationId, senderId) {
     })?.user_id || null;
 }
 
-function looksLikeQuestion(content = '') {
-    const text = content.trim();
-
-    if (!text) return false;
-
-    return (
-        text.includes('?') ||
-        /^(hi|hello|hey|can|could|would|what|why|how|when|where|are|is|do|does|did|will|should)\b/i.test(text)
-    );
-}
-
 exports.createMessage = async (convId, senderId, content) => {
     if (!convId) throw new Error('conversation id is required');
     if (!senderId) throw new Error('sender id is required');
     if (!content?.trim()) throw new Error('message content is required');
+    if (content.trim().length > 2000) throw new Error('message content is too long');
 
     const { data: membership, error: membershipError } = await supabase
         .from('conversation_participants')
@@ -62,7 +55,8 @@ exports.createMessage = async (convId, senderId, content) => {
       file_name,
       file_size,
       is_ai_generated,
-      created_at
+      created_at,
+      updated_at
     `)
         .single();
 
@@ -81,13 +75,13 @@ exports.createMessage = async (convId, senderId, content) => {
 
 exports.triggerAIReply = async (msg, convId, options = {}) => {
     try {
-        const { receiverOnline = false } = options;
+        const { receiverOnline = false, isReceiverOnline } = options;
 
         if (!msg?.content) return null;
 
         // If receiver is online, let the real user reply manually
         if (receiverOnline) {
-            console.log('🤖 AI reply skipped: receiver is online');
+            console.log('ðŸ¤– AI reply skipped: receiver is online');
             return null;
         }
 
@@ -95,12 +89,17 @@ exports.triggerAIReply = async (msg, convId, options = {}) => {
         const receiverId = await getOtherParticipant(convId, senderId);
 
         if (!receiverId) {
-            console.warn('🤖 AI reply skipped: receiver not found');
+            console.warn('ðŸ¤– AI reply skipped: receiver not found');
+            return null;
+        }
+
+        if (typeof isReceiverOnline === 'function' && isReceiverOnline(receiverId)) {
+            console.log('AI reply skipped: receiver came online');
             return null;
         }
 
         // Do not auto-reply too frequently
-        const recentWindow = new Date(Date.now() - 45 * 1000).toISOString();
+        const recentAiWindow = new Date(Date.now() - AUTO_REPLY_RECENT_AI_WINDOW_MS).toISOString();
 
         const { count: recentAiCount, error: recentAiError } = await supabase
             .from('messages')
@@ -108,28 +107,30 @@ exports.triggerAIReply = async (msg, convId, options = {}) => {
             .eq('conversation_id', convId)
             .eq('sender_id', receiverId)
             .eq('is_ai_generated', true)
-            .gte('created_at', recentWindow);
+            .gte('created_at', recentAiWindow);
 
         if (recentAiError) throw recentAiError;
 
         if ((recentAiCount || 0) > 0) {
-            console.log('🤖 AI reply skipped: recent auto-reply already exists');
+            console.log('ðŸ¤– AI reply skipped: recent auto-reply already exists');
             return null;
         }
 
         // If receiver recently replied manually, no AI needed
+        const recentHumanWindow = new Date(Date.now() - AUTO_REPLY_RECENT_HUMAN_WINDOW_MS).toISOString();
+
         const { count: recentHumanCount, error: recentHumanError } = await supabase
             .from('messages')
             .select('id', { count: 'exact', head: true })
             .eq('conversation_id', convId)
             .eq('sender_id', receiverId)
             .eq('is_ai_generated', false)
-            .gte('created_at', recentWindow);
+            .gte('created_at', recentHumanWindow);
 
         if (recentHumanError) throw recentHumanError;
 
         if ((recentHumanCount || 0) > 0) {
-            console.log('🤖 AI reply skipped: receiver recently replied manually');
+            console.log('ðŸ¤– AI reply skipped: receiver recently replied manually');
             return null;
         }
 
@@ -151,6 +152,7 @@ exports.triggerAIReply = async (msg, convId, options = {}) => {
         if (senderProfileError) throw senderProfileError;
 
         let receiverStudentProfile = null;
+        let receiverFounderProfile = null;
 
         if (receiverProfile?.user_type === 'student') {
             const { data, error } = await supabase
@@ -173,6 +175,34 @@ exports.triggerAIReply = async (msg, convId, options = {}) => {
 
             if (!error) {
                 receiverStudentProfile = data;
+            }
+        }
+
+        if (receiverProfile?.user_type === 'early-stage-founder') {
+            const { data, error } = await supabase
+                .from('founder_profiles')
+                .select(`
+            company_name,
+            idea_title,
+            industry,
+            startup_stage,
+            problem_statement,
+            solution_description,
+            unique_value_proposition,
+            target_market,
+            founder_role,
+            help_needed,
+            skills_needed,
+            hiring_roles,
+            funding_stage,
+            product_status,
+            current_challenges
+          `)
+                .eq('user_id', receiverId)
+                .maybeSingle();
+
+            if (!error) {
+                receiverFounderProfile = data;
             }
         }
 
@@ -204,49 +234,46 @@ exports.triggerAIReply = async (msg, convId, options = {}) => {
         const senderName = senderProfile?.full_name || 'there';
         const receiverName = receiverProfile?.full_name || 'User';
 
+        const profileContext = {
+            basic: {
+                name: receiverName,
+                role: receiverProfile?.user_type || 'user',
+                bio: receiverProfile?.bio || null,
+                location: receiverProfile?.location || null,
+            },
+            student: receiverStudentProfile || null,
+            founder: receiverFounderProfile || null,
+        };
+
         const prompt = `
-  You are writing an auto-reply on behalf of ${receiverName}, who is currently offline.
-  
-  Important:
-  - Speak as ${receiverName}, in first person.
-  - Do NOT say you are AI.
-  - Do NOT say "AI auto-reply".
-  - Be natural, helpful, and human-friendly.
-  - Continue the conversation based on the recent chat history.
-  - Answer the latest message directly.
-  - Mention that you are currently away/busy only briefly.
-  - Ask one relevant follow-up question if useful.
-  - Keep it under 45 words.
-  - Do not make fixed commitments like exact meeting times unless already mentioned by the user.
-  - Do not invent sensitive/private details.
-  - If the sender asks about startup idea, respond using the available startup context.
-  
-  Receiver profile:
-  Name: ${receiverName}
-  Role: ${receiverProfile?.user_type || 'user'}
-  Bio: ${receiverProfile?.bio || 'Not provided'}
-  Location: ${receiverProfile?.location || 'Not provided'}
-  University: ${receiverStudentProfile?.university || 'Not provided'}
-  Degree/Major: ${[receiverStudentProfile?.degree, receiverStudentProfile?.major].filter(Boolean).join(' / ') || 'Not provided'}
-  Startup idea title: ${receiverStudentProfile?.idea_title || 'Not provided'}
-  Startup domain: ${receiverStudentProfile?.idea_domain || 'Not provided'}
-  Startup description: ${receiverStudentProfile?.startup_idea_description || 'Not provided'}
-  Target audience: ${receiverStudentProfile?.target_audience || 'Not provided'}
-  Unique value proposition: ${receiverStudentProfile?.unique_value_prop || 'Not provided'}
-  Commitment level: ${receiverStudentProfile?.commitment_level || 'Not provided'}
-  Help needed: ${Array.isArray(receiverStudentProfile?.help_needed) ? receiverStudentProfile.help_needed.join(', ') : receiverStudentProfile?.help_needed || 'Not provided'}
-  
-  Sender:
-  Name: ${senderName}
-  
-  Recent conversation:
-  ${conversationHistory}
-  
-  Latest message from ${senderName}:
-  "${msg.content}"
-  
-  Write ${receiverName}'s auto-reply:
-  `;
+You are ScaleScope's availability assistant for ${receiverName}.
+${receiverName} is unavailable right now, so you are helping keep the conversation warm until they return.
+
+Rules:
+- Do not pretend to be ${receiverName}.
+- Do not write in first person as ${receiverName}.
+- Make it clear, naturally, that this is an auto-reply while ${receiverName} is away.
+- Reply like a helpful human assistant, not a chatbot.
+- Be warm, concise, and natural.
+- Acknowledge ${senderName}'s latest message directly.
+- Use the receiver profile only when it is relevant.
+- Ask one simple next question if it helps ${receiverName} reply later.
+- Keep it under 55 words.
+- Do not promise meetings, funding, investment, acceptance, partnership, hiring, or exact response times.
+- Do not invent sensitive/private details.
+- Avoid phrases like "as an AI", "I am a bot", or formal customer-support wording.
+
+Receiver profile context:
+${JSON.stringify(profileContext, null, 2)}
+
+Recent conversation:
+${conversationHistory}
+
+Latest message from ${senderName}:
+"${msg.content}"
+
+Write only the auto-reply text:
+`;
 
         const model = gemini.getGeminiModel({
             maxTokens: 120,
@@ -262,6 +289,8 @@ exports.triggerAIReply = async (msg, convId, options = {}) => {
         aiText = aiText
             .replace(/^AI Auto-Reply:\s*/i, '')
             .replace(/^Auto-reply:\s*/i, '')
+            .replace(/^ScaleScope Auto-Reply:\s*/i, '')
+            .replace(/^ScaleScope Assistant:\s*/i, '')
             .replace(/^Usman Ali Shah:\s*/i, '')
             .replace(/^User:\s*/i, '')
             .trim();
@@ -270,8 +299,9 @@ exports.triggerAIReply = async (msg, convId, options = {}) => {
 
         // Avoid ultra-short weak replies like "Hey!"
         if (aiText.split(/\s+/).length < 5) {
-            aiText = `Hey ${senderName.split(' ')[0]}, I’m away right now but yes, we can discuss it. Which part would you like to start with?`;
+            aiText = `Hey ${senderName.split(' ')[0]}, ${receiverName} is away right now. You can share what you would like to discuss, and they can continue when they are back.`;
         }
+
 
         const now = new Date().toISOString();
 

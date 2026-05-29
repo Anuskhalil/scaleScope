@@ -61,6 +61,109 @@ const parseFunding = (value) => {
   return Number.isFinite(n) ? n : null;
 };
 
+const lowerArray = (value) => safeArray(value).map((item) => String(item).toLowerCase());
+
+const scoreFounderTeamCandidate = (founderProfile = {}, candidate = {}) => {
+  let score = 20;
+  const reasons = [];
+  const neededSkills = lowerArray(founderProfile.skills_needed);
+  const hiringRoles = lowerArray(founderProfile.hiring_roles);
+  const candidateSkills = lowerArray(candidate.skills);
+  const candidateTopics = lowerArray([
+    ...safeArray(candidate.interests),
+    candidate.idea_domain,
+    candidate.industry,
+  ].filter(Boolean));
+
+  const skillMatches = neededSkills.filter((need) =>
+    candidateSkills.some((skill) => skill.includes(need) || need.includes(skill))
+  );
+
+  if (skillMatches.length) {
+    score += Math.min(40, skillMatches.length * 15);
+    reasons.push(`Skills needed: ${skillMatches.slice(0, 2).join(', ')}`);
+  }
+
+  if (hiringRoles.some((role) =>
+    candidateSkills.some((skill) => skill.includes(role) || role.includes(skill))
+  )) {
+    score += 15;
+    reasons.push('Fits a hiring role');
+  }
+
+  if (
+    founderProfile.commitment_level &&
+    candidate.commitment &&
+    founderProfile.commitment_level === candidate.commitment
+  ) {
+    score += 12;
+    reasons.push('Commitment level aligns');
+  }
+
+  if (
+    founderProfile.industry &&
+    candidateTopics.some((topic) =>
+      topic.includes(String(founderProfile.industry).toLowerCase())
+    )
+  ) {
+    score += 10;
+    reasons.push(`Relevant to ${founderProfile.industry}`);
+  }
+
+  if (candidate.has_idea) {
+    score += 5;
+    reasons.push('Startup-active profile');
+  }
+
+  if (Number(candidate.profile_completion || 0) >= 70) {
+    score += 8;
+    reasons.push('Profile is well completed');
+  }
+
+  return {
+    matchScore: Math.min(100, Math.round(score)),
+    reasons: reasons.length ? reasons.slice(0, 3) : ['Available profile data shows a possible team fit'],
+  };
+};
+
+const scoreFounderInvestor = (founderProfile = {}, investor = {}) => {
+  let score = 15;
+  const reasons = [];
+  const stage = String(founderProfile.funding_stage || founderProfile.startup_stage || '').toLowerCase();
+  const industry = String(founderProfile.industry || '').toLowerCase();
+  const stages = lowerArray(investor.preferred_stages);
+  const industries = lowerArray(investor.preferred_industries);
+
+  if (stage && stages.some((item) => item.includes(stage) || stage.includes(item))) {
+    score += 35;
+    reasons.push(`Stage fit: ${founderProfile.funding_stage || founderProfile.startup_stage}`);
+  }
+
+  if (industry && industries.some((item) => item.includes(industry) || industry.includes(item))) {
+    score += 35;
+    reasons.push(`Industry fit: ${founderProfile.industry}`);
+  }
+
+  if (investor.is_verified) {
+    score += 8;
+    reasons.push('Verified investor profile');
+  }
+
+  if (investor.is_active !== false) {
+    score += 4;
+    reasons.push('Open profile for discovery');
+  }
+
+  if (!stages.length && !industries.length) {
+    reasons.push('Detailed investment preferences not added yet');
+  }
+
+  return {
+    matchScore: Math.min(100, Math.round(score)),
+    reasons: reasons.slice(0, 3),
+  };
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FOUNDER PROFILE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -405,6 +508,7 @@ export async function fetchFounderDashboardData(userId) {
     investors = await fetchInvestors({
       stage: founderProfile.funding_stage || founderProfile.startup_stage || '',
       industry: founderProfile.industry || '',
+      founderProfile,
       limit: 6,
     });
   } catch (e) {
@@ -415,6 +519,8 @@ export async function fetchFounderDashboardData(userId) {
     teamCandidates = await fetchTeamCandidates({
       skills: safeArray(founderProfile.skills_needed),
       commitment: founderProfile.commitment_level || '',
+      excludeUserId: userId,
+      founderProfile,
       limit: 6,
     });
   } catch (e) {
@@ -440,9 +546,12 @@ export async function fetchTeamCandidates({
   skills = [],
   commitment = '',
   industry = '',
+  role = '',
+  excludeUserId = '',
+  founderProfile = {},
   limit = 24,
 } = {}) {
-  let query = supabase
+  let studentsQuery = supabase
     .from('student_profiles')
     .select(`
       id,
@@ -467,54 +576,119 @@ export async function fetchTeamCandidates({
         bio,
         avatar_url,
         location,
-        skills,
         linkedin_url,
         github_url
       )
     `)
-    .or('looking_for.cs.{"Co-Founder"},looking_for.cs.{"Startup"}')
-    .limit(limit);
+    .or('looking_for.cs.{"Co-Founder"},looking_for.cs.{"Startup"}');
 
-  const { data, error } = await query;
+  let foundersQuery = supabase
+    .from('founder_profiles')
+    .select(`
+      id,
+      user_id,
+      company_name,
+      idea_title,
+      industry,
+      startup_stage,
+      commitment_level,
+      weekly_hours,
+      looking_for,
+      help_needed,
+      skills_needed,
+      founder_skills,
+      profile_completion,
+      profiles!founder_profiles_user_id_fkey (
+        id,
+        full_name,
+        bio,
+        avatar_url,
+        location,
+        linkedin_url,
+        github_url
+      )
+    `)
+    .contains('looking_for', ['Co-Founder']);
 
-  if (error) throw error;
+  if (excludeUserId) {
+    studentsQuery = studentsQuery.neq('user_id', excludeUserId);
+    foundersQuery = foundersQuery.neq('user_id', excludeUserId);
+  }
 
-  let result = data || [];
+  const [studentsRes, foundersRes] = await Promise.all([
+    studentsQuery.limit(limit),
+    foundersQuery.limit(limit),
+  ]);
+
+  if (studentsRes.error) throw studentsRes.error;
+  if (foundersRes.error) throw foundersRes.error;
+
+  let result = [
+    ...(studentsRes.data || []).map((student) => ({
+      ...student,
+      candidate_type: 'student',
+      name: student.profiles?.full_name,
+      avatar: student.profiles?.avatar_url,
+      bio: student.profiles?.bio || student.career_goals || student.startup_idea_description,
+      location: student.profiles?.location,
+      commitment: student.commitment_level,
+      has_idea: student.has_startup_idea,
+      skills: safeArray(student.skills_with_levels)
+        .map((item) => item?.skill || item)
+        .filter(Boolean),
+    })),
+    ...(foundersRes.data || []).map((founder) => ({
+      ...founder,
+      candidate_type: 'founder',
+      name: founder.profiles?.full_name,
+      avatar: founder.profiles?.avatar_url,
+      bio: founder.profiles?.bio || founder.idea_title || founder.company_name,
+      location: founder.profiles?.location,
+      commitment: founder.commitment_level,
+      interests: [founder.industry].filter(Boolean),
+      has_idea: true,
+      skills: safeArray(founder.founder_skills),
+    })),
+  ];
+
+  if (role) {
+    result = result.filter((candidate) => safeArray(candidate.looking_for).includes(role));
+  }
 
   if (skills.length > 0) {
     const lowerSkills = skills.map((skill) => String(skill).toLowerCase());
 
-    result = result.filter((student) => {
-      const studentSkills = [
-        ...safeArray(student.skills_with_levels).map((item) =>
-          String(item?.skill || item).toLowerCase()
-        ),
-        ...safeArray(student.profiles?.skills).map((item) =>
-          String(item).toLowerCase()
-        ),
-      ];
-
-      return lowerSkills.some((wanted) =>
-        studentSkills.some((skill) => skill.includes(wanted) || wanted.includes(skill))
-      );
-    });
+    result = result.filter((candidate) =>
+      lowerSkills.some((wanted) =>
+        safeArray(candidate.skills).some((skill) => {
+          const lowerSkill = String(skill).toLowerCase();
+          return lowerSkill.includes(wanted) || wanted.includes(lowerSkill);
+        })
+      )
+    );
   }
 
   if (commitment) {
-    result = result.filter((student) => student.commitment_level === commitment);
+    result = result.filter((candidate) => candidate.commitment === commitment);
   }
 
   if (industry) {
     const lowerIndustry = industry.toLowerCase();
 
-    result = result.filter((student) => {
-      return safeArray(student.interests).some((interest) =>
+    result = result.filter((candidate) => {
+      return safeArray(candidate.interests).some((interest) =>
         String(interest).toLowerCase().includes(lowerIndustry)
-      ) || String(student.idea_domain || '').toLowerCase().includes(lowerIndustry);
+      ) || String(candidate.idea_domain || candidate.industry || '').toLowerCase().includes(lowerIndustry);
     });
   }
 
-  return result;
+  return result
+    .map((candidate) => ({
+      ...candidate,
+      ...scoreFounderTeamCandidate(founderProfile, candidate),
+    }))
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, limit);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -586,6 +760,7 @@ export async function fetchMentorsForFounder({
 export async function fetchInvestors({
   stage = '',
   industry = '',
+  founderProfile = {},
   limit = 20,
 } = {}) {
   let query = supabase
@@ -630,9 +805,36 @@ export async function fetchInvestors({
 
   const { data, error } = await query;
 
-  if (error) throw error;
+  if (!error) {
+    return (data || [])
+      .map((investor) => ({
+        ...investor,
+        ...scoreFounderInvestor(founderProfile, investor),
+      }))
+      .sort((a, b) => b.matchScore - a.matchScore);
+  }
 
-  return data || [];
+  console.warn('Investor profile query unavailable, using profile fallback:', error.message);
+
+  const { data: profileRows, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, full_name, bio, avatar_url, location, linkedin_url, twitter_url, user_type')
+    .eq('user_type', 'investor')
+    .limit(limit);
+
+  if (profilesError) throw profilesError;
+
+  return (profileRows || []).map((profile) => ({
+    id: profile.id,
+    profile_id: profile.id,
+    user_id: profile.id,
+    investor_type: 'Investor',
+    is_active: true,
+    preferred_stages: [],
+    preferred_industries: [],
+    profiles: profile,
+    ...scoreFounderInvestor(founderProfile, {}),
+  }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

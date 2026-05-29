@@ -128,19 +128,27 @@ exports.respondRequest = async (requestId, action, userId) => {
         ? [req.sender_id, req.receiver_id]
         : [req.receiver_id, req.sender_id];
 
-    const { error: connErr } = await supabase
+    const { data: existingConnection, error: existingConnectionErr } = await supabase
       .from('connections')
-      .upsert(
-        {
+      .select('id')
+      .eq('user_1', u1)
+      .eq('user_2', u2)
+      .maybeSingle();
+
+    if (existingConnectionErr) throw existingConnectionErr;
+
+    if (!existingConnection) {
+      const { error: connErr } = await supabase
+        .from('connections')
+        .insert({
           user_1: u1,
           user_2: u2,
           connection_type: req.type,
           connected_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_1,user_2' }
-      );
+        });
 
-    if (connErr) throw connErr;
+      if (connErr) throw connErr;
+    }
 
     const { data: convId, error: convErr } = await supabase.rpc(
       'create_conversation_with_participants',
@@ -151,7 +159,11 @@ exports.respondRequest = async (requestId, action, userId) => {
       }
     );
 
-    if (convErr) throw convErr;
+    if (convErr) {
+      throw new Error(
+        `Connection accepted, but conversation setup failed. Please run the create_conversation_with_participants SQL function. ${convErr.message}`
+      );
+    }
 
     conversationId = convId;
   }

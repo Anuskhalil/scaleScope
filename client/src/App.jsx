@@ -27,6 +27,7 @@ import FounderProfilePage from './pages/EarlyStageFounderRolePages/FounderProfil
 import DiscoverPage from './pages/StudentRolePages/DiscoverPage';
 import MessagesPage from './pages/StudentRolePages/MessagesPage';
 import FindMentorsPage from './pages/StudentRolePages/FindMentorsPage';
+import MeetingRoomPage from './pages/MeetingRoomPage';
 
 // ── Student Pages ──
 import StudentDashboard from './pages/StudentRolePages/StudentDashbaord';
@@ -400,6 +401,15 @@ export default function App() {
           {/* ───────────────────────────────────────────── */}
           {/* New role-prefixed student routes */}
           {/* ───────────────────────────────────────────── */}
+          <Route
+            path="/meetings/:meetingId"
+            element={
+              <RolePage allowedRoles={['student', 'early-stage-founder']}>
+                <MeetingRoomPage />
+              </RolePage>
+            }
+          />
+
           <Route
             path="/student/dashboard"
             element={

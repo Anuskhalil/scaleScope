@@ -27,6 +27,7 @@ export default function StudentViewProfile() {
 
   const [profile, setProfile] = useState(null);
   const [student, setStudent] = useState(null);
+  const [founder, setFounder] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,7 +38,7 @@ export default function StudentViewProfile() {
       try {
         setState({ loading: true, error: null });
 
-        const [profileRes, studentRes, connectionsRes] = await Promise.allSettled([
+        const [profileRes, studentRes, founderRes, connectionsRes] = await Promise.allSettled([
           supabase
             .from('profiles')
             .select('id, full_name, email, user_type, avatar_url, bio, location')
@@ -66,6 +67,25 @@ export default function StudentViewProfile() {
             .eq('user_id', userId)
             .maybeSingle(),
 
+          supabase
+            .from('founder_profiles')
+            .select(`
+              user_id,
+              company_name,
+              idea_title,
+              industry,
+              startup_stage,
+              problem_statement,
+              solution_description,
+              unique_value_proposition,
+              target_audience,
+              founder_skills,
+              commitment_level,
+              looking_for
+            `)
+            .eq('user_id', userId)
+            .maybeSingle(),
+
           backendApi.getMyConnections(),
         ]);
 
@@ -74,6 +94,8 @@ export default function StudentViewProfile() {
 
         const studentData =
           studentRes.status === 'fulfilled' ? studentRes.value.data : null;
+        const founderData =
+          founderRes.status === 'fulfilled' ? founderRes.value.data : null;
 
         if (!profileData) {
           throw new Error('Profile not found');
@@ -90,6 +112,7 @@ export default function StudentViewProfile() {
 
         setProfile(profileData);
         setStudent(studentData);
+        setFounder(founderData);
         setConnectionStatus(isConnected ? 'accepted' : null);
 
         setState({ loading: false, error: null });
@@ -173,7 +196,7 @@ export default function StudentViewProfile() {
     );
   }
 
-  const skills = student?.skills_with_levels || [];
+  const skills = student?.skills_with_levels || founder?.founder_skills || [];
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 pb-16 px-4">
@@ -359,6 +382,41 @@ export default function StudentViewProfile() {
               <p className="text-sm text-gray-600 mt-2">
                 <span className="font-bold">Unique value:</span>{' '}
                 {student.unique_value_prop}
+              </p>
+            )}
+          </div>
+        )}
+
+        {founder && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 mt-5">
+            <h2 className="font-black text-gray-900 mb-3 flex items-center gap-2">
+              <Lightbulb className="w-5 text-[#1B2D7F]" />
+              Founder Startup
+            </h2>
+
+            <p className="text-lg font-bold text-gray-900">
+              {founder.idea_title || founder.company_name || 'Startup'}
+            </p>
+
+            <p className="text-sm text-gray-500 mt-1">
+              {[founder.industry, founder.startup_stage].filter(Boolean).join(' / ') || 'Startup stage not added'}
+            </p>
+
+            {(founder.problem_statement || founder.solution_description) && (
+              <p className="text-sm text-gray-600 mt-3">
+                {founder.problem_statement || founder.solution_description}
+              </p>
+            )}
+
+            {founder.target_audience && (
+              <p className="text-sm text-gray-600 mt-3">
+                <span className="font-bold">Target audience:</span> {founder.target_audience}
+              </p>
+            )}
+
+            {founder.unique_value_proposition && (
+              <p className="text-sm text-gray-600 mt-2">
+                <span className="font-bold">Unique value:</span> {founder.unique_value_proposition}
               </p>
             )}
           </div>

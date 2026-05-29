@@ -103,7 +103,7 @@ export default function RoleNavbar() {
 
   const getRoleNavItems = () => {
     const baseItems = [
-      { icon: <Home className="w-4 h-4" />, label: 'Dashboard', path: `${roleBase}/dashboard` },
+      { icon: <Home className="w-3 h-4" />, label: 'Dashboard', path: `${roleBase}/dashboard` },
       { icon: <Search className="w-4 h-4" />, label: 'Discover', path: `${roleBase}/discover` },
       { icon: <MessageSquare className="w-4 h-4" />, label: 'Messages', path: `${roleBase}/messages` },
     ];
@@ -112,23 +112,23 @@ export default function RoleNavbar() {
       case 'student':
         return [
           ...baseItems,
-          { icon: <Users className="w-4 h-4" />, label: 'Find Mentors', path: '/student/find-mentors' },
-          { icon: <Rocket className="w-4 h-4" />, label: 'Find Co-Founders', path: '/student/find-cofounders' },
+          { icon: <Users className="w-3 h-4" />, label: 'Find Mentors', path: '/student/find-mentors' },
+          { icon: <Rocket className="w-3 h-4" />, label: 'Find Co-Founders', path: '/student/find-cofounders' },
         ];
 
       case 'early-stage-founder':
         return [
           ...baseItems,
-          { icon: <Users className="w-4 h-4" />, label: 'Find Team', path: '/founder/find-team' },
-          { icon: <Briefcase className="w-4 h-4" />, label: 'Find Investors', path: '/founder/find-investors' },
-          { icon: <UserCheck className="w-4 h-4" />, label: 'Find Mentors', path: '/founder/find-mentors' },
+          { icon: <Users className="w-3 h-4" />, label: 'Find Team', path: '/founder/find-team' },
+          { icon: <Briefcase className="w-3 h-4" />, label: 'Find Investors', path: '/founder/find-investors' },
+          { icon: <UserCheck className="w-3 h-4" />, label: 'Find Mentors', path: '/founder/find-mentors' },
         ];
 
       case 'mentor':
         return [
           ...baseItems,
-          { icon: <GraduationCap className="w-4 h-4" />, label: 'My Mentees', path: '/mentor/my-mentees' },
-          { icon: <Users className="w-4 h-4" />, label: 'Find Founders', path: '/mentor/find-founders' },
+          { icon: <GraduationCap className="w-3 h-4" />, label: 'My Mentees', path: '/mentor/my-mentees' },
+          { icon: <Users className="w-3 h-4" />, label: 'Find Founders', path: '/mentor/find-founders' },
         ];
 
       case 'investor':
@@ -195,10 +195,10 @@ export default function RoleNavbar() {
 
           {/* Desktop Right Section */}
           <div className="hidden md:flex items-center gap-4">
-            <button className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all relative">
+            {/* <button className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all relative">
               <Bell className="w-5 h-5" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            </button> */}
 
             {/* Profile Dropdown */}
             <div className="relative">

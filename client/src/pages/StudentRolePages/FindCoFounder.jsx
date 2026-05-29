@@ -473,6 +473,8 @@ const CoFounderCard = memo(function CoFounderCard({
   const personId = getPersonId(candidate);
   const p = useMemo(() => normalizeProfile(candidate), [candidate]);
   const score = getScore(candidate);
+  const isFounderCandidate =
+    candidate.candidate_type === 'founder' || p.user_type === 'early-stage-founder';
 
   const reasons = useMemo(() => {
     return candidate.reasons?.length
@@ -523,7 +525,7 @@ const CoFounderCard = memo(function CoFounderCard({
               </span>
 
               <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700">
-                Co-Founder
+                {isFounderCandidate ? 'Founder Match' : 'Co-Founder'}
               </span>
             </div>
           </div>

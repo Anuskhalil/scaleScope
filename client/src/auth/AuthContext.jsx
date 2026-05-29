@@ -95,14 +95,22 @@ export function AuthProvider({ children }) {
       try {
         const { data, error } = await supabase.auth.getSession();
 
-        if (error) {
-          console.error('getSession error:', error);
-        }
+        if (error) throw error;
 
         if (!mounted) return;
 
-        setSession(data?.session || null);
-        setUser(data?.session?.user || null);
+        const nextSession = data?.session || null;
+        const nextUser = nextSession?.user || null;
+
+        setSession(nextSession);
+        setUser(nextUser);
+
+        if (nextUser?.id) {
+          await Promise.all([loadProfile(nextUser.id), refreshMfaLevel()]);
+        } else {
+          setProfile(null);
+          setMfaLevel(null);
+        }
       } catch (err) {
         console.error('Auth init failed:', err);
 
@@ -124,9 +132,22 @@ export function AuthProvider({ children }) {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
 
+      const nextUser = nextSession?.user || null;
+
       setSession(nextSession || null);
-      setUser(nextSession?.user || null);
+      setUser(nextUser);
       setLoading(false);
+
+      if (nextUser?.id) {
+        setTimeout(() => {
+          if (!mounted) return;
+          loadProfile(nextUser.id);
+          refreshMfaLevel();
+        }, 0);
+      } else {
+        setProfile(null);
+        setMfaLevel(null);
+      }
     });
 
     return () => {

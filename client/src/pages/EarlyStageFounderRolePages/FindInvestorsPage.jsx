@@ -3,35 +3,32 @@
 // Shows: firm_name, investment_stage, ticket_size, industries
 // CTA: Send Pitch → connection_request (type: 'investor_contact')
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import {
   fetchInvestors,
+  fetchFounderProfile,
   sendConnectionRequest,
   getOrCreateConversation,
   formatCheckSize,
 } from '../../services/founderService';
 import {
   Search, DollarSign, MessageSquare, Send, CheckCircle,
-  MapPin, Filter, Loader, AlertTriangle, RefreshCw,
-  ChevronRight, X, Sparkles, Building2, TrendingUp,
-  Globe, Linkedin, Twitter, ExternalLink,
+  MapPin, Loader, AlertTriangle, RefreshCw,
+  X, Sparkles, Linkedin, Twitter, Info,
+  ArrowRight, SlidersHorizontal, Building2,
 } from 'lucide-react';
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
+  :root{--primary:#98DE38;--secondary:#1B2D7F;--gray-50:#F9FAFB}
   .ss{font-family:'Syne',sans-serif}.dm{font-family:'DM Sans',sans-serif}
   .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
-  .lift:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(5,150,105,.09)}
-  .g-found{background:linear-gradient(135deg,#f59e0b,#ef4444)}
-  .g-em{background:linear-gradient(135deg,#059669,#0891b2)}
-  .page-bg{background-color:#f0fdf4;background-image:radial-gradient(circle,#86efac 1px,transparent 1px);background-size:28px 28px}
-  .chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;color:#64748b;transition:all .14s}
-  .chip:hover{border-color:#6ee7b7;color:#065f46}
-  .chip.on{background:#ecfdf5;border-color:#6ee7b7;color:#065f46}
-  .filter-panel{border-bottom:1px solid #f3f4f6;padding-bottom:16px;margin-bottom:16px}
-  .filter-panel:last-child{border-bottom:none;padding-bottom:0;margin-bottom:0}
+  .lift:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(27,45,127,.12)}
+  .g-found{background:linear-gradient(135deg,#1B2D7F,#2A3F8F)}
+  .g-em{background:linear-gradient(135deg,#98DE38,#7EC42E)}
+  .page-bg{background-color:var(--gray-50);background-image:radial-gradient(circle,rgba(152,222,56,.08) 1px,transparent 1px);background-size:28px 28px}
   .slide-in{animation:si .28s cubic-bezier(.32,.72,0,1) both}
   @keyframes si{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
   .f0{animation:fu .32s ease both}.f1{animation:fu .32s .06s ease both}
@@ -42,10 +39,13 @@ const CSS = `
   .modal-pop{animation:mp .22s cubic-bezier(.34,1.4,.64,1) both}
   @keyframes mp{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
   .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .14s;background:#fff}
-  .inp:focus{border-color:#059669}
+  .inp:focus{border-color:#98DE38}
   .ta{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:12px;font-size:14px;outline:none;resize:none;font-family:'DM Sans',sans-serif;transition:border-color .14s;background:#f8fafc}
   .ta:focus{border-color:#059669;background:#fff}
   .verify-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:#ecfdf5;color:#059669;border:1.5px solid #6ee7b7}
+  .tooltip-wrap{position:relative}
+  .tooltip-wrap:hover .tooltip-box,.tooltip-wrap:focus-within .tooltip-box{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
+  .tooltip-box{position:absolute;bottom:calc(100% + 8px);left:50%;z-index:20;width:260px;padding:10px 12px;border-radius:10px;background:#1B2D7F;color:#fff;font-size:12px;opacity:0;visibility:hidden;transform:translateX(-50%) translateY(4px);transition:all .15s ease;box-shadow:0 8px 24px rgba(0,0,0,.2)}
 `;
 
 const STAGE_OPTS = ['Pre-seed', 'Seed', 'Series A', 'Series B', 'Series B+'];
@@ -76,8 +76,10 @@ function InvestorCard({ investor, onPitch, onMessage, pitchState }) {
   const uid = investor.profile_id || investor.user_id;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm lift">
-      <div className="p-5">
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm lift p-5">
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="hidden sm:block w-1 rounded-full self-stretch g-em" aria-hidden="true" />
+        <div className="flex-1 min-w-0">
         {/* Header */}
         <div className="flex items-start gap-3 mb-3">
           <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradFor(uid)} flex items-center justify-center text-white text-sm font-bold ss flex-shrink-0`}>
@@ -110,6 +112,17 @@ function InvestorCard({ investor, onPitch, onMessage, pitchState }) {
             {p.bio || investor.what_i_look_for || investor.investment_thesis}
           </p>
         )}
+
+        <div className="flex flex-wrap gap-2 mb-3">
+          <span className="text-xs font-black px-2.5 py-1 rounded-full bg-[#98DE38]/20 text-[#1B2D7F]">
+            {investor.matchScore || 15}% Match
+          </span>
+          {(investor.reasons || []).slice(0, 2).map((reason) => (
+            <span key={reason} className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-semibold">
+              {reason}
+            </span>
+          ))}
+        </div>
 
         {/* Stages */}
         {stages.length > 0 && (
@@ -175,20 +188,25 @@ function InvestorCard({ investor, onPitch, onMessage, pitchState }) {
         </div>
 
         {/* CTAs */}
-        <div className="flex gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <Link to={`/user-profile/${uid}`}
+            className="flex items-center justify-center py-2.5 border-2 border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-all">
+            View Profile
+          </Link>
           <button onClick={onMessage}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border-2 border-slate-200 text-slate-600 hover:border-emerald-200 hover:text-emerald-600 rounded-xl text-xs font-bold transition-all">
+            className="flex items-center justify-center gap-1.5 py-2.5 border-2 border-slate-200 text-slate-600 hover:border-emerald-200 hover:text-emerald-600 rounded-xl text-xs font-bold transition-all">
             <MessageSquare className="w-3.5 h-3.5" /> Message
           </button>
           <button onClick={onPitch} disabled={pitchState === 'sent' || pitchState === 'sending'}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${pitchState === 'sent' ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
+            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${pitchState === 'sent' ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
                 pitchState === 'sending' ? 'g-em text-white opacity-70 cursor-wait' :
-                  'g-em text-white hover:opacity-90'
+                  'g-em text-black hover:opacity-90'
               }`}>
             {pitchState === 'sent' ? <><CheckCircle className="w-3.5 h-3.5" />Pitched</> :
               pitchState === 'sending' ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
                 <><Send className="w-3.5 h-3.5" />Send Pitch</>}
           </button>
+        </div>
         </div>
       </div>
     </div>
@@ -207,22 +225,35 @@ export default function FindInvestorsPage() {
   const [stageF, setStageF] = useState('');
   const [industryF, setIndustryF] = useState('');
   const [locationF, setLocationF] = useState('');
+  const [matchBand, setMatchBand] = useState('all');
   const [pitchStates, setPitchStates] = useState({});
   const [pitchModal, setPitchModal] = useState(null); // investor
   const [pitchText, setPitchText] = useState('');
   const [sending, setSending] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [founderProfile, setFounderProfile] = useState({});
 
   const load = useCallback(async (stage = stageF, industry = industryF) => {
+    if (!user?.id) return;
     setLoading(true); setError('');
     try {
-      const data = await fetchInvestors({ stage, industry, limit: 30 });
+      const founderData = founderProfile.user_id
+        ? founderProfile
+        : (await fetchFounderProfile(user?.id)).founderProfile || {};
+
+      if (!founderProfile.user_id) setFounderProfile(founderData);
+
+      const data = await fetchInvestors({
+        stage,
+        industry,
+        founderProfile: founderData,
+        limit: 30,
+      });
       setInvestors(data);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [stageF, industryF]);
+  }, [stageF, industryF, user?.id, founderProfile]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const handlePitch = (investor) => {
     setPitchModal(investor);
@@ -254,7 +285,18 @@ export default function FindInvestorsPage() {
     } catch (e) { console.error(e); }
   };
 
-  // Client-side text search + location
+  const stageOptions = useMemo(() => {
+    const result = new Set(STAGE_OPTS);
+    investors.forEach((investor) => (investor.preferred_stages || investor.investment_stage || []).forEach((stage) => result.add(stage)));
+    return ['', ...result];
+  }, [investors]);
+
+  const industryOptions = useMemo(() => {
+    const result = new Set(INDUSTRY_OPTS);
+    investors.forEach((investor) => (investor.preferred_industries || investor.industries_of_interest || []).forEach((industry) => result.add(industry)));
+    return ['', ...result];
+  }, [investors]);
+
   const shown = investors.filter(inv => {
     const p = inv.profiles || {};
     if (locationF) {
@@ -271,93 +313,71 @@ export default function FindInvestorsPage() {
       ].filter(Boolean).join(' ').toLowerCase();
       if (!searchable.includes(q)) return false;
     }
+    if (matchBand === '60plus' && Number(inv.matchScore || 0) < 60) return false;
+    if (matchBand === 'below60' && Number(inv.matchScore || 0) >= 60) return false;
     return true;
   });
+
+  const strongCount = investors.filter((investor) => Number(investor.matchScore || 0) >= 60).length;
+  const exploreCount = investors.length - strongCount;
+
+  const resetFilters = () => {
+    setSearch('');
+    setStageF('');
+    setIndustryF('');
+    setLocationF('');
+    setMatchBand('all');
+    load('', '');
+  };
 
   return (
     <>
       <style>{CSS}</style>
       <div className="min-h-screen page-bg dm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
 
           {/* Header */}
           <div className="mb-8 f0">
-            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-full mb-3">
+            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#1B2D7F] bg-[#98DE38]/20 px-3 py-1.5 rounded-full mb-3">
               <DollarSign className="w-3.5 h-3.5" /> Find Investors
             </div>
-            <h1 className="ss font-black text-4xl text-slate-900 mb-2">Find Investors</h1>
-            <p className="text-slate-600 text-lg max-w-xl">
-              Angel investors and VCs actively looking for early-stage startups.
-              Filter by stage, industry, and location. Send your pitch with one click.
-            </p>
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+              <div>
+                <h1 className="ss font-black text-4xl text-slate-900 mb-2">Investor Fit</h1>
+                <p className="text-slate-600 text-sm max-w-xl">
+                  Explore investors suggested from your startup stage and industry context, then pitch with a focused intro.
+                </p>
+              </div>
+              <Link to="/founder/profile" className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50">
+                Improve Matching <ArrowRight className="w-4" />
+              </Link>
+            </div>
           </div>
 
-          <div className="grid lg:grid-cols-4 gap-6">
+          <section className="grid sm:grid-cols-3 gap-3 mb-6 f1">
+            <div className="bg-white rounded-2xl p-4 border border-slate-100"><p className="text-xs text-slate-500">Available investor matches</p><p className="text-2xl font-black text-slate-900">{investors.length}</p></div>
+            <div className="bg-white rounded-2xl p-4 border border-slate-100"><p className="text-xs text-slate-500">Explore matches below 60%</p><p className="text-2xl font-black text-slate-900">{exploreCount}</p></div>
+            <div className="bg-white rounded-2xl p-4 border border-slate-100"><p className="text-xs text-slate-500">Strong matches 60%+</p><p className="text-2xl font-black text-slate-900">{strongCount}</p></div>
+          </section>
 
-            {/* Filter sidebar */}
-            <aside className="lg:col-span-1 f1">
-              <button onClick={() => setShowFilters(!showFilters)}
-                className="lg:hidden w-full flex items-center justify-between p-3.5 bg-white rounded-xl border border-emerald-100 mb-3 shadow-sm font-semibold text-sm text-slate-700">
-                <span className="flex items-center gap-2"><Filter className="w-4 h-4 text-emerald-500" />Filters</span>
-                <ChevronRight className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-90' : ''}`} />
-              </button>
+          <section className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 f1">
+            <div className="flex items-center gap-2">
+              <Search className="w-5 text-slate-400" />
+              <input className="flex-1 outline-none text-sm" placeholder="Search by investor, fund, industry, or thesis..." value={search} onChange={e => setSearch(e.target.value)} />
+              {search && <button type="button" onClick={() => setSearch('')} className="p-1 hover:bg-slate-100 rounded"><X className="w-4 text-slate-400" /></button>}
+            </div>
+            <div className="grid md:grid-cols-5 gap-3 mt-4">
+              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Match band</label><select value={matchBand} onChange={e => setMatchBand(e.target.value)} className="inp"><option value="all">All matches</option><option value="60plus">60%+</option><option value="below60">Below 60%</option></select></div>
+              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Stage</label><select value={stageF} onChange={e => { setStageF(e.target.value); load(e.target.value, industryF); }} className="inp">{stageOptions.map(stage => <option key={stage || 'all'} value={stage}>{stage || 'All stages'}</option>)}</select></div>
+              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Industry</label><select value={industryF} onChange={e => { setIndustryF(e.target.value); load(stageF, e.target.value); }} className="inp">{industryOptions.map(industry => <option key={industry || 'all'} value={industry}>{industry || 'All'}</option>)}</select></div>
+              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Location</label><select value={locationF} onChange={e => setLocationF(e.target.value)} className="inp"><option value="">All</option>{LOCATION_OPTS.map(location => <option key={location} value={location}>{location}</option>)}</select></div>
+              <div className="flex items-end gap-2"><button onClick={resetFilters} className="w-full py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 flex items-center justify-center gap-2"><SlidersHorizontal className="w-4" />Reset</button><button onClick={() => load(stageF, industryF)} className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-emerald-600"><RefreshCw className="w-4" /></button></div>
+            </div>
+          </section>
 
-              <div className={`bg-white rounded-2xl border border-emerald-100/60 shadow-sm p-5 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-                {/* Stage */}
-                <div className="filter-panel">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Investment Stage</p>
-                  <div className="space-y-1.5">
-                    {['', ...STAGE_OPTS].map(s => (
-                      <button key={s} onClick={() => { setStageF(s); load(s, industryF); }}
-                        className={`w-full text-left text-sm py-2 px-3 rounded-xl transition-all font-medium ${stageF === s
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold'
-                            : 'text-slate-600 hover:bg-slate-50'
-                          }`}>
-                        {s || 'All Stages'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Industry */}
-                <div className="filter-panel">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Industry Focus</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['', ...INDUSTRY_OPTS].map(ind => (
-                      <button key={ind} onClick={() => { setIndustryF(ind); load(stageF, ind); }}
-                        className={`chip ${industryF === ind && ind ? 'on' : ''}`}>
-                        {ind || 'Any'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Location */}
-                <div className="filter-panel">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Location / Focus</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['', ...LOCATION_OPTS].map(loc => (
-                      <button key={loc} onClick={() => setLocationF(loc === locationF ? '' : loc)}
-                        className={`chip ${locationF === loc && loc ? 'on' : ''}`}>
-                        {loc || 'Any'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {(stageF || industryF || locationF) && (
-                  <button onClick={() => { setStageF(''); setIndustryF(''); setLocationF(''); load('', ''); }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-rose-500 hover:bg-red-50 rounded-xl transition-all">
-                    <X className="w-3.5 h-3.5" /> Clear Filters
-                  </button>
-                )}
-              </div>
-            </aside>
-
-            {/* Main content */}
-            <div className="lg:col-span-3 f2">
+          <div className="f2">
               {/* Search + refresh */}
-              <div className="flex items-center gap-3 mb-5">
+              <div className="hidden">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input className="inp pl-10" placeholder="Search by name, fund, industry, or thesis…"
@@ -370,11 +390,10 @@ export default function FindInvestorsPage() {
               </div>
 
               {!loading && (
-                <p className="text-sm text-slate-500 mb-4 flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-emerald-500" />
-                  <span className="font-semibold text-slate-700">{shown.length}</span> investors
-                  {(stageF || industryF || locationF || search) && ' matching filters'}
-                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                  <p className="text-sm text-slate-500">Showing <span className="font-bold text-slate-900">{shown.length}</span> results</p>
+                  <p className="text-xs text-slate-400">Pitch requests open the relationship before direct messages.</p>
+                </div>
               )}
 
               {error && (
@@ -388,7 +407,7 @@ export default function FindInvestorsPage() {
               )}
 
               {loading ? (
-                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid lg:grid-cols-2 gap-4">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="bg-white rounded-2xl border border-slate-100 p-5 space-y-3">
                       <div className="flex gap-3"><div className="shimmer w-12 h-12 flex-shrink-0 rounded-2xl" /><div className="flex-1 space-y-2"><div className="shimmer h-4 w-28" /><div className="shimmer h-3 w-20" /></div></div>
@@ -406,19 +425,19 @@ export default function FindInvestorsPage() {
                   </div>
                   <h3 className="ss font-bold text-slate-900 text-xl mb-2">No investors found</h3>
                   <p className="text-slate-500 text-sm mb-4">
-                    {(stageF || industryF || locationF || search)
+                    {(stageF || industryF || locationF || search || matchBand !== 'all')
                       ? 'Try different filters'
                       : 'Investor profiles will appear here once they join ScalScope.'}
                   </p>
-                  {(stageF || industryF || locationF || search) && (
-                    <button onClick={() => { setStageF(''); setIndustryF(''); setLocationF(''); setSearch(''); load('', ''); }}
+                  {(stageF || industryF || locationF || search || matchBand !== 'all') && (
+                    <button onClick={resetFilters}
                       className="text-sm font-semibold text-emerald-600 hover:underline">
                       Clear all filters
                     </button>
                   )}
                 </div>
               ) : (
-                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid lg:grid-cols-2 gap-4">
                   {shown.map((inv, i) => {
                     const uid = inv.profile_id || inv.user_id;
                     return (
@@ -434,7 +453,6 @@ export default function FindInvestorsPage() {
                 </div>
               )}
             </div>
-          </div>
         </div>
       </div>
 
@@ -461,7 +479,7 @@ export default function FindInvestorsPage() {
               <button onClick={() => setPitchModal(null)}
                 className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200">Cancel</button>
               <button onClick={handleSendPitch} disabled={!pitchText.trim() || sending}
-                className="flex-1 py-3 g-em text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50">
+                className="flex-1 py-3 g-em text-black rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50">
                 {sending ? <Loader className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" />Send Pitch</>}
               </button>
             </div>
