@@ -1,412 +1,388 @@
 // src/pages/InvestorRolePages/FindStartupsPage.jsx
-// Investor browses: Startups (founders) with AI match scores
-// CTA: Express Interest → connection_request(type='investor_interest') | Message
-
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import {
-  fetchStartupsForInvestor, fetchInvestorProfile,
+  fetchStartupsForInvestor,
+  fetchInvestorProfile,
   rankStartupsForInvestor,
-  sendConnectionRequest, getOrCreateConversation,
+  sendConnectionRequest,
+  getOrCreateConversation,
 } from '../../services/investorService';
+import { backendApi } from '../../lib/backendApi';
 import {
-  Search, Sparkles, Rocket, MessageSquare,
-  CheckCircle, MapPin, Filter, Loader, AlertTriangle,
-  RefreshCw, ChevronRight, X, Send, Zap, DollarSign,
-  FileText, Globe, Users, TrendingUp,
+  Search,
+  Rocket,
+  MessageSquare,
+  MapPin,
+  X,
+  Loader,
+  CheckCircle,
+  Info,
+  ArrowRight,
+  SlidersHorizontal,
+  Sparkles,
+  ShieldCheck,
+  BookOpen,
+  Building2,
+  Send,
+  DollarSign,
+  FileText,
+  Globe,
+  UserPlus,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
-  .ss{font-family:'Syne',sans-serif}.dm{font-family:'DM Sans',sans-serif}
-  .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
-  .lift:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(29,78,216,.09)}
-  .g-inv{background:linear-gradient(135deg,#1d4ed8,#4f46e5)}
-  .page-bg{background-color:#eff6ff;background-image:radial-gradient(circle,#bfdbfe 1px,transparent 1px);background-size:28px 28px}
-  .chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #e2e8f0;background:#fff;color:#64748b;transition:all .14s}
-  .chip:hover{border-color:#93c5fd;color:#1d4ed8}
-  .chip.on{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8}
-  .filter-panel{border-bottom:1px solid #f3f4f6;padding-bottom:16px;margin-bottom:16px}
-  .filter-panel:last-child{border-bottom:none;padding-bottom:0;margin-bottom:0}
-  .slide-in{animation:si .28s cubic-bezier(.32,.72,0,1) both}
-  @keyframes si{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
-  .f0{animation:fu .32s ease both}.f1{animation:fu .32s .06s ease both}
-  .f2{animation:fu .32s .12s ease both}
-  @keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  .shimmer{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:sh 1.4s infinite;border-radius:12px}
-  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
-  .modal-pop{animation:mp .22s cubic-bezier(.34,1.4,.64,1) both}
-  @keyframes mp{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-  .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .14s;background:#fff}
-  .inp:focus{border-color:#1d4ed8}
-  .ai-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:linear-gradient(135deg,#1d4ed8,#4f46e5);color:#fff}
-  .stage-pill{padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700}
+  :root {
+    --primary: #98DE38;
+    --primary-dark: #7EC42E;
+    --secondary: #1B2D7F;
+    --secondary-light: #2A3F8F;
+    --white: #fff;
+    --gray-50: #F9FAFB;
+    --gray-100: #F3F4F6;
+    --gray-200: #E5E7EB;
+  }
+  .page-bg { background: var(--gray-50); background-image: radial-gradient(circle, rgba(152,222,56,.06) 1px, transparent 1px); background-size: 28px 28px; }
+  .g-brand { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
+  .g-sec { background: linear-gradient(135deg, var(--secondary), var(--secondary-light)); }
+  .lift { transition: transform .2s cubic-bezier(.22,.68,0,1.2), box-shadow .2s ease; }
+  .lift:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(27,45,127,.12); }
+  .shimmer { background: linear-gradient(90deg, var(--gray-200) 25%, #ddd 50%, var(--gray-200) 75%); background-size: 200% 100%; animation: s 1.5s infinite; border-radius: 12px; }
+  @keyframes s { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .tooltip-wrap { position: relative; }
+  .tooltip-wrap:focus-within .tooltip-box, .tooltip-wrap:hover .tooltip-box { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+  .tooltip-box { opacity: 0; visibility: hidden; transform: translateX(-50%) translateY(4px); transition: all .15s ease; position: absolute; bottom: calc(100% + 8px); left: 50%; background: var(--secondary); color: var(--white); font-size: 12px; padding: 10px 12px; border-radius: 10px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,.2); width: 260px; white-space: normal; }
+  .tooltip-box::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--secondary); }
 `;
 
-const INDUSTRIES = ['EdTech','HealthTech','FinTech','SaaS','AgriTech','CleanTech','LegalTech','HRTech','E-commerce','AI / ML','Social Impact'];
-const STAGES     = ['Just an Idea','Researching','Building MVP','MVP Built','Growing','Pre-seed','Seed','Series A'];
-const STAGE_COLORS = {
-  'Just an Idea':'bg-yellow-100 text-yellow-800','Researching':'bg-orange-100 text-orange-800',
-  'Building MVP':'bg-blue-100 text-blue-800','MVP Built':'bg-teal-100 text-teal-800',
-  'Growing':'bg-emerald-100 text-emerald-800','Pre-seed':'bg-violet-100 text-violet-800',
-  'Seed':'bg-indigo-100 text-indigo-800','Series A':'bg-rose-100 text-rose-800',
+const INDUSTRIES = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'E-commerce', 'AI / ML', 'Social Impact'];
+const STAGES = ['Idea', 'Just an Idea', 'Researching', 'Building MVP', 'MVP Built', 'Growing', 'Pre-seed', 'Seed', 'Series A'];
+
+const initials = (name) => {
+  if (!name) return '?';
+  return name.split(' ').map((word) => word[0]).join('').slice(0, 2).toUpperCase();
 };
 
-function initials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-}
-function gradFor(id) {
-  const g = ['from-blue-500 to-indigo-500','from-violet-500 to-purple-500',
-             'from-emerald-500 to-teal-500','from-amber-500 to-orange-500',
-             'from-rose-500 to-pink-500','from-cyan-500 to-blue-500'];
-  return g[((id || '').charCodeAt?.(0) || 0) % g.length];
-}
+const getScore = (item) => Number(item?._score || item?.matchScore || item?.score || 0);
+const profileOf = (item) => item?.profiles || item?.profile || {};
 
-// ── Startup card ──────────────────────────────────────────────────────────
-function StartupCard({ startup, onExpress, onMessage, expressState, isTop }) {
-  const p       = startup.profiles || {};
-  const name    = startup.company_name || startup.idea_title || 'Unnamed Startup';
-  const stage   = startup.funding_stage || startup.startup_stage || startup.company_stage;
-  const stageCls= STAGE_COLORS[stage] || 'bg-slate-100 text-slate-700';
-  const score   = startup._score || 0;
+function StartupCard({ startup, expressState, connectionStatus, onExpress, onMessage }) {
+  const p = profileOf(startup);
+  const name = startup.company_name || startup.idea_title || 'Unnamed Startup';
+  const stage = startup.funding_stage || startup.startup_stage || startup.company_stage || '';
+  const score = getScore(startup);
+  const reason = startup._matchReason || 'Matches your investment focus';
+  const summary = startup.problem_solving || startup.problem_statement || startup.unique_value_proposition || p.bio || '';
+  const sourceLabel = startup.source_label || (startup.source_role === 'student' ? 'Student Idea' : 'Founder Startup');
+  const ownerLabel = startup.source_role === 'student' ? 'Student Founder' : 'Founder';
 
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm lift ${isTop ? 'border-blue-200 bg-gradient-to-br from-white to-blue-50/30' : 'border-slate-100'}`}>
-      <div className="p-5">
-        {/* Header */}
-        <div className="flex items-start gap-3 mb-3">
-          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradFor(startup.user_id)} flex items-center justify-center text-white text-sm font-bold ss flex-shrink-0`}>
-            {initials(name)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-bold text-slate-900 ss leading-tight truncate">{name}</p>
-              {score >= 50 && <span className="ai-badge flex-shrink-0"><Sparkles className="w-2.5 h-2.5" />Match</span>}
+    <article className="bg-white rounded-2xl p-5 border border-gray-100 lift">
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="hidden sm:block w-1 rounded-full self-stretch g-brand" aria-hidden="true" />
+        <div className="w-14 h-14 rounded-xl g-sec flex items-center justify-center text-white font-bold flex-shrink-0">{initials(name)}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+            <div>
+              <p className="font-bold text-gray-900 truncate">{name}</p>
+              <p className="text-xs text-gray-500">
+                {p.full_name || ownerLabel}
+                {startup.industry ? ` · ${startup.industry}` : ''}
+                {stage ? ` · ${stage}` : ''}
+              </p>
             </div>
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              {startup.industry && <span className="chip">{startup.industry}</span>}
-              {stage && <span className={`stage-pill ${stageCls}`}>{stage}</span>}
-              {startup.team_size && <span className="chip">👥 {startup.team_size}</span>}
-            </div>
-          </div>
-        </div>
-
-        {/* AI match reason */}
-        {startup._matchReason && score >= 30 && (
-          <p className="text-xs text-blue-600 italic mb-2">"{startup._matchReason}"</p>
-        )}
-
-        {/* Problem */}
-        {(startup.problem_solving || startup.problem_statement) && (
-          <div className="mb-3">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1">Problem</p>
-            <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
-              {startup.problem_solving || startup.problem_statement}
-            </p>
-          </div>
-        )}
-
-        {/* UVP */}
-        {startup.unique_value_proposition && (
-          <p className="text-xs text-slate-500 italic mb-3 line-clamp-2">"{startup.unique_value_proposition}"</p>
-        )}
-
-        {/* Founder */}
-        {p.full_name && (
-          <div className="flex items-center gap-2 mb-3 p-2.5 bg-slate-50 rounded-xl">
-            <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${gradFor(p.id)} flex items-center justify-center text-white text-xs font-bold ss`}>
-              {initials(p.full_name)}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-800 ss truncate">{p.full_name}</p>
-              {p.location && <p className="text-xs text-slate-400 flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{p.location}</p>}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black px-2.5 py-1 rounded-full bg-[#98DE38]/20 text-[#1B2D7F]">{score}% Match</span>
+              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[#1B2D7F]/5 text-[#1B2D7F]">{sourceLabel}</span>
             </div>
           </div>
-        )}
 
-        {/* Assets */}
-        <div className="flex items-center gap-3 mb-4">
-          {startup.pitch_deck_url && (
-            <a href={startup.pitch_deck_url} target="_blank" rel="noreferrer"
-              className="flex items-center gap-1 text-xs text-blue-600 font-semibold hover:underline">
-              <FileText className="w-3 h-3" /> Pitch Deck
-            </a>
+          {p.location && <p className="text-xs text-gray-400 flex items-center gap-1 mt-1"><MapPin className="w-3" />{p.location}</p>}
+
+          {summary && (
+            <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl mt-3">
+              <p className="text-xs font-bold text-[#1B2D7F] flex items-center gap-1 mb-1"><BookOpen className="w-3" />Startup Context</p>
+              <p className="text-sm text-gray-700 line-clamp-2">{summary}</p>
+            </div>
           )}
-          {startup.demo_url && (
-            <a href={startup.demo_url} target="_blank" rel="noreferrer"
-              className="flex items-center gap-1 text-xs text-indigo-600 font-semibold hover:underline">
-              <Globe className="w-3 h-3" /> Demo
-            </a>
-          )}
-        </div>
 
-        {/* CTAs */}
-        <div className="flex gap-2">
-          <button onClick={onMessage}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border-2 border-slate-200 text-slate-600 hover:border-blue-200 hover:text-blue-600 rounded-xl text-xs font-bold transition-all">
-            <MessageSquare className="w-3.5 h-3.5" /> Message
-          </button>
-          <button onClick={onExpress} disabled={expressState === 'sent' || expressState === 'sending'}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              expressState === 'sent'    ? 'bg-emerald-50 text-emerald-600 border-2 border-emerald-200' :
-              expressState === 'sending' ? 'g-inv text-white opacity-70 cursor-wait' :
-              'g-inv text-white hover:opacity-90'
-            }`}>
-            {expressState === 'sent'    ? <><CheckCircle className="w-3.5 h-3.5" />Interested</> :
-             expressState === 'sending' ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
-             <><Zap className="w-3.5 h-3.5" />Express Interest</>}
-          </button>
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {startup.industry && <span className="text-xs px-2 py-0.5 rounded-full bg-[#98DE38]/10 text-[#1B2D7F] border border-[#98DE38]/30">{startup.industry}</span>}
+            {stage && <span className="text-xs px-2 py-0.5 rounded-full bg-[#1B2D7F]/5 text-[#1B2D7F] border border-[#1B2D7F]/10">{stage}</span>}
+            {startup.team_size && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200">{startup.team_size} members</span>}
+            {startup.university && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200">{startup.university}</span>}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mt-3">
+            {startup.pitch_deck_url && <a href={startup.pitch_deck_url} target="_blank" rel="noreferrer" className="text-xs text-[#1B2D7F] font-bold hover:underline flex items-center gap-1"><FileText className="w-3" />Pitch Deck</a>}
+            {startup.demo_url && <a href={startup.demo_url} target="_blank" rel="noreferrer" className="text-xs text-[#1B2D7F] font-bold hover:underline flex items-center gap-1"><Globe className="w-3" />Demo</a>}
+          </div>
+
+          <div className="tooltip-wrap mt-3 inline-block">
+            <button type="button" className="text-xs text-[#1B2D7F] hover:underline flex items-center gap-1" aria-label="Why recommended?"><Info className="w-3" />Why this match?</button>
+            <div className="tooltip-box"><p className="font-semibold mb-1">Match Reason:</p><p>{reason}</p></div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
+            <Link to={`/user-profile/${startup.user_id || p.id}`} className="py-2 border-2 border-[#1B2D7F]/10 bg-[#1B2D7F]/5 text-[#1B2D7F] rounded-xl text-xs font-bold hover:bg-[#1B2D7F]/10 transition flex items-center justify-center">View Profile</Link>
+            <button
+              type="button"
+              onClick={onMessage}
+              disabled={connectionStatus !== 'accepted'}
+              title={connectionStatus === 'accepted' ? 'Message this connection' : 'Connect first to send messages'}
+              className={`py-2 border-2 rounded-xl text-xs font-bold transition flex items-center justify-center ${
+                connectionStatus === 'accepted'
+                  ? 'border-gray-200 hover:border-gray-300 text-gray-800 bg-white'
+                  : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <MessageSquare className="w-3.5 mr-1" />
+              {connectionStatus === 'accepted' ? 'Message' : 'Connect first'}
+            </button>
+            {expressState === 'sent' ? (
+              <button type="button" disabled className="py-2 bg-[#98DE38]/10 border border-[#98DE38]/40 text-[#1B2D7F] rounded-xl text-xs font-bold flex items-center justify-center"><CheckCircle className="w-3.5 mr-1" />Interested</button>
+            ) : expressState === 'pending' ? (
+              <button type="button" disabled className="py-2 bg-[#98DE38]/10 border border-[#98DE38]/40 text-[#1B2D7F] rounded-xl text-xs font-bold flex items-center justify-center"><CheckCircle className="w-3.5 mr-1" />Pending</button>
+            ) : expressState === 'accepted' ? (
+              <button type="button" disabled className="py-2 bg-[#98DE38]/10 border border-[#98DE38]/40 text-[#1B2D7F] rounded-xl text-xs font-bold flex items-center justify-center"><CheckCircle className="w-3.5 mr-1" />Connected</button>
+            ) : expressState === 'sending' ? (
+              <button type="button" disabled className="py-2 g-brand text-black rounded-xl text-xs font-black flex items-center justify-center opacity-70"><Loader className="w-3.5 animate-spin mr-1" />Sending...</button>
+            ) : (
+              <button type="button" onClick={onExpress} className="py-2 g-brand text-black rounded-xl text-xs font-black hover:opacity-90 transition flex items-center justify-center"><UserPlus className="w-3.5 mr-1" />Interest</button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 export default function FindStartupsPage() {
-  const { user }    = useAuth();
-  const navigate    = useNavigate();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [state, setState] = useState({ loading: true, error: null });
+  const [startups, setStartups] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const [filters, setFilters] = useState({ query: '', matchBand: 'all', industry: '', stage: '' });
+  const [expressStates, setExpressStates] = useState({});
+  const [connStatusMap, setConnStatusMap] = useState({});
+  const [msgModal, setMsgModal] = useState(null);
+  const [msgText, setMsgText] = useState('');
+  const [sending, setSending] = useState(false);
 
-  const [startups,     setStartups]    = useState([]);
-  const [myProfile,    setMyProfile]   = useState(null);
-  const [loading,      setLoading]     = useState(true);
-  const [error,        setError]       = useState('');
-  const [search,       setSearch]      = useState('');
-  const [industryF,    setIndustryF]   = useState('');
-  const [stageF,       setStageF]      = useState('');
-  const [expressStates,setExpressStates] = useState({});
-  const [msgModal,     setMsgModal]    = useState(null);
-  const [msgText,      setMsgText]     = useState('');
-  const [sending,      setSending]     = useState(false);
-  const [showFilters,  setShowFilters] = useState(false);
-
-  const load = useCallback(async (industry = industryF, stage = stageF) => {
-    setLoading(true); setError('');
+  const load = useCallback(async () => {
+    if (!user?.id) return;
+    setState({ loading: true, error: null });
     try {
-      const [data, profileData] = await Promise.all([
-        fetchStartupsForInvestor({ industry, stage, limit: 30 }),
-        myProfile ? Promise.resolve({ profile: {}, investorProfile: myProfile }) : fetchInvestorProfile(user.id),
+      const [rows, profileData] = await Promise.all([
+        fetchStartupsForInvestor({ limit: 80 }),
+        profile ? Promise.resolve({ investorProfile: profile }) : fetchInvestorProfile(user.id),
       ]);
-      const ip = myProfile || profileData.investorProfile;
-      if (!myProfile) setMyProfile(ip);
-      const ranked = rankStartupsForInvestor(data, ip);
-      setStartups(ranked);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  }, [user, industryF, stageF, myProfile]);
+      const investorProfile = profile || profileData.investorProfile;
+      if (!profile) setProfile(investorProfile);
+      setStartups(rankStartupsForInvestor(rows, investorProfile));
+      const myConnections = await backendApi.getMyConnections().catch((err) => {
+        console.warn('Investor startup connection status load failed:', err);
+        return { data: [] };
+      });
+      const statusMap = {};
+      (myConnections?.data || []).forEach((connection) => {
+        if (connection.otherUser?.id) statusMap[connection.otherUser.id] = 'accepted';
+      });
+      setConnStatusMap(statusMap);
+      setState({ loading: false, error: null });
+    } catch (err) {
+      console.error('Find startups load failed:', err);
+      setState({ loading: false, error: err.message || 'Failed to load startups' });
+      toast.error('Failed to load startups');
+    }
+  }, [profile, user?.id]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() => {
+    return startups.filter((startup) => {
+      const p = profileOf(startup);
+      const score = getScore(startup);
+      const stage = startup.funding_stage || startup.startup_stage || startup.company_stage || '';
+      const searchText = [
+        startup.company_name,
+        startup.idea_title,
+        startup.industry,
+        startup.source_label,
+        startup.university,
+        p.full_name,
+        p.bio,
+        startup.problem_solving,
+        startup.problem_statement,
+        startup.unique_value_proposition,
+        startup.target_market,
+        stage,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return (
+        (!filters.query || searchText.includes(filters.query.toLowerCase())) &&
+        (!filters.industry || startup.industry === filters.industry) &&
+        (!filters.stage || stage === filters.stage) &&
+        (filters.matchBand === 'all' || (filters.matchBand === '60plus' && score >= 60) || (filters.matchBand === 'below60' && score < 60))
+      );
+    }).sort((a, b) => getScore(b) - getScore(a));
+  }, [filters, startups]);
 
   const handleExpress = async (startup) => {
     if (expressStates[startup.user_id]) return;
-    setExpressStates(p => ({ ...p, [startup.user_id]: 'sending' }));
+    setExpressStates((prev) => ({ ...prev, [startup.user_id]: 'sending' }));
     try {
-      await sendConnectionRequest(user.id, startup.user_id, 'investor_interest');
-      setExpressStates(p => ({ ...p, [startup.user_id]: 'sent' }));
-    } catch (e) {
-      if (!e.message?.includes('23505')) alert(e.message);
-      else setExpressStates(p => ({ ...p, [startup.user_id]: 'sent' }));
+      await sendConnectionRequest(user.id, startup.user_id, 'investor_interest', 'Hi, I reviewed your startup profile and would like to learn more about your company.');
+      setExpressStates((prev) => ({ ...prev, [startup.user_id]: 'sent' }));
+      setConnStatusMap((prev) => ({ ...prev, [startup.user_id]: prev[startup.user_id] || 'pending' }));
+      toast.success('Investor interest sent', { style: { background: '#98DE38', color: '#000' } });
+    } catch (err) {
+      console.error('Investor interest failed:', err);
+      setExpressStates((prev) => ({ ...prev, [startup.user_id]: undefined }));
+      toast.error(err.message || 'Could not send interest');
     }
   };
 
-  const handleMessage = (startup) => {
+  const openMessageModal = (startup) => {
+    if (connStatusMap[startup.user_id] !== 'accepted') {
+      toast.error('Connect first to send messages');
+      return;
+    }
     const name = startup.profiles?.full_name?.split(' ')[0] || 'there';
     setMsgModal(startup);
-    setMsgText(`Hi ${name}, I came across your startup${startup.company_name ? ` "${startup.company_name}"` : ''} on ScalScope. I invest in ${(myProfile?.industries_of_interest || []).slice(0,2).join(' and ') || 'your space'} and I'd love to learn more. Are you open to a quick call?`);
+    setMsgText(`Hi ${name}, I came across your startup${startup.company_name ? ` "${startup.company_name}"` : ''} on ScaleScope. It looks relevant to my investment focus and I would like to learn more. Are you open to connecting?`);
   };
 
   const handleSendMessage = async () => {
     if (!msgModal || !msgText.trim() || sending) return;
     setSending(true);
     try {
-      await sendConnectionRequest(user.id, msgModal.user_id, 'investor_interest', msgText.trim());
-      setExpressStates(p => ({ ...p, [msgModal.user_id]: 'sent' }));
-      setMsgModal(null); setMsgText('');
-      navigate('/messages');
-    } catch (e) {
-      if (!e.message?.includes('23505')) alert(e.message);
-      else { setMsgModal(null); navigate('/messages'); }
-    } finally { setSending(false); }
+      const convId = await getOrCreateConversation(user.id, msgModal.user_id);
+      if (convId) await backendApi.sendConversationMessage(convId, msgText.trim());
+      setMsgModal(null);
+      setMsgText('');
+      toast.success('Message sent', { style: { background: '#98DE38', color: '#000' } });
+      navigate(convId ? `/investor/messages?conv=${convId}` : '/investor/messages');
+    } catch (err) {
+      console.error('Investor message failed:', err);
+      toast.error(err.message || 'Could not send message');
+    } finally {
+      setSending(false);
+    }
   };
 
-  // Client-side search
-  const shown = startups.filter(s => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    const fields = [s.company_name, s.idea_title, s.industry, s.profiles?.full_name,
-      s.problem_solving, s.problem_statement, s.unique_value_proposition].filter(Boolean).join(' ').toLowerCase();
-    return fields.includes(q);
-  });
+  const resetFilters = () => setFilters({ query: '', matchBand: 'all', industry: '', stage: '' });
+  const strongCount = startups.filter((startup) => getScore(startup) >= 60).length;
+  const below60Count = startups.length - strongCount;
+
+  if (state.loading) return <div className="min-h-screen flex items-center justify-center"><Loader className="w-8 h-8 animate-spin text-[#1B2D7F]" /></div>;
 
   return (
     <>
       <style>{CSS}</style>
-      <div className="min-h-screen page-bg dm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-
-          {/* Header */}
-          <div className="mb-8 f0">
-            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full mb-3">
-              <Rocket className="w-3.5 h-3.5" /> Browse Startups
+      <div className="min-h-screen page-bg pt-20 pb-16 px-4">
+        <div className="max-w-6xl mx-auto">
+          <header className="mb-8">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase px-3 py-1 rounded-full bg-[#98DE38]/15 text-[#1B2D7F] border border-[#98DE38]/40"><Rocket className="w-3.5" />Find Startups</span>
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mt-3">
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-black text-gray-900">Startup Deal Flow</h1>
+                <p className="text-gray-500 text-sm max-w-xl mt-2">Discover founder startups and student startup ideas. Match quality is based on your preferred stages, industries, and thesis.</p>
+              </div>
+              <Link to="/investor/profile" className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50">Improve Matching <ArrowRight className="w-4" /></Link>
             </div>
-            <h1 className="ss font-black text-4xl text-slate-900 mb-2">Find Startups to Back</h1>
-            <p className="text-slate-600 text-lg max-w-xl">
-              Founders actively seeking investment. Ranked by match with your investment focus.
-              Express interest or message directly.
-            </p>
+          </header>
+
+          <section className="grid sm:grid-cols-3 gap-3 mb-6">
+            <Stat label="Available startup matches" value={startups.length} />
+            <Stat label="Explore matches below 60%" value={below60Count} />
+            <Stat label="Strong matches 60%+" value={strongCount} />
+          </section>
+
+          <section className="bg-white border border-gray-200 rounded-2xl p-4 mb-6">
+            <div className="flex items-center gap-2">
+              <Search className="w-5 text-gray-400" />
+              <input type="text" value={filters.query} onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))} placeholder="Search by startup, student idea, founder, industry, problem..." className="flex-1 outline-none text-sm" />
+              {filters.query && <button type="button" onClick={() => setFilters((prev) => ({ ...prev, query: '' }))} className="p-1 hover:bg-gray-100 rounded" aria-label="Clear search"><X className="w-4 text-gray-400" /></button>}
+            </div>
+            <div className="grid md:grid-cols-4 gap-3 mt-4">
+              <SelectFilter label="Match band" value={filters.matchBand} onChange={(value) => setFilters((prev) => ({ ...prev, matchBand: value }))}><option value="all">All matches</option><option value="60plus">60%+</option><option value="below60">Below 60%</option></SelectFilter>
+              <SelectFilter label="Industry" value={filters.industry} onChange={(value) => setFilters((prev) => ({ ...prev, industry: value }))}><option value="">All</option>{INDUSTRIES.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
+              <SelectFilter label="Stage" value={filters.stage} onChange={(value) => setFilters((prev) => ({ ...prev, stage: value }))}><option value="">All</option>{STAGES.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
+              <div className="flex items-end"><button type="button" onClick={resetFilters} className="w-full py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2"><SlidersHorizontal className="w-4" />Reset</button></div>
+            </div>
+          </section>
+
+          {state.error && <div className="bg-white border border-red-100 rounded-2xl p-4 mb-4 text-sm text-red-600">{state.error}</div>}
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+            <p className="text-sm text-gray-500">Showing <span className="font-bold text-gray-900">{filtered.length}</span> results</p>
+            <p className="text-xs text-gray-400">Message unlocks after accepted connection.</p>
           </div>
 
-          <div className="grid lg:grid-cols-4 gap-6">
-
-            {/* Filter sidebar */}
-            <aside className="lg:col-span-1 f1">
-              <button onClick={() => setShowFilters(!showFilters)}
-                className="lg:hidden w-full flex items-center justify-between p-3.5 bg-white rounded-xl border border-blue-100 mb-3 shadow-sm font-semibold text-sm text-slate-700">
-                <span className="flex items-center gap-2"><Filter className="w-4 h-4 text-blue-500" />Filters</span>
-                <ChevronRight className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-90' : ''}`} />
-              </button>
-
-              <div className={`bg-white rounded-2xl border border-blue-100/60 shadow-sm p-5 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-                {/* Industry */}
-                <div className="filter-panel">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Industry</p>
-                  <div className="space-y-1.5">
-                    {['', ...INDUSTRIES].map(ind => (
-                      <button key={ind} onClick={() => { setIndustryF(ind); load(ind, stageF); }}
-                        className={`w-full text-left text-sm py-2 px-3 rounded-xl transition-all font-medium ${
-                          industryF === ind ? 'bg-blue-50 text-blue-700 border border-blue-200 font-bold' : 'text-slate-600 hover:bg-slate-50'
-                        }`}>
-                        {ind || 'All Industries'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Stage */}
-                <div className="filter-panel">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Funding Stage</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['', ...STAGES].map(s => (
-                      <button key={s} onClick={() => { setStageF(s); load(industryF, s); }}
-                        className={`chip ${stageF === s && s ? 'on' : ''}`}>
-                        {s || 'Any'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {(industryF || stageF) && (
-                  <button onClick={() => { setIndustryF(''); setStageF(''); load('', ''); }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-semibold text-rose-500 hover:bg-red-50 rounded-xl transition-all">
-                    <X className="w-3.5 h-3.5" /> Clear Filters
-                  </button>
-                )}
-              </div>
-            </aside>
-
-            {/* Main content */}
-            <div className="lg:col-span-3 f2">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input className="inp pl-10" placeholder="Search by startup name, founder, industry, or problem…"
-                    value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
-                <button onClick={() => load(industryF, stageF)}
-                  className="p-2.5 bg-white border border-blue-100 rounded-xl text-slate-500 hover:text-blue-600 hover:border-blue-200 transition-all">
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              </div>
-
-              {!loading && (
-                <p className="text-sm text-slate-500 mb-4 flex items-center gap-2">
-                  <Rocket className="w-4 h-4 text-blue-500" />
-                  <span className="font-semibold text-slate-700">{shown.length}</span> startups
-                  {(industryF || stageF || search) && ' matching filters'}
-                  {shown.filter(s => s._score >= 50).length > 0 && (
-                    <span className="ai-badge"><Sparkles className="w-2.5 h-2.5" />{shown.filter(s => s._score >= 50).length} AI matched</span>
-                  )}
-                </p>
-              )}
-
-              {error && (
-                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-4 mb-5">
-                  <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                  <p className="text-sm text-red-700 flex-1">{error}</p>
-                  <button onClick={() => load(industryF, stageF)} className="text-red-500 hover:text-red-700"><RefreshCw className="w-4 h-4" /></button>
-                </div>
-              )}
-
-              {loading ? (
-                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="bg-white rounded-2xl border border-slate-100 p-5 space-y-3">
-                      <div className="flex gap-3"><div className="shimmer w-12 h-12 flex-shrink-0 rounded-2xl" /><div className="flex-1 space-y-2"><div className="shimmer h-4 w-28" /><div className="shimmer h-3 w-20" /></div></div>
-                      <div className="shimmer h-3 w-full" /><div className="shimmer h-3 w-4/5" />
-                      <div className="shimmer h-10 w-full" />
-                      <div className="flex gap-2"><div className="shimmer h-9 flex-1" /><div className="shimmer h-9 flex-1" /></div>
-                    </div>
-                  ))}
-                </div>
-              ) : shown.length === 0 ? (
-                <div className="py-20 text-center">
-                  <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <Rocket className="w-8 h-8 text-blue-400" />
-                  </div>
-                  <h3 className="ss font-bold text-slate-900 text-xl mb-2">No startups found</h3>
-                  <p className="text-slate-500 text-sm mb-4">
-                    {(industryF || stageF || search) ? 'Try different filters' : 'Founders will appear here as they join ScalScope.'}
-                  </p>
-                  {(industryF || stageF || search) && (
-                    <button onClick={() => { setIndustryF(''); setStageF(''); setSearch(''); load('', ''); }}
-                      className="text-sm font-semibold text-blue-600 hover:underline">Clear all filters</button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {shown.map((s, i) => (
-                    <div key={s.id || i} className="slide-in" style={{ animationDelay: `${Math.min(i, 8) * 0.05}s` }}>
-                      <StartupCard
-                        startup={s}
-                        isTop={i < 3 && s._score >= 40}
-                        onExpress={() => handleExpress(s)}
-                        onMessage={() => handleMessage(s)}
-                        expressState={expressStates[s.user_id]} />
-                    </div>
-                  ))}
-                </div>
-              )}
+          {filtered.length > 0 ? (
+            <div className="grid lg:grid-cols-2 gap-4" aria-live="polite">
+              {filtered.map((startup) => (
+                <StartupCard
+                  key={startup.id || startup.user_id}
+                  startup={startup}
+                  expressState={expressStates[startup.user_id] || connStatusMap[startup.user_id]}
+                  connectionStatus={connStatusMap[startup.user_id]}
+                  onExpress={() => handleExpress(startup)}
+                  onMessage={() => openMessageModal(startup)}
+                />
+              ))}
             </div>
-          </div>
+          ) : (
+            <div className="py-14 text-center bg-white rounded-2xl border border-gray-200 text-gray-500">
+              <div className="w-14 h-14 rounded-full bg-gray-50 mx-auto mb-4 flex items-center justify-center"><Sparkles className="w-6 text-gray-400" /></div>
+              <p className="font-bold text-gray-800">No startup matches found.</p>
+              <p className="text-sm text-gray-500 mt-1">Try changing filters or improve your investor profile for better matching.</p>
+              <button type="button" onClick={resetFilters} className="mt-4 px-4 py-2 g-brand text-black rounded-xl text-sm font-black">Clear filters</button>
+            </div>
+          )}
+
+          <aside className="mt-8 bg-white rounded-2xl p-5 border border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2"><ShieldCheck className="w-4 text-[#1B2D7F]" />Matching tip</h3>
+            <p className="text-sm text-gray-600">Add preferred stages, industry focus, check range, and thesis to get better founder startup and student idea matches.</p>
+            <Link to="/investor/profile" className="inline-flex items-center gap-1 text-xs font-bold text-[#1B2D7F] mt-3 hover:underline">Edit Profile <ArrowRight className="w-3" /></Link>
+          </aside>
         </div>
       </div>
 
-      {/* Message / Express Interest modal */}
       {msgModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl p-7 max-w-lg w-full shadow-2xl modal-pop">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="ss font-black text-xl text-slate-900">
-                Message {msgModal.profiles?.full_name?.split(' ')[0] || 'Founder'}
-              </h3>
-              <button onClick={() => setMsgModal(null)} className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400"><X className="w-5 h-5" /></button>
+          <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-xl text-gray-900">Message {msgModal.profiles?.full_name?.split(' ')[0] || 'Founder'}</h3>
+              <button type="button" onClick={() => setMsgModal(null)} className="p-1.5 hover:bg-gray-100 rounded-xl text-gray-400" aria-label="Close message modal"><X className="w-5 h-5" /></button>
             </div>
-            <p className="text-xs text-slate-400 mb-3">Edit the template — a personalised message gets 3× better response rates.</p>
-            <textarea className="w-full p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl text-sm outline-none resize-none focus:border-blue-400 transition-colors"
-              rows={6} value={msgText} onChange={e => setMsgText(e.target.value)} maxLength={600} />
-            <p className="text-xs text-slate-400 text-right mt-1 mb-4">{msgText.length}/600</p>
+            <p className="text-xs text-gray-400 mb-3">A personalized message helps founders understand why you are interested.</p>
+            <textarea className="w-full p-4 bg-gray-50 border-2 border-gray-200 rounded-2xl text-sm outline-none resize-none focus:border-[#98DE38] transition-colors" rows={6} value={msgText} onChange={(event) => setMsgText(event.target.value)} maxLength={500} />
+            <p className="text-xs text-gray-400 text-right mt-1 mb-4">{msgText.length}/500</p>
             <div className="flex gap-3">
-              <button onClick={() => setMsgModal(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200">Cancel</button>
-              <button onClick={handleSendMessage} disabled={!msgText.trim() || sending}
-                className="flex-1 py-3 g-inv text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50">
-                {sending ? <Loader className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" />Send Message</>}
-              </button>
+              <button type="button" onClick={() => setMsgModal(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200">Cancel</button>
+              <button type="button" onClick={handleSendMessage} disabled={!msgText.trim() || sending} className="flex-1 py-3 g-brand text-black rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50">{sending ? <Loader className="w-4 h-4 animate-spin" /> : <><Send className="w-4" />Send Interest</>}</button>
             </div>
           </div>
         </div>
       )}
     </>
+  );
+}
+
+function Stat({ label, value }) {
+  return <div className="bg-white rounded-2xl p-4 border border-gray-100"><p className="text-xs text-gray-500">{label}</p><p className="text-2xl font-black text-gray-900">{value}</p></div>;
+}
+
+function SelectFilter({ label, value, onChange, children }) {
+  return (
+    <div>
+      <label className="text-xs font-bold text-gray-500 mb-1 block">{label}</label>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm">{children}</select>
+    </div>
   );
 }

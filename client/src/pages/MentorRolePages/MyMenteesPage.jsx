@@ -18,9 +18,10 @@ const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
   .ss{font-family:'Syne',sans-serif}.dm{font-family:'DM Sans',sans-serif}
   .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
-  .lift:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(5,150,105,.09)}
-  .g-ment{background:linear-gradient(135deg,#059669,#0891b2)}
-  .page-bg{background-color:#f0fdf9;background-image:radial-gradient(circle,#6ee7b7 1px,transparent 1px);background-size:28px 28px}
+  .lift:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(27,45,127,.12)}
+  .g-brand,.g-ment{background:linear-gradient(135deg,#98DE38,#7EC42E)}
+  .g-sec{background:linear-gradient(135deg,#1B2D7F,#2A3F8F)}
+  .page-bg{background-color:#F9FAFB;background-image:radial-gradient(circle,rgba(152,222,56,.08) 1px,transparent 1px);background-size:28px 28px}
   .f0{animation:fu .35s ease both}.f1{animation:fu .35s .07s ease both}
   .f2{animation:fu .35s .14s ease both}
   @keyframes fu{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
@@ -29,7 +30,10 @@ const CSS = `
   .shimmer{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:sh 1.4s infinite;border-radius:12px}
   @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
   .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .14s;background:#fff}
-  .inp:focus{border-color:#059669}
+  .inp:focus{border-color:#98DE38}
+  .mentor-brand .text-emerald-300,.mentor-brand .text-emerald-500,.mentor-brand .text-emerald-600,.mentor-brand .text-emerald-700{color:#1B2D7F!important}
+  .mentor-brand .bg-emerald-50,.mentor-brand .bg-emerald-100{background-color:rgba(152,222,56,.14)!important}
+  .mentor-brand .border-emerald-100{border-color:rgba(152,222,56,.35)!important}
 `;
 
 function initials(name) {
@@ -112,7 +116,7 @@ function MenteeCard({ mentee, onMessage }) {
 
         {/* CTA */}
         <button onClick={onMessage}
-          className="w-full flex items-center justify-center gap-2 py-2.5 g-ment text-white text-sm font-bold rounded-xl hover:opacity-90 transition-all">
+          className="w-full flex items-center justify-center gap-2 py-2.5 g-ment text-[#1B2D7F] text-sm font-bold rounded-xl hover:opacity-90 transition-all">
           <MessageSquare className="w-4 h-4" /> Message {u.full_name?.split(' ')[0] || ''}
         </button>
       </div>
@@ -144,8 +148,8 @@ export default function MyMenteesPage() {
 
   const handleMessage = async (targetId) => {
     try {
-      await getOrCreateConversation(user.id, targetId);
-      navigate('/messages');
+      const convId = await getOrCreateConversation(user.id, targetId);
+      navigate(convId ? `/mentor/messages?conv=${convId}` : '/mentor/messages');
     } catch (e) { console.error(e); }
   };
 
@@ -165,29 +169,36 @@ export default function MyMenteesPage() {
   return (
     <>
       <style>{CSS}</style>
-      <div className="min-h-screen page-bg dm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+      <div className="min-h-screen page-bg pt-20 pb-16 px-4 dm mentor-brand">
+        <div className="max-w-6xl mx-auto">
 
           {/* Header */}
           <div className="mb-8 f0">
-            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-full mb-3">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 mb-3">
               <UserCheck className="w-3.5 h-3.5" /> My Mentees
             </div>
-            <h1 className="ss font-black text-4xl text-slate-900 mb-2">My Mentees</h1>
-            <p className="text-slate-600 text-lg max-w-xl">Everyone you're currently mentoring in one place.</p>
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-black text-gray-900 mb-2">Active Guidance</h1>
+                <p className="text-gray-500 text-sm max-w-xl">Students and founders connected with you for mentorship and startup guidance.</p>
+              </div>
+              <Link to="/mentor/find-founders" className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50">
+                Find Founders <ArrowRight className="w-4" />
+              </Link>
+            </div>
           </div>
 
           {/* Stats */}
           {!loading && mentees.length > 0 && (
-            <div className="grid grid-cols-3 gap-4 mb-8 f1">
+            <div className="grid sm:grid-cols-3 gap-3 mb-6 f1">
               {[
                 { label: 'Total',     val: mentees.length, col: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
                 { label: 'Founders',  val: founders,       col: 'text-amber-600',   bg: 'bg-amber-50 border-amber-100'   },
                 { label: 'Students',  val: students,       col: 'text-indigo-600',  bg: 'bg-indigo-50 border-indigo-100' },
               ].map((s, i) => (
-                <div key={i} className={`bg-white rounded-2xl p-5 border shadow-sm text-center ${s.bg}`}>
-                  <p className={`ss font-black text-3xl ${s.col}`}>{s.val}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
+                <div key={i} className="bg-white rounded-2xl p-4 border border-gray-100">
+                  <p className="text-xs text-gray-500">{s.label}</p>
+                  <p className="text-2xl font-black text-gray-900">{s.val}</p>
                 </div>
               ))}
             </div>
@@ -200,7 +211,7 @@ export default function MyMenteesPage() {
               <input className="inp pl-10" placeholder="Search mentees by name, startup, or location…"
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <button onClick={load} className="p-2.5 bg-white border border-emerald-100 rounded-xl text-slate-500 hover:text-emerald-600 hover:border-emerald-200 transition-all">
+            <button onClick={load} className="p-2.5 bg-white border border-[#98DE38]/30 rounded-xl text-slate-500 hover:text-[#1B2D7F] hover:border-[#98DE38] transition-all">
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
@@ -228,15 +239,15 @@ export default function MyMenteesPage() {
               <div className="w-20 h-20 bg-emerald-50 rounded-3xl flex items-center justify-center mx-auto mb-5">
                 <Users className="w-10 h-10 text-emerald-300" />
               </div>
-              <h3 className="ss font-bold text-slate-900 text-2xl mb-2 empty">No mentees yet</h3>
+              <h3 className="ss font-bold text-slate-900 text-2xl mb-2 empty">No active guidance yet</h3>
               <p className="text-slate-500 mb-6 max-w-sm mx-auto">
                 Accept incoming mentorship requests from your dashboard, or reach out directly to founders and students.
               </p>
               <div className="flex flex-wrap gap-3 justify-center">
-                <Link to="/dashboard" className="g-ment text-white font-bold text-sm px-5 py-2.5 rounded-xl hover:opacity-90 transition-all flex items-center gap-2">
+                <Link to="/mentor/dashboard" className="g-ment text-[#1B2D7F] font-bold text-sm px-5 py-2.5 rounded-xl hover:opacity-90 transition-all flex items-center gap-2">
                   <BookOpen className="w-4 h-4" /> Go to Dashboard
                 </Link>
-                <Link to="/find-founders" className="bg-white text-slate-700 border-2 border-slate-200 font-bold text-sm px-5 py-2.5 rounded-xl hover:border-emerald-200 transition-all flex items-center gap-2">
+                <Link to="/mentor/find-founders" className="bg-white text-slate-700 border-2 border-slate-200 font-bold text-sm px-5 py-2.5 rounded-xl hover:border-[#98DE38]/40 transition-all flex items-center gap-2">
                   <Search className="w-4 h-4" /> Find Founders
                 </Link>
               </div>

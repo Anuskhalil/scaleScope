@@ -2,6 +2,7 @@ const supabase = require('../config/supabase');
 
 const VALID_REQUEST_TYPES = [
   'mentor_request',
+  'mentor_offer',
   'cofounder_request',
   'investor_contact',
   'team_invite',

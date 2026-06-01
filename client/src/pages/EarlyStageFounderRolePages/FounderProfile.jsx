@@ -392,9 +392,14 @@ const KEY_RISK_CHIPS = [
   'Team risk',
   'Pricing risk',
 ];
+const LEGAL_STATUS_OPTS = ['Not registered yet', 'Sole proprietor', 'Private limited', 'LLC / C-Corp', 'Partnership', 'Non-profit', 'Other'];
+const INVESTMENT_READINESS_OPTS = ['Not raising yet', 'Preparing materials', 'Ready for intro', 'Actively raising', 'Committed round'];
+const COFOUNDER_STATUS_OPTS = ['Solo founder', 'Has co-founder', 'Looking for co-founder', 'Team formed', 'Open to advisory co-founder'];
 
 const makeEmpty = (user) => ({
   // profiles
+  id: null,
+  user_id: user?.id || '',
   full_name: '',
   email: user?.email || '',
   user_type: 'early-stage-founder',
@@ -411,6 +416,7 @@ const makeEmpty = (user) => ({
   idea_title: '',
   industry: '',
   startup_stage: '',
+  company_stage: '',
   problem_solving: '',
   problem_statement: '',
   unique_value_proposition: '',
@@ -427,11 +433,24 @@ const makeEmpty = (user) => ({
   pitch_deck_url: '',
   demo_url: '',
   website_url: '',
+  startup_location: '',
+  legal_status: '',
+  monthly_revenue: '',
+  active_users: '',
+  customer_count: '',
+  incubator_or_accelerator: '',
+  pitch_video_url: '',
+  investment_readiness: '',
+  cofounder_status: '',
   looking_for: [],
   help_needed: [],
   skills_needed: [],
   profile_completion: 0,
   onboarding_completed: false,
+  is_public: true,
+  is_active: true,
+  created_at: '',
+  updated_at: '',
   metadata: {},
 
   // enhanced founder profile fields
@@ -463,6 +482,7 @@ const makeEmpty = (user) => ({
 });
 
 const safeArray = (v) => (Array.isArray(v) ? v : []);
+const formatDate = (value) => value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
 
 function calcFounderCompletionWithBreakdown(f) {
   const checks = [
@@ -481,6 +501,8 @@ function calcFounderCompletionWithBreakdown(f) {
     { field: 'industry', condition: !!f.industry, points: 5, label: 'Industry' },
     { field: 'stage', condition: !!f.startup_stage, points: 5, label: 'Startup stage' },
     { field: 'product_status', condition: !!f.product_status, points: 4, label: 'Product status' },
+    { field: 'startup_location', condition: !!f.startup_location, points: 3, label: 'Startup location' },
+    { field: 'investment_readiness', condition: !!f.investment_readiness, points: 3, label: 'Investment readiness' },
     { field: 'validation_status', condition: !!f.validation_status, points: 5, label: 'Validation status' },
     { field: 'problem', condition: (f.problem_solving || f.problem_statement || '').trim().length > 20, points: 8, label: 'Problem statement' },
     { field: 'uvp', condition: (f.unique_value_proposition || '').trim().length > 10, points: 6, label: 'Unique value' },
@@ -787,6 +809,8 @@ export default function FounderProfile() {
       const normalized = {
         ...makeEmpty(user),
 
+        id: source.id || null,
+        user_id: source.user_id || user?.id || '',
         full_name: source.full_name || '',
         email: source.email || user.email || '',
         user_type: source.user_type || 'early-stage-founder',
@@ -804,6 +828,7 @@ export default function FounderProfile() {
         idea_title: source.idea_title || '',
         industry: source.industry || '',
         startup_stage: source.startup_stage || source.company_stage || '',
+        company_stage: source.company_stage || source.startup_stage || '',
         problem_solving: source.problem_solving || source.problem_statement || '',
         problem_statement: source.problem_statement || source.problem_solving || '',
         unique_value_proposition: source.unique_value_proposition || '',
@@ -826,11 +851,24 @@ export default function FounderProfile() {
         pitch_deck_url: source.pitch_deck_url || '',
         demo_url: source.demo_url || '',
         website_url: source.website_url || '',
+        startup_location: source.startup_location || '',
+        legal_status: source.legal_status || '',
+        monthly_revenue: source.monthly_revenue === null || source.monthly_revenue === undefined ? '' : String(source.monthly_revenue),
+        active_users: source.active_users === null || source.active_users === undefined ? '' : String(source.active_users),
+        customer_count: source.customer_count === null || source.customer_count === undefined ? '' : String(source.customer_count),
+        incubator_or_accelerator: source.incubator_or_accelerator || '',
+        pitch_video_url: source.pitch_video_url || '',
+        investment_readiness: source.investment_readiness || '',
+        cofounder_status: source.cofounder_status || '',
         looking_for: safeArray(source.looking_for),
         help_needed: safeArray(source.help_needed),
         skills_needed: safeArray(source.skills_needed),
         profile_completion: source.profile_completion || 0,
         onboarding_completed: source.onboarding_completed || false,
+        is_public: source.is_public !== false,
+        is_active: source.is_active !== false,
+        created_at: source.created_at || '',
+        updated_at: source.updated_at || '',
 
         founder_role: source.founder_role || '',
         commitment_level: source.commitment_level || '',
@@ -975,6 +1013,8 @@ export default function FounderProfile() {
         skills: safeArray(formData.founder_skills),
         profile_completion: completion,
         onboarding_completed: true,
+        is_public: formData.is_public !== false,
+        is_active: formData.is_active !== false,
         metadata: {
           updated_from: 'founder_profile_page',
           updated_at: now,
@@ -1005,6 +1045,15 @@ export default function FounderProfile() {
         pitch_deck_url: formData.pitch_deck_url?.trim() || '',
         demo_url: formData.demo_url?.trim() || '',
         website_url: formData.website_url?.trim() || '',
+        startup_location: formData.startup_location?.trim() || '',
+        legal_status: formData.legal_status || '',
+        monthly_revenue: formData.monthly_revenue || '',
+        active_users: formData.active_users || '',
+        customer_count: formData.customer_count || '',
+        incubator_or_accelerator: formData.incubator_or_accelerator?.trim() || '',
+        pitch_video_url: formData.pitch_video_url?.trim() || '',
+        investment_readiness: formData.investment_readiness || '',
+        cofounder_status: formData.cofounder_status || '',
 
         looking_for: safeArray(formData.looking_for),
         help_needed: safeArray(formData.help_needed),
@@ -1646,9 +1695,54 @@ function ViewMode({ formData, onEditClick }) {
         )}
       </Section>
 
+      <Section title="Readiness & Operating Metrics" icon={<TrendingUp className="w-5 h-5 text-[#1B2D7F]" />}>
+        <div className="grid md:grid-cols-3 gap-3">
+          {[
+            { l: 'Startup Location', v: formData.startup_location, I: MapPin },
+            { l: 'Legal Status', v: formData.legal_status, I: Shield },
+            { l: 'Investment Readiness', v: formData.investment_readiness, I: DollarSign },
+            { l: 'Monthly Revenue', v: formData.monthly_revenue, I: DollarSign },
+            { l: 'Active Users', v: formData.active_users || '0', I: Users },
+            { l: 'Customers', v: formData.customer_count || '0', I: Target },
+            { l: 'Incubator / Accelerator', v: formData.incubator_or_accelerator, I: Rocket },
+            { l: 'Co-Founder Status', v: formData.cofounder_status, I: Users },
+          ].map((x, i) => (
+            <div key={i} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
+              <div className="p-2 bg-gray-100 rounded-lg" style={{ color: '#1B2D7F' }}><x.I className="w-4 h-4" /></div>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">{x.l}</p>
+                <p className="text-sm font-semibold text-gray-800 truncate">{x.v || <span className="text-gray-300 italic">Not provided</span>}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Visibility & Status" icon={<Shield className="w-5 h-5 text-[#1B2D7F]" />}>
+        <div className="grid md:grid-cols-2 gap-3">
+          {[
+            { l: 'Public Profile', v: formData.is_public ? 'Visible' : 'Private', I: Shield },
+            { l: 'Active Startup', v: formData.is_active ? 'Active' : 'Inactive', I: Shield },
+            { l: 'Founder Profile ID', v: formData.id, I: Shield },
+            { l: 'User ID', v: formData.user_id, I: User },
+            { l: 'Created', v: formatDate(formData.created_at), I: Clock },
+            { l: 'Updated', v: formatDate(formData.updated_at), I: Clock },
+          ].map((x, i) => (
+            <div key={i} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
+              <div className="p-2 bg-gray-100 rounded-lg" style={{ color: '#1B2D7F' }}><x.I className="w-4 h-4" /></div>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">{x.l}</p>
+                <p className="text-sm font-semibold text-gray-800 truncate">{x.v || <span className="text-gray-300 italic">Not provided</span>}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
       <Section title="Links & Assets" icon={<LinkIcon className="w-5 h-5 text-[#1B2D7F]" />}>
         {[
           formData.pitch_deck_url,
+          formData.pitch_video_url,
           formData.demo_url,
           formData.website_url,
           formData.linkedin_url,
@@ -1658,6 +1752,7 @@ function ViewMode({ formData, onEditClick }) {
           <div className="grid md:grid-cols-2 gap-3">
             {[
               { k: 'pitch_deck_url', l: 'Pitch Deck', I: FileText, bg: 'bg-lime-50', c: 'text-[#1B2D7F]' },
+              { k: 'pitch_video_url', l: 'Pitch Video', I: Globe, bg: 'bg-lime-50', c: 'text-[#1B2D7F]' },
               { k: 'demo_url', l: 'Demo', I: Globe, bg: 'bg-gray-50', c: 'text-gray-700' },
               { k: 'website_url', l: 'Website', I: Globe, bg: 'bg-gray-50', c: 'text-gray-700' },
               { k: 'linkedin_url', l: 'LinkedIn', I: Linkedin, bg: 'bg-blue-50', c: 'text-blue-600' },
@@ -2079,6 +2174,20 @@ function EditMode({
           rows={3}
           max={500}
         />
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <FormInput label="Monthly Revenue" value={formData.monthly_revenue} onChange={(v) => updateField('monthly_revenue', v)} icon={<DollarSign className="w-4 h-4" />} placeholder="e.g. 50000" />
+          <FormInput label="Active Users" type="number" value={formData.active_users} onChange={(v) => updateField('active_users', v)} icon={<Users className="w-4 h-4" />} placeholder="e.g. 1200" />
+          <FormInput label="Customer Count" type="number" value={formData.customer_count} onChange={(v) => updateField('customer_count', v)} icon={<Target className="w-4 h-4" />} placeholder="e.g. 35" />
+          <FormInput label="Incubator / Accelerator" value={formData.incubator_or_accelerator} onChange={(v) => updateField('incubator_or_accelerator', v)} icon={<Rocket className="w-4 h-4" />} placeholder="e.g. NIC, Y Combinator, Plan9" />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <SelectField label="Legal Status" value={formData.legal_status} onChange={(v) => updateField('legal_status', v)} options={LEGAL_STATUS_OPTS} placeholder="Select legal status..." />
+          <SelectField label="Investment Readiness" value={formData.investment_readiness} onChange={(v) => updateField('investment_readiness', v)} options={INVESTMENT_READINESS_OPTS} placeholder="Select readiness..." />
+          <SelectField label="Co-Founder Status" value={formData.cofounder_status} onChange={(v) => updateField('cofounder_status', v)} options={COFOUNDER_STATUS_OPTS} placeholder="Select co-founder status..." />
+          <FormInput label="Startup Location" value={formData.startup_location} onChange={(v) => updateField('startup_location', v)} icon={<MapPin className="w-4 h-4" />} placeholder="e.g. Karachi, Remote, LUMS Lahore" />
+        </div>
       </EditSection>
 
       <EditSection title="Founder Skills" icon={<Briefcase className="w-4 h-4" />} hint="AI uses your skills for matching. Add at least 3.">
@@ -2314,10 +2423,30 @@ function EditMode({
         </div>
       </EditSection>
 
+      <EditSection title="Visibility & Status" icon={<Shield className="w-4 h-4" />} hint="Control whether mentors, investors, and team candidates can discover this startup profile.">
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#98DE38]/50 transition-all">
+            <input type="checkbox" checked={formData.is_public !== false} onChange={(e) => updateField('is_public', e.target.checked)} className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]" />
+            <div><p className="text-sm font-semibold text-gray-700">Public startup profile</p><p className="text-xs text-gray-400">Show this startup in matching and discovery.</p></div>
+          </label>
+          <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#98DE38]/50 transition-all">
+            <input type="checkbox" checked={formData.is_active !== false} onChange={(e) => updateField('is_active', e.target.checked)} className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]" />
+            <div><p className="text-sm font-semibold text-gray-700">Active startup</p><p className="text-xs text-gray-400">Keep on while you are looking for support or funding.</p></div>
+          </label>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <FormInput label="Founder Profile ID" value={formData.id || ''} disabled icon={<Shield className="w-4 h-4" />} />
+          <FormInput label="User ID" value={formData.user_id || ''} disabled icon={<User className="w-4 h-4" />} />
+          <FormInput label="Created At" value={formatDate(formData.created_at)} disabled icon={<Clock className="w-4 h-4" />} />
+          <FormInput label="Updated At" value={formatDate(formData.updated_at)} disabled icon={<Clock className="w-4 h-4" />} />
+        </div>
+      </EditSection>
+
       <EditSection title="Links & Assets" icon={<LinkIcon className="w-4 h-4" />} hint="Boosts investor trust and discoverability.">
         <div className="grid md:grid-cols-2 gap-4">
           {[
             { field: 'pitch_deck_url', Icon: FileText, label: 'Pitch Deck URL', points: 4, placeholder: 'Google Drive, Notion, or direct link' },
+            { field: 'pitch_video_url', Icon: Globe, label: 'Pitch Video URL', points: 3, placeholder: 'Loom, YouTube, or video pitch URL' },
             { field: 'demo_url', Icon: Globe, label: 'Demo / Product URL', points: 3, placeholder: 'Loom, YouTube, or live demo URL' },
             { field: 'website_url', Icon: Globe, label: 'Website URL', points: 2, placeholder: 'https://yourstartup.com' },
             { field: 'linkedin_url', Icon: Linkedin, label: 'LinkedIn URL', points: 3, placeholder: 'https://linkedin.com/in/you' },

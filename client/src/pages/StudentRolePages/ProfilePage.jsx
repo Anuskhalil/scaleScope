@@ -46,6 +46,11 @@ const SKILL_CHIPS = ['Technical / Dev', 'AI / ML', 'Marketing', 'Design / UI-UX'
 const INTEREST_CHIPS = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'E-commerce', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'AI / ML', 'Social Impact', 'Gaming'];
 const HELP_NEEDED_CHIPS = ['Product Strategy', 'Technical Architecture', 'Design / UX', 'Marketing & Growth', 'Fundraising', 'Market Research', 'Legal & Compliance', 'Team Building', 'Pitch Deck Review', 'Mentorship', 'User Research', 'Business Model'];
 const COMMITMENT_LEVELS = ['Exploring', 'Casual (2–5 hrs/week)', 'Serious (5–15 hrs/week)', 'Full-time (15–30 hrs/week)'];
+const HOURS_PER_WEEK_OPTS = ['0-5 hrs/week', '5-10 hrs/week', '10-20 hrs/week', '20-30 hrs/week', '30+ hrs/week'];
+const COLLABORATION_OPTS = ['Remote only', 'Hybrid', 'In-person', 'Flexible', 'Async first'];
+const STUDENT_ROLE_OPTS = ['Technical Co-Founder', 'Product / Strategy', 'Design / UI-UX', 'Marketing / Growth', 'Sales / BD', 'Operations', 'Research'];
+const AVAILABILITY_STATUS_OPTS = ['Exploring', 'Available now', 'Available part-time', 'Busy this month', 'Not available'];
+const LANGUAGE_OPTS = ['English', 'Urdu', 'Hindi', 'Arabic', 'Punjabi', 'Sindhi', 'Pashto', 'Balochi'];
 const LOOKING_FOR_OPTS = [
   { val: 'Co-Founder', icon: '👥', desc: 'Build together' },
   { val: 'Mentor', icon: '🧠', desc: 'Guidance & advice' },
@@ -109,12 +114,16 @@ const generateHelpSuggestions = (interests, ideaDescription) => {
 
 // ✅ SAFE INITIAL STATE
 const makeEmpty = (user, role) => ({
+  id: null, user_id: user?.id || '',
   full_name: '', email: user?.email || '', user_type: role || '',
   location: '', bio: '', avatar_url: '', linkedin_url: '', github_url: '', twitter_url: '',
   skills: [], interests: [], looking_for: [], help_needed: [], projects: [], launch_risk_flags: [],
   skills_with_levels: [],
   university: '', degree: '', major: '', graduation_year_int: '', current_year: '', career_goals: '',
   startup_idea_description: '', short_bio_for_mentors: '', commitment_level: '',
+  hours_per_week: '', collaboration_preference: '', has_cofounder: false, resume_url: '',
+  portfolio_url: '', preferred_role: '', preferred_industries: [], open_to_internship: false,
+  open_to_cofounder: false, availability_status: '', languages: [], city_or_campus: '',
   // ✅ NEW startup idea fields
   has_startup_idea: false,
   idea_title: '',
@@ -122,7 +131,7 @@ const makeEmpty = (user, role) => ({
   idea_stage: '',
   target_audience: '',
   unique_value_prop: '',
-  profile_completion: 0, onboarding_completed: false, metadata: {},
+  profile_completion: 0, onboarding_completed: false, metadata: {}, created_at: '', updated_at: '',
 });
 
 // 🔧 Helpers
@@ -163,6 +172,10 @@ function calcCompletionWithBreakdown(f) {
     { field: 'help_needed', condition: ((f.help_needed || []).length > 0), points: 3, label: 'Help needed' },
     { field: 'mentor_bio', condition: (f.short_bio_for_mentors || '').trim().length > 10, points: 3, label: 'Mentor bio' },
     { field: 'commitment', condition: !!f.commitment_level, points: 2, label: 'Commitment level' },
+    { field: 'hours_per_week', condition: !!f.hours_per_week, points: 2, label: 'Hours per week' },
+    { field: 'collaboration_preference', condition: !!f.collaboration_preference, points: 2, label: 'Collaboration preference' },
+    { field: 'availability_status', condition: !!f.availability_status, points: 2, label: 'Availability status' },
+    { field: 'preferred_role', condition: !!f.preferred_role, points: 2, label: 'Preferred role' },
     { field: 'skill_levels', condition: ((f.skills_with_levels || []).length >= (f.skills || []).length && (f.skills || []).length > 0), points: 3, label: 'Skill proficiency levels' },
     { field: 'startup_idea', condition: (f.startup_idea_description || '').trim().length > 10, points: 2, label: 'Startup idea description' },
   ];
@@ -261,7 +274,7 @@ export default function ProfilePage() {
       const draft = loadDraft();
       const [profilesRes, studentRes] = await Promise.all([
         supabase.from('profiles').select('id, full_name, email, user_type, avatar_url, bio, location, linkedin_url, github_url, twitter_url, updated_at').eq('id', user.id).maybeSingle(),
-        supabase.from('student_profiles').select(`id, user_id, university, degree, major, graduation_year_int, interests, current_year, career_goals, looking_for, has_startup_idea, startup_idea_description, idea_title, idea_domain, idea_stage, target_audience, unique_value_prop, skills_with_levels, help_needed, commitment_level, short_bio_for_mentors, profile_completion, updated_at`).eq('user_id', user.id).maybeSingle()
+        supabase.from('student_profiles').select(`id, user_id, university, degree, major, graduation_year_int, interests, current_year, career_goals, looking_for, projects, has_startup_idea, startup_idea_description, idea_title, idea_domain, idea_stage, target_audience, unique_value_prop, skills_with_levels, help_needed, commitment_level, hours_per_week, collaboration_preference, has_cofounder, resume_url, portfolio_url, preferred_role, preferred_industries, open_to_internship, open_to_cofounder, availability_status, languages, city_or_campus, launch_risk_flags, short_bio_for_mentors, profile_completion, onboarding_completed, metadata, created_at, updated_at`).eq('user_id', user.id).maybeSingle()
       ]);
       if (profilesRes.error) throw profilesRes.error;
       if (studentRes.error) throw studentRes.error;
@@ -280,6 +293,7 @@ export default function ProfilePage() {
 
       const normalized = {
         ...makeEmpty(user, userRole),
+        id: source.id || null, user_id: source.user_id || user?.id || '',
         full_name: source.full_name || '', email: source.email || user?.email || '', user_type: source.user_type || userRole || '',
         location: source.location || '', bio: source.bio || '', avatar_url: avatarUrl || '',
         linkedin_url: source.linkedin_url || '', github_url: source.github_url || '', twitter_url: source.twitter_url || '',
@@ -292,6 +306,18 @@ export default function ProfilePage() {
         current_year: source.current_year || '', career_goals: source.career_goals || '',
         startup_idea_description: source.startup_idea_description || '', short_bio_for_mentors: source.short_bio_for_mentors || '',
         commitment_level: source.commitment_level || '',
+        hours_per_week: source.hours_per_week || '',
+        collaboration_preference: source.collaboration_preference || '',
+        has_cofounder: Boolean(source.has_cofounder),
+        resume_url: source.resume_url || '',
+        portfolio_url: source.portfolio_url || '',
+        preferred_role: source.preferred_role || '',
+        preferred_industries: source.preferred_industries || [],
+        open_to_internship: Boolean(source.open_to_internship),
+        open_to_cofounder: Boolean(source.open_to_cofounder),
+        availability_status: source.availability_status || '',
+        languages: source.languages || [],
+        city_or_campus: source.city_or_campus || '',
         // ✅ NEW fields
         has_startup_idea: source.has_startup_idea || false,
         idea_title: source.idea_title || '',
@@ -299,7 +325,7 @@ export default function ProfilePage() {
         idea_stage: source.idea_stage || '',
         target_audience: source.target_audience || '',
         unique_value_prop: source.unique_value_prop || '',
-        profile_completion: source.profile_completion || 0, onboarding_completed: source.onboarding_completed || false, updated_at: source.updated_at,
+        profile_completion: source.profile_completion || 0, onboarding_completed: source.onboarding_completed || false, metadata: source.metadata || {}, created_at: source.created_at || '', updated_at: source.updated_at,
       };
 
       snapRef.current = normalized;
@@ -342,7 +368,22 @@ export default function ProfilePage() {
         unique_value_prop: formData.has_startup_idea ? (formData.unique_value_prop?.trim() || null) : null,
         startup_idea_description: formData.has_startup_idea ? (formData.startup_idea_description?.trim() || null) : null,
         short_bio_for_mentors: formData.short_bio_for_mentors?.trim() || null, commitment_level: formData.commitment_level || null,
-        skills_with_levels: skillsWithLevels, profile_completion: calcCompletionWithBreakdown(formData).percentage, updated_at: now,
+        hours_per_week: formData.hours_per_week || null,
+        collaboration_preference: formData.collaboration_preference || null,
+        has_cofounder: Boolean(formData.has_cofounder),
+        resume_url: formData.resume_url?.trim() || null,
+        portfolio_url: formData.portfolio_url?.trim() || null,
+        preferred_role: formData.preferred_role || null,
+        preferred_industries: formData.preferred_industries || [],
+        open_to_internship: Boolean(formData.open_to_internship),
+        open_to_cofounder: Boolean(formData.open_to_cofounder),
+        availability_status: formData.availability_status || null,
+        languages: formData.languages || [],
+        city_or_campus: formData.city_or_campus?.trim() || null,
+        projects: formData.projects || [],
+        launch_risk_flags: formData.launch_risk_flags || [],
+        metadata: formData.metadata || {},
+        skills_with_levels: skillsWithLevels, profile_completion: calcCompletionWithBreakdown(formData).percentage, onboarding_completed: true, updated_at: now,
       }, { onConflict: 'user_id' });
       if (se) throw se;
 
@@ -576,17 +617,66 @@ function ViewMode({ formData, isStudent, onEditClick }) {
           title="Availability & Commitment"
           icon={<Clock className="w-5 h-5 text-[#1B2D7F]" />}
         >
-          <div className="p-4 bg-gray-50 rounded-xl border-l-4" style={{ borderColor: '#98DE38' }}>
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">
-              Commitment Level
-            </p>
-
-            <p className="text-sm font-semibold text-gray-800">
-              {formData.commitment_level || (
-                <span className="text-gray-300 italic">Not provided</span>
-              )}
-            </p>
+          <div className="grid md:grid-cols-2 gap-3">
+            {[
+              { l: 'Commitment Level', v: formData.commitment_level, I: Clock },
+              { l: 'Hours Per Week', v: formData.hours_per_week, I: Clock },
+              { l: 'Collaboration', v: formData.collaboration_preference, I: Users },
+              { l: 'Has Co-Founder', v: formData.has_cofounder ? 'Yes' : 'No', I: Users },
+            ].map((x, i) => (
+              <div key={i} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
+                <div className="p-2 bg-gray-100 rounded-lg" style={{ color: '#1B2D7F' }}>
+                  <x.I className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">{x.l}</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{x.v || <span className="text-gray-300 italic">Not provided</span>}</p>
+                </div>
+              </div>
+            ))}
           </div>
+        </Section>
+      )}
+
+      {isStudent && (
+        <Section title="Discovery Preferences" icon={<Users className="w-5 h-5 text-[#1B2D7F]" />}>
+          <div className="grid md:grid-cols-2 gap-3 mb-4">
+            {[
+              { l: 'Preferred Role', v: formData.preferred_role, I: Briefcase },
+              { l: 'Availability Status', v: formData.availability_status, I: Clock },
+              { l: 'City / Campus', v: formData.city_or_campus, I: MapPin },
+              { l: 'Open to Internship', v: formData.open_to_internship ? 'Yes' : 'No', I: Briefcase },
+              { l: 'Open to Co-Founder', v: formData.open_to_cofounder ? 'Yes' : 'No', I: Users },
+            ].map((x, i) => (
+              <div key={i} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
+                <div className="p-2 bg-gray-100 rounded-lg" style={{ color: '#1B2D7F' }}><x.I className="w-4 h-4" /></div>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">{x.l}</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{x.v || <span className="text-gray-300 italic">Not provided</span>}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {(formData.preferred_industries || []).length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Preferred Industries</p>
+              <div className="flex flex-wrap gap-2">
+                {formData.preferred_industries.map((item) => (
+                  <span key={item} className="px-3 py-2 rounded-full text-xs font-semibold border" style={{ background: 'rgba(27,45,127,0.08)', color: '#1B2D7F', borderColor: 'rgba(27,45,127,0.2)' }}>{item}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(formData.languages || []).length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Languages</p>
+              <div className="flex flex-wrap gap-2">
+                {formData.languages.map((item) => (
+                  <span key={item} className="px-3 py-2 rounded-full text-xs font-semibold border" style={{ background: 'rgba(152,222,56,0.12)', color: '#1B2D7F', borderColor: '#98DE38' }}>{item}</span>
+                ))}
+              </div>
+            </div>
+          )}
         </Section>
       )}
 
@@ -671,6 +761,23 @@ function ViewMode({ formData, isStudent, onEditClick }) {
         ) : <Empty label="No skills added yet. Add at least 3 to improve matching." />}
       </Section>
 
+      <Section title="Projects & Launch Risks" icon={<Rocket className="w-5 h-5 text-[#1B2D7F]" />}>
+        {(formData.projects || []).length > 0 ? (
+          <div className="space-y-2 mb-4">
+            {(formData.projects || []).map((project, i) => (
+              <div key={`${project}-${i}`} className="p-3 bg-gray-50 rounded-xl text-sm text-gray-700">{project}</div>
+            ))}
+          </div>
+        ) : <Empty label="No projects added yet." />}
+        {(formData.launch_risk_flags || []).length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {(formData.launch_risk_flags || []).map((risk, i) => (
+              <span key={`${risk}-${i}`} className="px-3 py-2 rounded-full text-xs font-semibold border" style={{ background: 'rgba(27,45,127,0.08)', color: '#1B2D7F', borderColor: 'rgba(27,45,127,0.2)' }}>{risk}</span>
+            ))}
+          </div>
+        )}
+      </Section>
+
       {/* Looking For - Always show for students */}
       {isStudent && (
         <Section title="Looking For" icon={<Tag className="w-5 h-5 text-[#1B2D7F]" />}>
@@ -687,9 +794,9 @@ function ViewMode({ formData, isStudent, onEditClick }) {
 
       {/* Links - Always show */}
       <Section title="Links" icon={<LinkIcon className="w-5 h-5 text-[#1B2D7F]" />}>
-        {([formData.linkedin_url, formData.github_url, formData.twitter_url].some(Boolean)) ? (
+        {([formData.linkedin_url, formData.github_url, formData.twitter_url, formData.resume_url, formData.portfolio_url].some(Boolean)) ? (
           <div className="grid md:grid-cols-2 gap-3">
-            {[{ k: 'linkedin_url', l: 'LinkedIn', I: Linkedin, bg: 'bg-blue-50', c: 'text-blue-600' }, { k: 'github_url', l: 'GitHub', I: Github, bg: 'bg-gray-50', c: 'text-gray-600' }, { k: 'twitter_url', l: 'Twitter', I: Twitter, bg: 'bg-sky-50', c: 'text-sky-600' }].filter(link => formData[link.k]).map(link => (
+            {[{ k: 'linkedin_url', l: 'LinkedIn', I: Linkedin, bg: 'bg-blue-50', c: 'text-blue-600' }, { k: 'github_url', l: 'GitHub', I: Github, bg: 'bg-gray-50', c: 'text-gray-600' }, { k: 'twitter_url', l: 'Twitter', I: Twitter, bg: 'bg-sky-50', c: 'text-sky-600' }, { k: 'resume_url', l: 'Resume', I: LinkIcon, bg: 'bg-gray-50', c: 'text-[#1B2D7F]' }, { k: 'portfolio_url', l: 'Portfolio', I: LinkIcon, bg: 'bg-gray-50', c: 'text-[#1B2D7F]' }].filter(link => formData[link.k]).map(link => (
               <a key={link.k} href={formData[link.k]} target="_blank" rel="noreferrer" className={`flex items-center gap-3 p-4 rounded-xl hover:opacity-80 transition-all ${link.bg} ${link.c}`}><link.I className="w-4 h-4 flex-shrink-0" /><div className="flex-1 min-w-0"><p className="text-xs font-bold uppercase tracking-wide">{link.l}</p><p className="text-xs truncate group-hover:underline opacity-80">{formData[link.k].replace(/^https?:\/\//, '')}</p></div><LinkIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-50" /></a>
             ))}
           </div>
@@ -832,6 +939,80 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
               Example: Exploring, Casual, Serious, or Full-time.
             </p>
           </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Hours Per Week</label>
+              <select className="sel" value={formData.hours_per_week || ''} onChange={(e) => updateField('hours_per_week', e.target.value)}>
+                <option value="">Select hours...</option>
+                {HOURS_PER_WEEK_OPTS.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Collaboration Preference</label>
+              <select className="sel" value={formData.collaboration_preference || ''} onChange={(e) => updateField('collaboration_preference', e.target.value)}>
+                <option value="">Select preference...</option>
+                {COLLABORATION_OPTS.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer">
+            <input type="checkbox" checked={!!formData.has_cofounder} onChange={(e) => updateField('has_cofounder', e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]" />
+            <span className="text-sm font-semibold text-gray-700">I already have a co-founder</span>
+          </label>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Availability Status</label>
+              <select className="sel" value={formData.availability_status || ''} onChange={(e) => updateField('availability_status', e.target.value)}>
+                <option value="">Select status...</option>
+                {AVAILABILITY_STATUS_OPTS.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Preferred Role</label>
+              <select className="sel" value={formData.preferred_role || ''} onChange={(e) => updateField('preferred_role', e.target.value)}>
+                <option value="">Select role...</option>
+                {STUDENT_ROLE_OPTS.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <FormInput label="City / Campus" value={formData.city_or_campus || ''} onChange={(v) => updateField('city_or_campus', v)} icon={<MapPin className="w-4 h-4" />} placeholder="e.g. FAST Karachi, LUMS, Remote" />
+
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Preferred Industries</p>
+            <div className="flex flex-wrap gap-2">
+              {INTEREST_CHIPS.map((item) => (
+                <button key={item} type="button" onClick={() => toggleArrayField('preferred_industries', item)} className={`chip ${((formData.preferred_industries || []).includes(item)) ? 'selected' : ''}`}>
+                  {(formData.preferred_industries || []).includes(item) ? '✓' : '+'} {item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Languages</p>
+            <div className="flex flex-wrap gap-2">
+              {LANGUAGE_OPTS.map((item) => (
+                <button key={item} type="button" onClick={() => toggleArrayField('languages', item)} className={`chip ${((formData.languages || []).includes(item)) ? 'selected' : ''}`}>
+                  {(formData.languages || []).includes(item) ? '✓' : '+'} {item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer">
+              <input type="checkbox" checked={!!formData.open_to_internship} onChange={(e) => updateField('open_to_internship', e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]" />
+              <span className="text-sm font-semibold text-gray-700">Open to internship</span>
+            </label>
+            <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200 cursor-pointer">
+              <input type="checkbox" checked={!!formData.open_to_cofounder} onChange={(e) => updateField('open_to_cofounder', e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]" />
+              <span className="text-sm font-semibold text-gray-700">Open to co-founder role</span>
+            </label>
+          </div>
         </EditSection>
       )}
 
@@ -907,6 +1088,10 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
           <EditSection title="Help Needed" icon={<Heart className="w-4 h-4" />} hint="What do you need guidance on?">
             <div className="flex flex-wrap gap-2">{HELP_NEEDED_CHIPS.map(item => (<button key={item} type="button" onClick={() => toggleArrayField('help_needed', item)} className={`chip ${((formData.help_needed || []).includes(item)) ? 'selected' : ''}`} style={(formData.help_needed || []).includes(item) ? { borderColor: '#EF4444' } : {}} aria-pressed={(formData.help_needed || []).includes(item)}>{(formData.help_needed || []).includes(item) ? '✓' : '+'} {item}</button>))}</div>
           </EditSection>
+          <EditSection title="Projects & Launch Risks" icon={<Rocket className="w-4 h-4" />} hint="Add one project or risk per line. These fields map directly to student_profiles.">
+            <FormTextarea label="Projects" value={(formData.projects || []).join('\n')} onChange={(v) => updateField('projects', v.split('\n').map((item) => item.trim()).filter(Boolean))} placeholder="e.g. Built an MVP for campus food delivery" rows={3} max={600} />
+            <FormTextarea label="Launch Risk Flags" value={(formData.launch_risk_flags || []).join('\n')} onChange={(v) => updateField('launch_risk_flags', v.split('\n').map((item) => item.trim()).filter(Boolean))} placeholder="e.g. Need legal review, no technical co-founder yet" rows={3} max={600} />
+          </EditSection>
           <EditSection title="Short Bio for Mentors" icon={<Lightbulb className="w-4 h-4" />} hint="Appears on mentor match cards. Keep it concise.">
             <FormTextarea label="Mentor Bio" value={formData.short_bio_for_mentors} onChange={(v) => updateField('short_bio_for_mentors', v)} placeholder="Brief intro for mentors: your background, what you're building, and what help you need..." rows={3} max={300} />
           </EditSection>
@@ -915,7 +1100,10 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
 
       {/* Links */}
       <EditSection title="Links" icon={<LinkIcon className="w-4 h-4" />} hint="Boosts verification & discoverability.">
-        <div className="grid md:grid-cols-2 gap-4">{[{ field: 'linkedin_url', Icon: Linkedin, label: 'LinkedIn URL', points: 3, placeholder: 'https://linkedin.com/in/you' }, { field: 'github_url', Icon: Github, label: 'GitHub URL', points: 2, placeholder: 'https://github.com/you' }, { field: 'twitter_url', Icon: Twitter, label: 'Twitter URL', points: 1, placeholder: 'https://twitter.com/you' }].map(item => (<div key={item.field}><label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5"><item.Icon className="w-3.5 h-3.5" style={{ color: '#1B2D7F' }} /> {item.label}<span className="ml-auto text-white font-bold px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: '#98DE38' }}>+{item.points}</span></label><input type="url" placeholder={item.placeholder} value={formData[item.field] || ''} onChange={(e) => updateField(item.field, e.target.value)} className="inp" aria-label={`${item.label} input`} /></div>))}</div>
+        <div className="grid md:grid-cols-2 gap-4">{[{ field: 'linkedin_url', Icon: Linkedin, label: 'LinkedIn URL', points: 3, placeholder: 'https://linkedin.com/in/you' }, { field: 'github_url', Icon: Github, label: 'GitHub URL', points: 2, placeholder: 'https://github.com/you' }, { field: 'twitter_url', Icon: Twitter, label: 'Twitter URL', points: 1, placeholder: 'https://twitter.com/you' }, { field: 'portfolio_url', Icon: LinkIcon, label: 'Portfolio URL', points: 2, placeholder: 'https://yourportfolio.com' }].map(item => (<div key={item.field}><label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5"><item.Icon className="w-3.5 h-3.5" style={{ color: '#1B2D7F' }} /> {item.label}<span className="ml-auto text-white font-bold px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: '#98DE38' }}>+{item.points}</span></label><input type="url" placeholder={item.placeholder} value={formData[item.field] || ''} onChange={(e) => updateField(item.field, e.target.value)} className="inp" aria-label={`${item.label} input`} /></div>))}</div>
+        <div className="mt-4">
+          <FormInput label="Resume URL" value={formData.resume_url || ''} onChange={(v) => updateField('resume_url', v)} placeholder="https://drive.google.com/..." icon={<LinkIcon className="w-4 h-4" />} />
+        </div>
       </EditSection>
     </form>
   );

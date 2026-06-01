@@ -277,6 +277,15 @@ export async function saveFounderStartupProfile(userId, data = {}) {
     pitch_deck_url: cleanText(data.pitch_deck_url),
     demo_url: cleanText(data.demo_url),
     website_url: cleanText(data.website_url),
+    startup_location: cleanText(data.startup_location),
+    legal_status: cleanText(data.legal_status),
+    monthly_revenue: parseFunding(data.monthly_revenue),
+    active_users: parseNumber(data.active_users) || 0,
+    customer_count: parseNumber(data.customer_count) || 0,
+    incubator_or_accelerator: cleanText(data.incubator_or_accelerator),
+    pitch_video_url: cleanText(data.pitch_video_url),
+    investment_readiness: cleanText(data.investment_readiness),
+    cofounder_status: cleanText(data.cofounder_status),
 
     // Matching fields
     looking_for: safeArray(data.looking_for),
@@ -291,6 +300,10 @@ export async function saveFounderStartupProfile(userId, data = {}) {
     equity_available: cleanText(data.equity_available),
     cofounder_requirements: cleanText(data.cofounder_requirements),
 
+    profile_completion: parseNumber(data.profile_completion) || 0,
+    onboarding_completed: Boolean(data.onboarding_completed),
+    is_public: data.is_public !== false,
+    is_active: data.is_active !== false,
     updated_at: new Date().toISOString(),
   };
 

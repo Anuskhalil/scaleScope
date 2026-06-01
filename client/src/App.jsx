@@ -42,7 +42,7 @@ import FindInvestorsPage from './pages/EarlyStageFounderRolePages/FindInvestorsP
 
 // ── Mentor Pages ──
 import MentorDashboard from './pages/MentorRolePages/MentorDashboard';
-import MentorProfilePage from './pages/MentorProfile';
+import MentorProfilePage from './pages/MentorRolePages/MentorProfile';
 import FindFoundersPage from './pages/MentorRolePages/FindFoundersPage';
 import MyMenteesPage from './pages/MentorRolePages/MyMenteesPage';
 
@@ -404,7 +404,7 @@ export default function App() {
           <Route
             path="/meetings/:meetingId"
             element={
-              <RolePage allowedRoles={['student', 'early-stage-founder']}>
+              <RolePage allowedRoles={['student', 'early-stage-founder', 'mentor']}>
                 <MeetingRoomPage />
               </RolePage>
             }

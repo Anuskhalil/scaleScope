@@ -3,20 +3,38 @@
 // Connection / messaging re-exported from studentService (shared infrastructure).
 
 import { supabase } from '../lib/supabaseClient';
+import { backendApi } from '../lib/backendApi';
 
 // ── Re-export shared functions ────────────────────────────────────────────
 export {
-  sendConnectionRequest,
   getConnectionStatus,
-  getOrCreateConversation,
   fetchConversations,
   fetchMessages,
   sendMessage,
   markConversationRead,
   subscribeToMessages,
   subscribeToConversations,
-  respondToRequest,
 } from './studentService';
+
+export async function sendConnectionRequest(senderId, receiverId, type = 'mentor_offer', message = '') {
+  if (!senderId) throw new Error('senderId is required');
+  if (!receiverId) throw new Error('receiverId is required');
+
+  return backendApi.sendConnect(receiverId, message?.slice(0, 500), type);
+}
+
+export async function respondToRequest(requestId, status) {
+  const action = status === 'accepted' ? 'accept' : status === 'declined' ? 'decline' : status;
+  return backendApi.respondConnect(requestId, action);
+}
+
+export async function getOrCreateConversation(userId, otherUserId) {
+  if (!userId) throw new Error('userId is required');
+  if (!otherUserId) throw new Error('otherUserId is required');
+
+  const data = await backendApi.getOrCreateConversation(otherUserId);
+  return data.conversationId || data.id || data.data?.id;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PROFILE
@@ -60,6 +78,9 @@ export function calcMentorCompletion(p, mp) {
   // Availability (10)
   if  (mp.mentorship_capacity > 0)              s += 5;
   if ((mp.available_for || []).length > 0)      s += 5;
+  if  (mp.booking_url)                          s += 3;
+  if  (mp.timezone)                             s += 2;
+  if ((mp.industries_supported || []).length > 0) s += 3;
   return Math.min(s, 100);
 }
 
@@ -99,10 +120,6 @@ export async function saveMentorBaseProfile(userId, data) {
     linkedin_url: data.linkedin_url || null,
     github_url:   data.github_url   || null,
     twitter_url:  data.twitter_url  || null,
-    skills:       data.skills       || [],
-    interests:    data.interests    || [],
-    profile_completion:   data.profile_completion   || 0,
-    onboarding_completed: data.onboarding_completed || false,
     updated_at:   now,
     last_active:  now,
   }, { onConflict: 'id' });
@@ -146,6 +163,18 @@ export async function saveMentorDetails(userId, data) {
     current_mentees:     safeInt(data.current_mentees, 0),
     hourly_rate:         safeNum(data.hourly_rate),
     is_pro_bono:         Boolean(data.is_pro_bono),
+    booking_url:         data.booking_url || null,
+    preferred_mentees:   safeArr(data.preferred_mentees),
+    industries_supported: safeArr(data.industries_supported),
+    languages:           safeArr(data.languages),
+    availability_hours:  data.availability_hours || null,
+    timezone:            data.timezone || null,
+    mentorship_mode:     data.mentorship_mode || null,
+    success_stories:     data.success_stories || null,
+    is_public:           data.is_public !== false,
+    is_active:           data.is_active !== false,
+    profile_completion:  safeInt(data.profile_completion, 0),
+    onboarding_completed: Boolean(data.onboarding_completed),
     updated_at:          new Date().toISOString(),
   }, { onConflict: 'user_id' });
   if (error) throw error;
@@ -161,7 +190,14 @@ export async function uploadMentorAvatar(userId, file) {
   if (ue) throw ue;
   const { data: { publicUrl } } = supabase.storage
     .from('avatars').getPublicUrl(path);
-  await saveMentorBaseProfile(userId, { avatar_url: publicUrl });
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      avatar_url: publicUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', userId);
+  if (error) throw error;
   return publicUrl;
 }
 
@@ -187,7 +223,7 @@ export async function fetchMentorDashboard(userId) {
       `)
       .eq('receiver_id', userId)
       .eq('status', 'pending')
-      .in('type', ['mentor_request', 'mentor'])
+      .in('type', ['mentor_request', 'mentor_offer', 'mentor'])
       .order('created_at', { ascending: false })
       .limit(10),
 
@@ -224,7 +260,7 @@ export async function fetchMentorDashboard(userId) {
       `)
       .eq('receiver_id', userId)
       .eq('status', 'accepted')
-      .in('type', ['mentor_request', 'mentor'])
+      .in('type', ['mentor_request', 'mentor_offer', 'mentor'])
       .order('created_at', { ascending: false });
     mentees = data || [];
   } catch (e) { console.warn('mentees:', e.message); }
@@ -306,7 +342,7 @@ export async function fetchMentees(mentorUserId) {
     `)
     .eq('receiver_id', mentorUserId)
     .eq('status', 'accepted')
-    .in('type', ['mentor_request', 'mentor'])
+    .in('type', ['mentor_request', 'mentor_offer', 'mentor'])
     .order('updated_at', { ascending: false });
 
   if (error) throw error;

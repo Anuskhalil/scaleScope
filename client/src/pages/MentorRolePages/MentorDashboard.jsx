@@ -1,633 +1,1173 @@
 // src/pages/MentorRolePages/MentorDashboard.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import {
-  fetchMentorDashboard, calcMentorCompletion, getMentorProfileNudges,
-  rankFoundersForMentor, rankStudentsForMentor,
-  respondToRequest, getOrCreateConversation,
+  fetchMentorDashboard,
+  calcMentorCompletion,
+  getMentorProfileNudges,
+  rankFoundersForMentor,
+  rankStudentsForMentor,
+  respondToRequest,
+  getOrCreateConversation,
+  sendConnectionRequest,
 } from '../../services/mentorService';
 import {
-  Users, MessageSquare, CheckCircle, X, Edit3, MapPin, Bell,
-  ChevronRight, ArrowRight, ArrowUpRight, Loader, Sparkles,
-  Send, Zap, Shield, Search, Star, TrendingUp, Lightbulb,
-  Rocket, GraduationCap, Award, Target, UserCheck, AlertCircle,
+  Rocket,
+  Users,
+  MessageSquare,
+  UserPlus,
+  Target,
+  CheckCircle,
+  Clock,
+  GraduationCap,
+  Shield,
+  Edit3,
+  Inbox,
+  Loader,
+  Settings,
+  TrendingUp,
+  Tag,
+  X,
+  Network,
+  ArrowRight,
   BookOpen,
+  Bell,
+  Sparkles,
 } from 'lucide-react';
 
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
-  .ss{font-family:'Syne',sans-serif}.dm{font-family:'DM Sans',sans-serif}
-  .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
-  .lift:hover{transform:translateY(-3px);box-shadow:0 16px 48px rgba(5,150,105,.10)}
-  .g-ment{background:linear-gradient(135deg,#059669,#0891b2)}
-  .g-teal{background:linear-gradient(135deg,#0d9488,#0891b2)}
-  .g-dk{background:linear-gradient(135deg,#022c22,#164e63)}
-  .page-bg{background-color:#f0fdf9;background-image:radial-gradient(circle,#6ee7b7 1px,transparent 1px);background-size:28px 28px}
-  .sh{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:sh 1.4s infinite;border-radius:10px}
-  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
-  .f0{animation:fu .35s ease both}.f1{animation:fu .35s .07s ease both}
-  .f2{animation:fu .35s .14s ease both}.f3{animation:fu .35s .21s ease both}
-  .f4{animation:fu .35s .28s ease both}
-  @keyframes fu{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-  .slide{animation:si .28s cubic-bezier(.32,.72,0,1) both}
-  @keyframes si{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
-  .prog-ring{transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1)}
-  .ai-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;background:linear-gradient(135deg,#059669,#0891b2);color:#fff}
-  .chip{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;border:1.5px solid #e2e8f0;background:#fff;color:#64748b}
-  .unread-pulse{animation:udot 2s ease-in-out infinite}
-  @keyframes udot{0%,100%{box-shadow:0 0 0 0 rgba(5,150,105,.5)}50%{box-shadow:0 0 0 5px rgba(5,150,105,0)}}
+  :root {
+    --primary: #98DE38;
+    --primary-dark: #7EC42E;
+    --secondary: #1B2D7F;
+    --secondary-light: #2A3F8F;
+    --black: #000000;
+    --white: #FFFFFF;
+    --gray-50: #F9FAFB;
+    --gray-100: #F3F4F6;
+    --gray-200: #E5E7EB;
+  }
+
+  .page-bg {
+    background: var(--gray-50);
+    background-image: radial-gradient(circle, rgba(152,222,56,.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .g-brand {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  }
+
+  .g-sec {
+    background: linear-gradient(135deg, var(--secondary), var(--secondary-light));
+  }
+
+  .lift {
+    transition: transform .2s cubic-bezier(.22,.68,0,1.2), box-shadow .2s ease;
+    will-change: transform;
+  }
+
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(27,45,127,.12);
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, var(--gray-100) 25%, var(--gray-200) 50%, var(--gray-100) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 12px;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .journey-item {
+    border: 2px solid var(--gray-200);
+    border-radius: 14px;
+    padding: 14px;
+    transition: all .2s;
+  }
+
+  .journey-item.done {
+    border-color: #10B981;
+    background: #F0FDF4;
+  }
+
+  .journey-item.active {
+    border-color: var(--secondary);
+    background: #F8FAFC;
+  }
+
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .idea-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(152,222,56,0.15);
+    color: #1B2D7F;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .idea-stage {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(27,45,127,0.1);
+    color: #1B2D7F;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+
+  button:focus-visible, a:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  .tooltip-wrap{position:relative}
+  .tooltip-wrap:hover .tooltip-box{opacity:1;visibility:visible;transform:translateY(0)}
+  .tooltip-box{opacity:0;visibility:hidden;transform:translateY(4px);transition:all .15s ease;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%) translateY(4px);background:#1e293b;color:#fff;font-size:11px;padding:8px 10px;border-radius:8px;white-space:nowrap;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.15);max-width:240px;white-space:normal;text-align:left}
+  .tooltip-box::after{content:'';position:absolute;top:100%;left:50%;margin-left:-4px;border-width:4px;border-style:solid;border-color:#1e293b transparent transparent transparent}
 `;
 
-function initials(name) {
+const initials = (name) => {
   if (!name) return '?';
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-}
-function timeAgo(iso) {
+
+  return name
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+};
+
+const timeAgo = (iso) => {
   if (!iso) return '';
-  const s = (Date.now() - new Date(iso)) / 1000;
-  if (s < 60)    return 'just now';
-  if (s < 3600)  return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
-function gradFor(id) {
-  const g = ['from-emerald-500 to-teal-500','from-indigo-500 to-violet-500',
-             'from-amber-500 to-orange-500','from-rose-500 to-pink-500',
-             'from-blue-500 to-cyan-500','from-violet-500 to-purple-500'];
-  return g[((id || '').charCodeAt?.(0) || 0) % g.length];
-}
-function Card({ children, className = '' }) {
-  return <div className={`bg-white rounded-2xl shadow-sm border border-emerald-100/60 ${className}`}>{children}</div>;
-}
-function SectionHead({ title, icon, linkTo, linkLabel }) {
+
+  const seconds = (Date.now() - new Date(iso)) / 1000;
+
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+
+  return `${Math.floor(seconds / 86400)}d`;
+};
+
+const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'md' }) => {
+  const [failed, setFailed] = useState(false);
+
+  const sizeClass = {
+    sm: 'w-8 h-8',
+    md: 'w-10 h-10',
+    lg: 'w-12 h-12',
+    xl: 'w-14 h-14',
+  }[size];
+
+  if (path && !failed) {
+    return (
+      <img
+        src={path}
+        alt=""
+        className={`${sizeClass} object-cover rounded-xl`}
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
   return (
-    <div className="flex items-center justify-between px-6 pt-6 pb-3">
-      <h2 className="ss font-bold text-slate-900 flex items-center gap-2 text-base">{icon}{title}</h2>
-      {linkLabel && linkTo && (
-        <Link to={linkTo} className="text-xs font-semibold text-emerald-600 flex items-center gap-0.5 hover:gap-1.5 transition-all">
-          {linkLabel}<ChevronRight className="w-3.5 h-3.5" />
+    <div
+      className={`${sizeClass} bg-gradient-to-br ${grad} flex items-center justify-center text-white font-bold rounded-xl`}
+      aria-hidden="true"
+    >
+      {initials(name)}
+    </div>
+  );
+});
+
+const DASHBOARD_MIN_MATCH = 60;
+
+function ConnectionActionNotice({ notice, onClose, onMessage }) {
+  if (!notice) return null;
+
+  const isAccepted = notice.type === 'accepted';
+  const person = notice.person || {};
+  const name = person.full_name || 'User';
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm lift">
+      <div className="flex items-start gap-3">
+        <Avatar name={name} path={person.avatar_url} size="lg" grad="from-indigo-500 to-purple-500" />
+
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-gray-900 text-sm">
+            {isAccepted ? `${name} is now a mentee.` : 'Invitation ignored.'}
+          </p>
+
+          <p className="text-xs text-gray-500 mt-1">
+            {isAccepted
+              ? 'You can now message each other in real time.'
+              : `You won't see this request again.`}
+          </p>
+
+          {isAccepted && (
+            <button
+              type="button"
+              onClick={() => onMessage?.(person.id)}
+              className="px-3 py-2 rounded-xl bg-[#98DE38] text-black text-xs font-bold hover:opacity-90 mt-3"
+            >
+              Send a message to {name}
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center flex-shrink-0"
+          aria-label="Close notice"
+        >
+          <X className="w-4 text-gray-500" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function MentorSuggestionCard({
+  person,
+  type,
+  helpState,
+  onOfferHelp,
+  onOpenChat,
+}) {
+  const [loading, setLoading] = useState(false);
+  const profile = person.profiles || {};
+  const personId = person.user_id;
+  const name = profile.full_name || person.full_name || (type === 'founder' ? 'Founder' : 'Student Founder');
+  const score = Number(person._score || person.matchScore || 0);
+  const title =
+    person.company_name ||
+    person.idea_title ||
+    person.startup_idea_description ||
+    (type === 'founder' ? 'Startup match' : 'Student with an idea');
+
+  const handleConnect = async () => {
+    if (!personId || helpState || loading) return;
+
+    try {
+      setLoading(true);
+      await onOfferHelp(personId);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl p-4 border border-gray-100 hover:shadow-md transition lift">
+      <div className="flex items-center gap-3 mb-3">
+        <Avatar
+          name={name}
+          path={profile.avatar_url}
+          size="lg"
+          grad={type === 'founder' ? 'from-amber-500 to-orange-500' : 'from-indigo-500 to-blue-500'}
+        />
+
+        <div className="flex-1 min-w-0">
+          <h3 className="font-bold text-gray-900 truncate">
+            {name}
+          </h3>
+
+          <p className="text-xs text-gray-500 truncate">
+            {profile.location || title || 'Mentor match'}
+          </p>
+        </div>
+
+        <span className="px-2 py-1 text-[10px] font-bold rounded-full bg-indigo-50 text-indigo-700 flex-shrink-0">
+          {score}% Match
+        </span>
+      </div>
+
+      {title && (
+        <p className="text-xs text-gray-600 mb-3 line-clamp-2">
+          {title}
+        </p>
+      )}
+
+      {person._matchReason && (
+        <p className="text-xs text-gray-600 mb-4">
+          {person._matchReason}
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <Link
+          to={`/user-profile/${personId}`}
+          className="py-2 border-2 border-indigo-100 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold hover:bg-indigo-100 transition flex items-center justify-center"
+        >
+          View Profile
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => onOpenChat?.(personId)}
+          disabled={helpState !== 'accepted'}
+          className={`py-2 border-2 rounded-xl text-xs font-bold transition flex items-center justify-center ${helpState === 'accepted'
+            ? 'border-gray-200 hover:border-gray-300 text-gray-800 bg-white'
+            : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+            }`}
+        >
+          <MessageSquare className="w-3.5 mr-1" />
+          {helpState === 'accepted' ? 'Message' : 'Connect first'}
+        </button>
+
+        {helpState === 'sent' || helpState === 'pending' ? (
+          <button
+            type="button"
+            disabled
+            className="py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-xs font-bold flex items-center justify-center"
+          >
+            <Clock className="w-3.5 mr-1" />
+            Pending
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleConnect}
+            disabled={loading}
+            className="py-2 g-brand text-black rounded-xl text-xs font-black hover:opacity-90 transition flex items-center justify-center disabled:opacity-60"
+          >
+            {loading ? (
+              <Loader className="w-3.5 animate-spin mr-1" />
+            ) : (
+              <GraduationCap className="w-3.5 mr-1" />
+            )}
+            {loading ? 'Sending...' : 'Request'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MyMenteesCard({ mentees = [], onMessage }) {
+  const visibleMentees = mentees.slice(0, 5);
+
+  return (
+    <div className="bg-white rounded-2xl p-5 border border-gray-100">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-gray-900 flex items-center gap-2">
+          <Network className="w-4 text-[#1B2D7F]" />
+          My Mentees
+        </h3>
+
+        <span className="text-xs font-bold px-2 py-1 rounded-full bg-green-50 text-green-700">
+          {mentees.length}
+        </span>
+      </div>
+
+      {mentees.length === 0 ? (
+        <div className="text-center py-6">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-50 flex items-center justify-center">
+            <Users className="w-5 text-gray-400" />
+          </div>
+
+          <p className="text-sm text-gray-700 font-bold">
+            No mentees yet
+          </p>
+
+          <p className="text-xs text-gray-400 mt-1">
+            Accept mentorship requests or connect with founders to build your network.
+          </p>
+
+          <Link
+            to="/mentor/find-founders"
+            className="inline-flex mt-4 px-4 py-2 g-brand text-black text-xs font-bold rounded-xl hover:opacity-90"
+          >
+            Find Founders
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {visibleMentees.map((item) => {
+            const person = item.user || item.sender || {};
+
+            return (
+              <div
+                key={item.id || item.requestId || person.id}
+                className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition"
+              >
+                <Avatar
+                  name={person.full_name}
+                  path={person.avatar_url}
+                  size="md"
+                />
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-gray-900 truncate">
+                    {person.full_name || 'User'}
+                  </p>
+
+                  <p className="text-xs text-gray-500 truncate capitalize">
+                    {person.user_type?.replace(/-/g, ' ') || 'Mentee'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onMessage?.(person.id)}
+                  className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-gray-200 hover:border-[#98DE38] hover:bg-[#98DE38]/10 transition"
+                >
+                  Message
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {mentees.length > 5 && (
+        <Link
+          to="/mentor/my-mentees"
+          className="w-full mt-4 py-2 text-xs font-bold text-[#1B2D7F] hover:underline flex items-center justify-center gap-1"
+        >
+          View all mentees <ArrowRight className="w-3" />
         </Link>
       )}
     </div>
   );
 }
 
-// ── Suggested person card (founder or student) ────────────────────────────
-function SuggestionCard({ person, label, onMessage, onOfferHelp, helpState }) {
-  const isFounder = !!person.company_name || !!person.idea_title;
-  const name      = person.profiles?.full_name || 'Unknown';
-  const subtitle  = isFounder
-    ? (person.company_name || person.idea_title || 'Startup')
-    : (person.profiles?.bio?.slice(0, 50) || 'Student');
-  const industry  = person.industry || (person.interests || [])[0] || '';
-  const score     = person._score || 0;
-  const reason    = person._matchReason || 'Matches your profile';
-
-  return (
-    <div className="flex items-start gap-3 p-3.5 rounded-xl border border-slate-100 hover:border-emerald-100 hover:bg-emerald-50/20 transition-all lift">
-      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradFor(person.user_id)} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`}>
-        {initials(name)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <p className="font-semibold text-slate-900 text-sm ss leading-tight">{name}</p>
-          {score >= 40 && (
-            <span className="ai-badge flex-shrink-0"><Sparkles className="w-2.5 h-2.5" />AI Match</span>
-          )}
-        </div>
-        <p className="text-xs text-slate-500 truncate">{subtitle}</p>
-        {person.profiles?.location && (
-          <p className="text-xs text-slate-400 flex items-center gap-0.5 mt-0.5">
-            <MapPin className="w-3 h-3" />{person.profiles.location}
-          </p>
-        )}
-        <p className="text-xs text-emerald-600 font-medium mt-1 italic">"{reason}"</p>
-        {(person.help_needed || []).length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {person.help_needed.slice(0, 2).map((h, i) => (
-              <span key={i} className="chip">{h}</span>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="flex flex-col gap-1.5 flex-shrink-0">
-        <button onClick={onMessage}
-          className="p-1.5 border border-slate-200 rounded-lg text-slate-400 hover:text-emerald-600 hover:border-emerald-200 transition-all">
-          <MessageSquare className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={onOfferHelp} disabled={helpState === 'sent' || helpState === 'sending'}
-          className={`p-1.5 rounded-lg transition-all ${
-            helpState === 'sent'    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
-            helpState === 'sending' ? 'bg-emerald-50 text-emerald-300 border border-emerald-100' :
-            'bg-emerald-600 text-white hover:bg-emerald-700'
-          }`}>
-          {helpState === 'sent'    ? <CheckCircle className="w-3.5 h-3.5" /> :
-           helpState === 'sending' ? <Loader className="w-3.5 h-3.5 animate-spin" /> :
-           <Zap className="w-3.5 h-3.5" />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 export default function MentorDashboard() {
-  const { user }   = useAuth();
-  const navigate   = useNavigate();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [data,       setData]       = useState(null);
-  const [loading,    setLoading]    = useState(true);
+  const [state, setState] = useState({
+    loading: true,
+    error: null,
+  });
+
+  const [data, setData] = useState({
+    profile: {},
+    mentorProfile: {},
+    requests: [],
+    mentees: [],
+    founders: [],
+    students: [],
+    convos: [],
+  });
+
   const [responding, setResponding] = useState({});
   const [helpStates, setHelpStates] = useState({});
+  const [actionNotice, setActionNotice] = useState(null);
 
-  const load = useCallback(async () => {
-    if (!user) return;
+  const load = useCallback(async ({ silent = false } = {}) => {
+    if (!user?.id) return;
+
+    if (!silent) {
+      setState({
+        loading: true,
+        error: null,
+      });
+    }
+
     try {
-      const d = await fetchMentorDashboard(user.id);
-      // Rank suggestions by relevance
-      d.founders  = rankFoundersForMentor(d.founders,  d.mentorProfile);
-      d.students  = rankStudentsForMentor(d.students,  d.mentorProfile);
-      setData(d);
-    } catch (e) { console.error('[MentorDashboard]', e); }
-    finally { setLoading(false); }
-  }, [user]);
+      const dashboard = await fetchMentorDashboard(user.id);
+      const founders = rankFoundersForMentor(dashboard.founders || [], dashboard.mentorProfile || {});
+      const students = rankStudentsForMentor(dashboard.students || [], dashboard.mentorProfile || {});
 
-  useEffect(() => { load(); }, [load]);
+      setData({
+        profile: dashboard.profile || {},
+        mentorProfile: dashboard.mentorProfile || {},
+        requests: dashboard.requests || [],
+        mentees: dashboard.mentees || [],
+        founders,
+        students,
+        convos: dashboard.convos || [],
+      });
 
-  const handleRespond = async (reqId, status) => {
-    setResponding(p => ({ ...p, [reqId]: status }));
+      setState({
+        loading: false,
+        error: null,
+      });
+    } catch (err) {
+      console.error('Mentor dashboard load failed:', err);
+      if (!silent) {
+        setState({
+          loading: false,
+          error: 'Failed to load dashboard',
+        });
+      } else {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+        }));
+      }
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const openConversationWith = useCallback(async (personId) => {
+    if (!personId) return;
+
     try {
-      await respondToRequest(reqId, status);
-      setData(prev => ({
+      const convId = await getOrCreateConversation(user.id, personId);
+      navigate(convId ? `/mentor/messages?conv=${convId}` : '/mentor/messages');
+    } catch (err) {
+      console.error('Open mentor chat error:', err);
+    }
+  }, [navigate, user?.id]);
+
+  const handleAccept = async (id) => {
+    const req = data.requests.find((item) => item.id === id);
+    const sender = req?.sender || {};
+    const senderId = sender.id;
+
+    if (!req || !senderId) return;
+
+    const person = {
+      id: senderId,
+      full_name: sender.full_name || 'User',
+      user_type: sender.user_type,
+      avatar_url: sender.avatar_url,
+      location: sender.location,
+    };
+
+    setResponding((prev) => ({
+      ...prev,
+      [id]: 'accepted',
+    }));
+
+    setData((prev) => ({
+      ...prev,
+      requests: prev.requests.filter((item) => item.id !== id),
+      mentees: [
+        {
+          id,
+          type: req.type,
+          created_at: new Date().toISOString(),
+          user: person,
+        },
+        ...(prev.mentees || []).filter((item) => {
+          const mentee = item.user || item.sender || {};
+          return mentee.id !== senderId;
+        }),
+      ],
+    }));
+
+    setActionNotice({
+      type: 'accepted',
+      requestId: id,
+      person,
+    });
+
+    try {
+      await respondToRequest(id, 'accepted');
+      setTimeout(() => load({ silent: true }), 600);
+    } catch (err) {
+      console.error('Mentor accept request error:', err);
+      setData((prev) => ({
         ...prev,
-        requests: prev.requests.filter(r => r.id !== reqId),
-        // If accepted, re-fetch mentees next load
+        requests: [req, ...prev.requests],
+        mentees: prev.mentees.filter((item) => {
+          const mentee = item.user || item.sender || {};
+          return mentee.id !== senderId;
+        }),
       }));
-      if (status === 'accepted') load();
-    } catch (e) { alert(e.message); setResponding(p => ({ ...p, [reqId]: null })); }
-  };
-
-  const handleMessage = async (targetId) => {
-    try { await getOrCreateConversation(user.id, targetId); navigate('/messages'); }
-    catch (e) { console.error(e); }
-  };
-
-  const handleOfferHelp = async (targetId, targetType) => {
-    if (helpStates[targetId]) return;
-    setHelpStates(p => ({ ...p, [targetId]: 'sending' }));
-    try {
-      const { sendConnectionRequest } = await import('../../services/mentorService');
-      await sendConnectionRequest(user.id, targetId, 'mentor_offer');
-      setHelpStates(p => ({ ...p, [targetId]: 'sent' }));
-    } catch (e) {
-      if (!e.message?.includes('23505')) alert(e.message);
-      else setHelpStates(p => ({ ...p, [targetId]: 'sent' }));
+      setActionNotice(null);
+    } finally {
+      setResponding((prev) => ({
+        ...prev,
+        [id]: null,
+      }));
     }
   };
 
-  if (loading) return (
-    <>
-      <style>{CSS}</style>
-      <div className="min-h-screen page-bg flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-2xl g-ment flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <BookOpen className="w-6 h-6 text-white" />
-          </div>
-          <p className="ss font-bold text-slate-900">Loading your mentor hub…</p>
-          <Loader className="w-5 h-5 animate-spin text-emerald-500 mx-auto mt-2" />
-        </div>
+  const handleDecline = async (id) => {
+    const req = data.requests.find((item) => item.id === id);
+    const sender = req?.sender || {};
+
+    if (!req) return;
+
+    setResponding((prev) => ({
+      ...prev,
+      [id]: 'declined',
+    }));
+
+    setData((prev) => ({
+      ...prev,
+      requests: prev.requests.filter((item) => item.id !== id),
+    }));
+
+    setActionNotice({
+      type: 'declined',
+      requestId: id,
+      person: {
+        id: sender.id,
+        full_name: sender.full_name || 'User',
+        user_type: sender.user_type,
+        avatar_url: sender.avatar_url,
+        location: sender.location,
+      },
+    });
+
+    try {
+      await respondToRequest(id, 'declined');
+      setTimeout(() => load({ silent: true }), 600);
+    } catch (err) {
+      console.error('Mentor decline request error:', err);
+      setData((prev) => ({
+        ...prev,
+        requests: [req, ...prev.requests],
+      }));
+      setActionNotice(null);
+    } finally {
+      setResponding((prev) => ({
+        ...prev,
+        [id]: null,
+      }));
+    }
+  };
+
+  const handleOfferHelp = async (personId) => {
+    if (!personId || helpStates[personId]) return;
+
+    setHelpStates((prev) => ({
+      ...prev,
+      [personId]: 'pending',
+    }));
+
+    try {
+      await sendConnectionRequest(
+        user.id,
+        personId,
+        'mentor_offer',
+        'Hi, your profile looks relevant to my mentorship experience. I would be happy to help where my background fits.'
+      );
+    } catch (err) {
+      if (!err.message?.includes('23505')) {
+        console.error('Mentor offer failed:', err);
+        setHelpStates((prev) => ({
+          ...prev,
+          [personId]: null,
+        }));
+      }
+    }
+  };
+
+  const hiddenConnectedIds = useMemo(() => {
+    const ids = new Set();
+
+    (data.mentees || []).forEach((item) => {
+      const person = item.user || item.sender || {};
+      if (person.id) ids.add(person.id);
+    });
+
+    return ids;
+  }, [data.mentees]);
+
+  const visibleFounders = useMemo(() => {
+    return (data.founders || [])
+      .filter((founder) => {
+        const score = Number(founder._score || founder.matchScore || founder.match_score || founder.score || 0);
+        return founder.user_id && !hiddenConnectedIds.has(founder.user_id) && score >= DASHBOARD_MIN_MATCH;
+      })
+      .sort((a, b) => Number(b._score || 0) - Number(a._score || 0))
+      .slice(0, 5);
+  }, [data.founders, hiddenConnectedIds]);
+
+  const visibleStudents = useMemo(() => {
+    return (data.students || [])
+      .filter((student) => {
+        const score = Number(student._score || student.matchScore || student.match_score || student.score || 0);
+        return student.user_id && !hiddenConnectedIds.has(student.user_id) && score >= DASHBOARD_MIN_MATCH;
+      })
+      .sort((a, b) => Number(b._score || 0) - Number(a._score || 0))
+      .slice(0, 5);
+  }, [data.students, hiddenConnectedIds]);
+
+  if (state.loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader className="w-8 h-8 animate-spin text-[#1B2D7F]" />
       </div>
-    </>
-  );
+    );
+  }
 
-  const { profile = {}, mentorProfile = {}, requests = [], mentees = [],
-          founders = [], students = [], convos = [] } = data || {};
+  if (state.error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-600">
+        {state.error}
+      </div>
+    );
+  }
 
-  const firstName  = profile.full_name?.split(' ')[0] || 'Mentor';
-  const init       = initials(profile.full_name);
+  const { profile, mentorProfile, requests, mentees, convos } = data;
   const completion = calcMentorCompletion(profile, mentorProfile);
-  const nudges     = getMentorProfileNudges(profile, mentorProfile);
-  const unread     = (convos || []).reduce((s, c) => s + (c.unreadCount || 0), 0);
-  const capacity   = mentorProfile.mentorship_capacity || 3;
-  const activeCt   = mentees.length;
-  const spotsLeft  = Math.max(0, capacity - activeCt);
-
-  // Progress ring
-  const R = 22, C = 2 * Math.PI * R, dash = C * (completion / 100);
+  const nudges = getMentorProfileNudges(profile, mentorProfile);
+  const unread = (convos || []).reduce((sum, conv) => sum + Number(conv.unreadCount || 0), 0);
+  const capacity = Number(mentorProfile.mentorship_capacity || 3);
+  const activeCt = mentees.length;
+  const spotsLeft = Math.max(0, capacity - activeCt);
+  const currentRole = profile.user_type || 'mentor';
 
   return (
     <>
       <style>{CSS}</style>
-      <div className="min-h-screen page-bg dm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
 
-          {/* ── HERO ──────────────────────────────────────────────────── */}
-          <div className="g-dk rounded-3xl px-7 py-8 md:px-10 mb-6 text-white relative overflow-hidden f0">
-            <div className="absolute -right-12 -top-12 w-60 h-60 rounded-full opacity-10 blur-2xl"
-              style={{ background: 'radial-gradient(circle,#34d399,transparent)' }} />
-            <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest bg-emerald-400/20 text-emerald-200 px-3 py-1 rounded-full border border-emerald-400/20">
-                    <BookOpen className="w-3.5 h-3.5" /> Mentor
-                  </span>
-                  {requests.length > 0 && (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold bg-red-500 text-white px-2.5 py-0.5 rounded-full">
-                      <Bell className="w-3 h-3" /> {requests.length} new
-                    </span>
-                  )}
-                  {spotsLeft > 0 && (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-500/30 text-emerald-200 px-2.5 py-0.5 rounded-full">
-                      {spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} open
-                    </span>
-                  )}
-                </div>
-                <h1 className="ss font-black text-3xl md:text-4xl leading-none mb-1">
-                  Welcome, {firstName} 👋
+      <div className="min-h-screen page-bg pt-20 pb-16 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="rounded-2xl p-6 mb-6 border bg-white border-gray-200">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+              <div>
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase bg-green-100 text-green-700">
+                  {currentRole}
+                </span>
+
+                <h1 className="text-2xl sm:text-3xl font-black mt-3">
+                  Welcome, {profile.full_name?.split(' ')[0] || 'there'}
                 </h1>
-                <p className="text-white/60 text-sm max-w-lg">
-                  {mentorProfile.current_role
-                    ? `${mentorProfile.current_role}${mentorProfile.current_company ? ` · ${mentorProfile.current_company}` : ''}`
-                    : 'Complete your profile to start receiving mentorship requests.'}
+
+                <p className="mt-2 text-sm max-w-lg text-gray-500">
+                  Your mission control. Guide founders, review requests, and manage mentorship conversations.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2 md:flex-col lg:flex-row">
-                <Link to="/mentor-profile" className="g-ment flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow hover:opacity-90 transition-all">
-                  <Edit3 className="w-4 h-4" /> Edit Profile
+
+              <div className="flex gap-2 flex-wrap">
+                <Link
+                  to="/mentor/find-founders"
+                  className="px-4 py-2 g-brand text-black font-bold text-sm rounded-xl hover:opacity-90"
+                >
+                  Find Founders
                 </Link>
-                <Link to="/find-founders" className="bg-white/15 border border-white/20 text-white flex items-center gap-2 font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-white/25 transition-all">
-                  <Search className="w-4 h-4" /> Find Founders
-                </Link>
-                <Link to="/messages" className="bg-white/10 border border-white/15 text-white/80 flex items-center gap-2 font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-white/20 transition-all">
-                  <MessageSquare className="w-4 h-4" /> Messages {unread > 0 && <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{unread}</span>}
+
+                <Link
+                  to="/mentor/my-mentees"
+                  className="px-4 py-2 border-2 border-gray-200 font-semibold text-sm rounded-xl hover:bg-gray-50"
+                >
+                  Mentees
                 </Link>
               </div>
             </div>
           </div>
 
-          {/* ── STATS ROW ───────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 f1">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
-              { label: 'Profile',    val: `${completion}%`,  sub: completion >= 80 ? 'Strong profile!' : 'Needs work', Icon: Shield,      grad: 'from-emerald-500 to-teal-500' },
-              { label: 'Requests',   val: `${requests.length}`, sub: 'Pending',      Icon: Bell,        grad: 'from-rose-500 to-pink-500' },
-              { label: 'Mentees',    val: `${activeCt}`,     sub: `${spotsLeft} spots open`,             Icon: UserCheck,   grad: 'from-indigo-500 to-violet-500' },
-              { label: 'Messages',   val: `${convos.length}`, sub: `${unread} unread`,                  Icon: MessageSquare, grad: 'from-blue-500 to-cyan-500' },
-            ].map((s, i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-emerald-100/60 lift">
-                <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${s.grad} flex items-center justify-center text-white mb-3`}>
-                  <s.Icon style={{ width: 17, height: 17 }} />
+              {
+                label: 'Profile',
+                val: `${completion}%`,
+                sub: completion > 70 ? 'Great' : 'Add more',
+                Icon: Shield,
+              },
+              {
+                label: 'Messages',
+                val: convos.length,
+                sub: unread ? `${unread} unread` : 'Active chats',
+                Icon: MessageSquare,
+              },
+              {
+                label: 'Requests',
+                val: requests.length,
+                sub: 'Pending review',
+                Icon: Inbox,
+              },
+              {
+                label: 'Mentees',
+                val: activeCt,
+                sub: `${spotsLeft} spots open`,
+                Icon: GraduationCap,
+              },
+            ].map((stat, index) => (
+              <div
+                key={index}
+                className="bg-white rounded-xl p-4 border border-gray-100 lift"
+              >
+                <div className="w-9 h-9 rounded-lg g-sec flex items-center justify-center text-white mb-2">
+                  <stat.Icon className="w-4 h-4" />
                 </div>
-                <p className="ss text-2xl font-black text-slate-900">{s.val}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
-                <p className="text-xs text-emerald-600 font-semibold mt-0.5">{s.sub}</p>
+
+                <p className="font-black text-xl text-gray-900">
+                  {stat.val}
+                </p>
+
+                <p className="text-xs text-gray-500">
+                  {stat.label} · {stat.sub}
+                </p>
               </div>
             ))}
           </div>
 
-          {/* ── MAIN GRID ───────────────────────────────────────────────── */}
           <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-5">
+            <div className="lg:col-span-2 space-y-6">
+              <ConnectionActionNotice
+                notice={actionNotice}
+                onClose={() => setActionNotice(null)}
+                onMessage={openConversationWith}
+              />
 
-              {/* 1. Profile Strength */}
-              {nudges.length > 0 && (
-                <Card className="f1">
-                  <SectionHead title="Profile Strength" icon={<Shield className="w-4.5 h-4.5 text-emerald-500" style={{ width: 18, height: 18 }} />} linkTo="/mentor-profile" linkLabel="Complete profile" />
-                  <div className="px-6 pb-6">
-                    <div className="flex items-center gap-5 mb-4">
-                      {/* Ring */}
-                      <div className="relative flex-shrink-0">
-                        <svg width="58" height="58" className="-rotate-90">
-                          <circle cx="29" cy="29" r={R} fill="none" stroke="#d1fae5" strokeWidth="5" />
-                          <circle cx="29" cy="29" r={R} fill="none" stroke="#059669" strokeWidth="5"
-                            strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C - dash}
-                            className="prog-ring" />
-                        </svg>
-                        <span className="absolute inset-0 flex items-center justify-center ss font-black text-xs text-slate-900">{completion}%</span>
-                      </div>
-                      <div>
-                        <p className="ss font-bold text-slate-900">
-                          {completion >= 80 ? 'Strong profile' : completion >= 50 ? 'Getting there' : 'Just getting started'}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {completion >= 80
-                            ? 'You\'re visible to students and founders.'
-                            : 'Complete your profile to appear in search results.'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      {nudges.map((n, i) => (
-                        <Link key={i} to="/mentor-profile"
-                          className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-all group">
-                          <AlertCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                          <p className="text-xs font-medium text-slate-700 flex-1">{n.msg}</p>
-                          <ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:text-emerald-600" />
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-              )}
-
-              {/* 2. Incoming Requests */}
               {requests.length > 0 && (
-                <Card className="f1">
-                  <SectionHead
-                    title={`Mentorship Requests (${requests.length})`}
-                    icon={<Bell className="w-4.5 h-4.5 text-rose-500" style={{ width: 18, height: 18 }} />}
-                  />
-                  <div className="px-6 pb-6 space-y-3">
-                    {requests.map(req => (
-                      <div key={req.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 slide">
-                        <div className="flex items-start gap-3">
-                          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradFor(req.sender?.id)} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`}>
-                            {initials(req.sender?.full_name)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                              <p className="font-semibold text-slate-900 text-sm ss">{req.sender?.full_name || 'Unknown'}</p>
-                              <span className="chip capitalize text-xs">{req.sender?.user_type?.replace(/-/g, ' ') || 'User'}</span>
-                              <span className="text-xs text-slate-400 ml-auto">{timeAgo(req.created_at)}</span>
-                            </div>
-                            {req.sender?.location && (
-                              <p className="text-xs text-slate-400 flex items-center gap-0.5 mb-1">
-                                <MapPin className="w-3 h-3" />{req.sender.location}
-                              </p>
-                            )}
-                            {req.message && (
-                              <p className="text-xs text-slate-600 italic line-clamp-2 mt-1">"{req.message}"</p>
-                            )}
-                          </div>
+                <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                  <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Inbox className="w-5 text-violet-500" />
+                    Pending Requests
+                  </h2>
+
+                  <div className="space-y-3">
+                    {requests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 rounded-xl"
+                      >
+                        <Avatar
+                          name={request.sender?.full_name}
+                          path={request.sender?.avatar_url}
+                          size="md"
+                        />
+
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm truncate">
+                            {request.sender?.full_name}
+                          </p>
+
+                          <p className="text-xs text-gray-500">
+                            {request.type?.replace('_', ' ')} · {timeAgo(request.created_at)}
+                          </p>
                         </div>
-                        <div className="flex gap-2 mt-3">
+
+                        <div className="flex gap-2">
                           <button
-                            onClick={() => handleRespond(req.id, 'accepted')}
-                            disabled={!!responding[req.id]}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 transition-all disabled:opacity-50">
-                            {responding[req.id] === 'accepted'
-                              ? <Loader className="w-3.5 h-3.5 animate-spin" />
-                              : <><CheckCircle className="w-3.5 h-3.5" />Accept</>}
+                            type="button"
+                            onClick={() => handleAccept(request.id)}
+                            disabled={!!responding[request.id]}
+                            className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 disabled:opacity-60"
+                          >
+                            {responding[request.id] === 'accepted' ? 'Accepting...' : 'Accept'}
                           </button>
+
                           <button
-                            onClick={() => handleMessage(req.sender?.id)}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border-2 border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:border-emerald-200 hover:text-emerald-600 transition-all">
-                            <MessageSquare className="w-3.5 h-3.5" />Message
-                          </button>
-                          <button
-                            onClick={() => handleRespond(req.id, 'declined')}
-                            disabled={!!responding[req.id]}
-                            className="px-3 py-2.5 border-2 border-red-100 text-red-400 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50">
-                            <X className="w-3.5 h-3.5" />
+                            type="button"
+                            onClick={() => handleDecline(request.id)}
+                            disabled={!!responding[request.id]}
+                            className="px-3 py-1.5 border border-gray-200 text-xs font-bold rounded-lg hover:border-red-200 hover:text-red-600 disabled:opacity-60"
+                          >
+                            Decline
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                </Card>
+                </div>
               )}
 
-              {/* 3. Active Mentees */}
-              <Card className="f2">
-                <SectionHead title="Active Mentees" icon={<UserCheck className="w-4.5 h-4.5 text-indigo-500" style={{ width: 18, height: 18 }} />} linkTo="/my-mentees" linkLabel="View all" />
-                <div className="px-6 pb-6">
-                  {mentees.length === 0 ? (
-                    <div className="py-8 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                      <UserCheck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                      <p className="text-slate-400 text-sm">No active mentees yet.</p>
-                      <p className="text-xs text-slate-300 mt-1">Accept a request above to start mentoring.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {mentees.slice(0, 4).map((m, i) => {
-                        const startup = m.founderData?.company_name || m.founderData?.idea_title
-                          || m.studentData?.startup_idea_description?.slice(0, 50)
-                          || null;
-                        return (
-                          <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-emerald-100 transition-all">
-                            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradFor(m.user?.id)} flex items-center justify-center text-white text-xs font-bold ss flex-shrink-0`}>
-                              {initials(m.user?.full_name)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-slate-900 text-sm ss">{m.user?.full_name || '—'}</p>
-                              {startup && <p className="text-xs text-slate-500 truncate">{startup}</p>}
-                              <p className="text-xs text-emerald-600 font-medium">
-                                {m.user?.user_type === 'early-stage-founder' ? '🚀 Founder' : '🎓 Student'}
-                              </p>
-                            </div>
-                            <button onClick={() => handleMessage(m.user?.id)}
-                              className="p-1.5 border border-slate-200 rounded-lg text-slate-400 hover:text-emerald-600 hover:border-emerald-200 transition-all">
-                              <MessageSquare className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                      {mentees.length > 4 && (
-                        <Link to="/my-mentees" className="flex items-center justify-center gap-1.5 w-full py-2.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
-                          See {mentees.length - 4} more <ArrowRight className="w-3 h-3" />
-                        </Link>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </Card>
+              <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Target className="w-5 text-[#1B2D7F]" />
+                  Your Journey
+                </h2>
 
-              {/* 4. AI Suggested Founders */}
-              <Card className="f3">
-                <SectionHead title="Suggested Founders" icon={<Sparkles className="w-4.5 h-4.5 text-emerald-500" style={{ width: 18, height: 18 }} />} linkTo="/find-founders" linkLabel="Browse all" />
-                <div className="px-6 pb-6">
-                  <p className="text-xs text-slate-400 mb-3">Matched to your expertise and what you can help with.</p>
-                  {founders.length > 0 ? (
-                    <div className="space-y-2">
-                      {founders.slice(0, 3).map((f, i) => (
-                        <SuggestionCard key={f.id || i} person={f}
-                          label="Founder"
-                          onMessage={() => handleMessage(f.user_id)}
-                          onOfferHelp={() => handleOfferHelp(f.user_id, 'founder')}
-                          helpState={helpStates[f.user_id]} />
-                      ))}
-                      {founders.length > 3 && (
-                        <Link to="/find-founders" className="flex items-center justify-center gap-1.5 w-full py-2.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all">
-                          See {founders.length - 3} more founders <ArrowRight className="w-3 h-3" />
-                        </Link>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="py-8 text-center bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                      <p className="text-slate-400 text-sm mb-2">No founders yet.</p>
-                      <Link to="/find-founders" className="inline-flex g-ment text-white text-xs font-bold px-4 py-2 rounded-xl">
-                        Browse Founders
+                <div className="space-y-3">
+                  <div className={`journey-item ${completion >= 70 ? 'done' : 'active'}`}>
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="flex items-start gap-3 flex-1">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${completion >= 70 ? 'bg-green-100' : 'bg-indigo-100'}`}>
+                          {completion >= 70 ? <CheckCircle className="w-4 text-green-600" /> : <Shield className="w-4 text-[#1B2D7F]" />}
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm">
+                            Mentor Profile
+                          </p>
+
+                          <p className="text-xs text-gray-500">
+                            {completion >= 70 ? 'Profile ready for better matches' : 'Add expertise and availability'}
+                          </p>
+
+                          {nudges.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {nudges.map((nudge) => (
+                                <span key={nudge.field} className="idea-badge">
+                                  <Tag className="w-3" />
+                                  {nudge.msg}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <Link
+                        to="/mentor/profile"
+                        className="text-xs font-bold px-3 py-1.5 g-brand text-black rounded-lg hover:opacity-90 flex-shrink-0"
+                      >
+                        {completion >= 70 ? 'Edit' : 'Add'}
                       </Link>
                     </div>
-                  )}
-                </div>
-              </Card>
+                  </div>
 
-              {/* Suggested Students */}
-              {students.length > 0 && (
-                <Card className="f3">
-                  <SectionHead title="Students with Ideas" icon={<GraduationCap className="w-4.5 h-4.5 text-indigo-500" style={{ width: 18, height: 18 }} />} linkTo="/find-founders" linkLabel="See all" />
-                  <div className="px-6 pb-6">
-                    <p className="text-xs text-slate-400 mb-3">Students actively building — and needing your guidance.</p>
-                    <div className="space-y-2">
-                      {students.slice(0, 3).map((s, i) => (
-                        <SuggestionCard key={s.id || i} person={s}
-                          label="Student"
-                          onMessage={() => handleMessage(s.user_id)}
-                          onOfferHelp={() => handleOfferHelp(s.user_id, 'student')}
-                          helpState={helpStates[s.user_id]} />
-                      ))}
-                    </div>
-                  </div>
-                </Card>
-              )}
+                  <div className="journey-item active">
+                    <div className="flex justify-between items-center gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                          <Users className="w-4 text-gray-600" />
+                        </span>
 
-              {/* Messages preview */}
-              <Card className="f4">
-                <SectionHead title="Messages" icon={<MessageSquare className="w-4.5 h-4.5 text-blue-500" style={{ width: 18, height: 18 }} />} linkTo="/messages" linkLabel="View all" />
-                <div className="px-6 pb-6">
-                  {convos.length > 0 ? (
-                    <div className="space-y-1">
-                      {convos.slice(0, 4).map(c => (
-                        <Link key={c.id} to="/messages"
-                          className={`flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-all ${c.unreadCount > 0 ? 'border-l-4 border-emerald-400 bg-emerald-50/30' : ''}`}>
-                          <div className="relative flex-shrink-0">
-                            <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradFor(c.otherUser?.id)} flex items-center justify-center text-white text-xs font-bold ss`}>
-                              {initials(c.otherUser?.full_name)}
-                            </div>
-                            {c.unreadCount > 0 && <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white unread-pulse" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-slate-900 text-sm ss">{c.otherUser?.full_name || '—'}</p>
-                            <p className={`text-xs truncate ${c.unreadCount > 0 ? 'text-slate-700 font-medium' : 'text-slate-400'}`}>
-                              {c.lastMessage?.content || 'No messages yet'}
-                            </p>
-                          </div>
-                          <span className="text-xs text-slate-300 flex-shrink-0">{timeAgo(c.last_message_at)}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-6 text-center">
-                      <p className="text-slate-400 text-sm">No conversations yet.</p>
-                      <p className="text-xs text-slate-300 mt-1">Accept a request to start messaging.</p>
-                    </div>
-                  )}
-                  <Link to="/messages" className="mt-3 flex items-center justify-center gap-2 w-full py-2.5 border-2 border-emerald-100 text-emerald-600 rounded-xl text-sm font-semibold hover:bg-emerald-50 transition-all">
-                    <Send className="w-4 h-4" /> Open Messages
-                  </Link>
-                </div>
-              </Card>
-            </div>
+                        <div>
+                          <p className="font-semibold text-sm">
+                            Founder Guidance
+                          </p>
 
-            {/* SIDEBAR */}
-            <div className="space-y-5">
+                          <p className="text-xs text-gray-500">
+                            Help builders move faster
+                          </p>
+                        </div>
+                      </div>
 
-              {/* Mentor card */}
-              <div className="g-dk rounded-2xl p-6 text-white relative overflow-hidden f0 lift">
-                <div className="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-white/5" />
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="ss font-bold text-base">My Profile</h3>
-                    <BookOpen className="w-5 h-5 text-emerald-400" />
-                  </div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-lg font-bold ss flex-shrink-0 overflow-hidden">
-                      {profile.avatar_url
-                        ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                        : init}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold ss truncate">{profile.full_name || 'Complete your profile'}</p>
-                      <p className="text-emerald-300 text-xs font-bold mt-0.5">
-                        {mentorProfile.current_role || 'Add your role'}
-                      </p>
-                      {profile.location && (
-                        <p className="text-white/50 text-xs flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3" />{profile.location}
-                        </p>
-                      )}
+                      <Link
+                        to="/mentor/find-founders"
+                        className="text-xs font-bold px-3 py-1.5 g-brand text-black rounded-lg"
+                      >
+                        Find Founders
+                      </Link>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="text-white/60">Profile strength</span>
-                    <span className="font-bold">{completion}%</span>
+
+                  <div className="journey-item">
+                    <div className="flex justify-between items-center gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                          <MessageSquare className="w-4 text-gray-600" />
+                        </span>
+
+                        <div>
+                          <p className="font-semibold text-sm">
+                            Mentor Conversations
+                          </p>
+
+                          <p className="text-xs text-gray-500">
+                            Keep guidance moving
+                          </p>
+                        </div>
+                      </div>
+
+                      <Link
+                        to="/mentor/messages"
+                        className="text-xs font-bold px-3 py-1.5 border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+                      >
+                        Browse
+                      </Link>
+                    </div>
                   </div>
-                  <div className="h-2 bg-white/15 rounded-full overflow-hidden mb-4">
-                    <div className="h-full bg-emerald-400 rounded-full transition-all duration-700" style={{ width: `${completion}%` }} />
-                  </div>
-                  <Link to="/mentor-profile" className="flex items-center justify-center gap-2 bg-white/15 hover:bg-white/25 text-white text-sm font-semibold py-2.5 rounded-xl transition-all">
-                    <Edit3 className="w-4 h-4" /> Edit Profile
-                  </Link>
                 </div>
               </div>
 
-              {/* Quick Actions */}
-              <Card className="f1">
-                <div className="px-6 pt-5 pb-2">
-                  <h3 className="ss font-bold text-slate-900 text-sm">Quick Actions</h3>
-                </div>
-                <div className="px-6 pb-5 space-y-0.5">
-                  {[
-                    { Icon: Edit3,        label: 'Edit Profile',    to: '/mentor-profile', col: 'text-emerald-600' },
-                    { Icon: Search,       label: 'Find Founders',   to: '/find-founders',  col: 'text-indigo-600'  },
-                    { Icon: UserCheck,    label: 'My Mentees',      to: '/my-mentees',     col: 'text-violet-600'  },
-                    { Icon: MessageSquare,label: 'Messages',        to: '/messages',       col: 'text-blue-600'    },
-                    { Icon: BookOpen,     label: 'Discover',        to: '/discover',       col: 'text-teal-600'    },
-                  ].map(({ Icon, label, to, col }, i) => (
-                    <Link key={i} to={to} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-50/50 group transition-all">
-                      <Icon className={`w-4 h-4 ${col}`} />
-                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 flex-1">{label}</span>
-                      <ArrowUpRight className="w-3 h-3 text-slate-300 group-hover:text-slate-500" />
-                    </Link>
-                  ))}
-                </div>
-              </Card>
+              <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                    <UserPlus className="w-5 text-indigo-500" />
+                    AI Suggested Founders
+                  </h2>
 
-              {/* Mentor stats */}
-              <Card className="f2">
-                <div className="px-6 pt-5 pb-5">
-                  <h3 className="ss font-bold text-slate-900 text-sm mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-500" /> Mentoring Stats
-                  </h3>
+                  <Link
+                    to="/mentor/find-founders"
+                    className="text-xs text-indigo-600 font-semibold"
+                  >
+                    Browse all →
+                  </Link>
+                </div>
+
+                {visibleFounders.length > 0 ? (
                   <div className="space-y-3">
-                    {[
-                      { label: 'Capacity',    val: `${capacity} mentees max`,    icon: '📊' },
-                      { label: 'Active',      val: `${activeCt} mentee${activeCt !== 1 ? 's' : ''}`, icon: '✅' },
-                      { label: 'Open spots',  val: `${spotsLeft} available`,     icon: '🟢' },
-                      { label: 'Rate',        val: mentorProfile.is_pro_bono
-                                                  ? 'Pro Bono ✓'
-                                                  : mentorProfile.hourly_rate
-                                                    ? `$${mentorProfile.hourly_rate}/hr`
-                                                    : 'Not set', icon: '💰' },
-                    ].map((s, i) => (
-                      <div key={i} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl">
-                        <span className="text-xs text-slate-500 flex items-center gap-1.5">{s.icon} {s.label}</span>
-                        <span className="text-xs font-bold text-slate-800 ss">{s.val}</span>
-                      </div>
+                    {visibleFounders.map((founder) => (
+                      <MentorSuggestionCard
+                        key={founder.user_id || founder.id}
+                        person={founder}
+                        type="founder"
+                        helpState={helpStates[founder.user_id]}
+                        onOfferHelp={handleOfferHelp}
+                        onOpenChat={openConversationWith}
+                      />
                     ))}
                   </div>
-                </div>
-              </Card>
+                ) : (
+                  <div className="py-8 text-center bg-gray-50 rounded-xl border border-gray-100">
+                    <p className="text-sm font-bold text-gray-700">
+                      No strong founder matches right now
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Dashboard only shows top founder matches with 60%+ score.
+                    </p>
 
-              {/* Expertise chips */}
-              {(mentorProfile.expertise_areas || []).length > 0 && (
-                <Card className="f3">
-                  <div className="px-6 pt-5 pb-5">
-                    <h3 className="ss font-bold text-slate-900 text-sm mb-3 flex items-center gap-2">
-                      <Star className="w-4 h-4 text-amber-400" /> My Expertise
-                    </h3>
-                    <div className="flex flex-wrap gap-1.5">
-                      {mentorProfile.expertise_areas.slice(0, 8).map((e, i) => (
-                        <span key={i} className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-full font-medium">
-                          {e}
-                        </span>
-                      ))}
-                    </div>
+                    <Link
+                      to="/mentor/find-founders"
+                      className="inline-flex mt-3 px-4 py-2 g-brand text-black text-xs font-bold rounded-xl"
+                    >
+                      Browse more
+                    </Link>
                   </div>
-                </Card>
-              )}
+                )}
+              </div>
+
+              <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                    <GraduationCap className="w-5 text-indigo-500" />
+                    AI Suggested Student Founders
+                  </h2>
+
+                  <Link
+                    to="/mentor/find-founders"
+                    className="text-xs text-indigo-600 font-semibold"
+                  >
+                    Browse all →
+                  </Link>
+                </div>
+
+                {visibleStudents.length > 0 ? (
+                  <div className="space-y-3">
+                    {visibleStudents.map((student) => (
+                      <MentorSuggestionCard
+                        key={student.user_id || student.id}
+                        person={student}
+                        type="student"
+                        helpState={helpStates[student.user_id]}
+                        onOfferHelp={handleOfferHelp}
+                        onOpenChat={openConversationWith}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center bg-gray-50 rounded-xl border border-gray-100">
+                    <p className="text-sm font-bold text-gray-700">
+                      No student founder matches right now
+                    </p>
+
+                    <p className="text-xs text-gray-400 mt-1">
+                      Dashboard only shows top student founder matches with 60%+ score.
+                    </p>
+
+                    <Link
+                      to="/mentor/find-founders"
+                      className="inline-flex mt-3 px-4 py-2 g-brand text-black text-xs font-bold rounded-xl"
+                    >
+                      Browse founders
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
+
+            <aside className="space-y-6">
+              <div className="g-sec rounded-2xl p-5 text-white">
+                <h3 className="font-bold mb-4 flex items-center gap-2">
+                  <Shield className="w-4" />
+                  My Profile
+                </h3>
+
+                <div className="flex items-center gap-3 mb-4">
+                  <Avatar
+                    name={profile.full_name}
+                    path={profile.avatar_url}
+                    size="lg"
+                  />
+
+                  <div>
+                    <p className="font-semibold">
+                      {profile.full_name || 'Complete Profile'}
+                    </p>
+
+                    {mentorProfile.current_role && (
+                      <p className="text-xs text-white/70">
+                        {mentorProfile.current_role}
+                        {mentorProfile.current_company ? ` · ${mentorProfile.current_company}` : ''}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-white/70">Complete</span>
+                  <span className="font-bold">{completion}%</span>
+                </div>
+
+                <div className="h-2 bg-white/20 rounded-full overflow-hidden mb-4">
+                  <div
+                    className="h-full bg-white rounded-full"
+                    style={{
+                      width: `${completion}%`,
+                    }}
+                  />
+                </div>
+
+                <Link
+                  to="/mentor/profile"
+                  className="w-full py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+                >
+                  <Edit3 className="w-4" />
+                  Edit Profile
+                </Link>
+              </div>
+
+              <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                <h3 className="font-bold text-gray-900 mb-4">
+                  Quick Links
+                </h3>
+
+                <nav className="space-y-1">
+                  {[
+                    {
+                      label: 'Find Founders',
+                      to: '/mentor/find-founders',
+                      Icon: UserPlus,
+                    },
+                    {
+                      label: 'My Mentees',
+                      to: '/mentor/my-mentees',
+                      Icon: GraduationCap,
+                    },
+                    {
+                      label: 'Messages',
+                      to: '/mentor/messages',
+                      Icon: MessageSquare,
+                    },
+                    {
+                      label: 'Discover',
+                      to: '/mentor/discover',
+                      Icon: Rocket,
+                    },
+                    {
+                      label: 'Preferences',
+                      to: '/mentor/settings',
+                      Icon: Settings,
+                    },
+                  ].map((item) => (
+                    <Link
+                      key={item.to}
+                      to={item.to}
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                    >
+                      <item.Icon className="w-4 text-gray-500" />
+                      {item.label}
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+
+              <MyMenteesCard
+                mentees={mentees}
+                onMessage={openConversationWith}
+              />
+            </aside>
           </div>
         </div>
       </div>
