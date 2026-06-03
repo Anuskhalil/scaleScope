@@ -23,7 +23,7 @@ export default function RoleNavbar() {
     profileData?.user_type ||
     profile?.user_type ||
     user?.user_metadata?.user_type ||
-    'student';
+    null;
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -50,7 +50,7 @@ export default function RoleNavbar() {
         return '/investor';
 
       default:
-        return '/student';
+        return '/login';
     }
   };
 
@@ -169,12 +169,12 @@ export default function RoleNavbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <div className="flex-shrink-0 flex items-center mt-5">
-            <Link to={`${roleBase}/dashboard`} className="flex items-center gap-2 group">
+          <div className="flex-shrink-0 flex items-center mt-3 md:mt-5 min-w-0">
+            <Link to={`${roleBase}/dashboard`} className="flex items-center gap-2 group min-w-0">
               <img
                 src={ScalScopeLogo}
                 alt="Scale Scope Logo"
-                className="h-auto w-60 md:h-14 lg:h-16 object-cover"
+                className="h-auto w-40 sm:w-52 md:w-60 md:h-14 lg:h-16 object-cover"
               />
             </Link>
           </div>
@@ -235,7 +235,7 @@ export default function RoleNavbar() {
                     </div>
 
                     <Link
-                      to={`${roleBase}/profile`}
+                      to={roleBase === '/login' ? '/login' : `${roleBase}/profile`}
                       onClick={() => setShowProfileMenu(false)}
                       className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 transition-all"
                     >
@@ -310,7 +310,7 @@ export default function RoleNavbar() {
 
             <div className="border-t border-slate-200 mt-4 pt-4 space-y-2">
               <Link
-                to="/profile"
+                to={roleBase === '/login' ? '/login' : `${roleBase}/profile`}
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
               >

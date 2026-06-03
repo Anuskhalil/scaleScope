@@ -91,12 +91,12 @@ import {
                   key={type.title}
                   className="group bg-slate-50 rounded-3xl p-7 sm:p-8 border border-slate-100 hover:bg-white hover:shadow-xl transition-all"
                 >
-                  <div className="flex items-start gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-[#1B2D7F] text-[#98DE38] flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                       <Icon className="w-7 h-7" />
                     </div>
   
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs font-black uppercase tracking-wider text-[#1B2D7F] mb-1">
                         {type.label}
                       </p>

@@ -782,7 +782,7 @@ function ViewMode({ formData, isStudent, onEditClick }) {
       {isStudent && (
         <Section title="Looking For" icon={<Tag className="w-5 h-5 text-[#1B2D7F]" />}>
           {(formData.looking_for || []).length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {(formData.looking_for || []).map((val, i) => {
                 const opt = LOOKING_FOR_OPTS.find(o => o.val === val);
                 return <div key={`${val}-${i}`} className="flex flex-col items-center gap-2 p-4 rounded-2xl text-center border" style={{ background: 'rgba(27,45,127,0.05)', borderColor: 'rgba(27,45,127,0.2)' }}><span className="text-2xl">{opt?.icon || '🔍'}</span><span className="text-xs font-bold ss" style={{ color: '#1B2D7F' }}>{val}</span><span className="text-xs text-gray-400">{opt?.desc}</span></div>;
@@ -1083,7 +1083,7 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
       {isStudent && (
         <>
           <EditSection title="Looking For" icon={<Tag className="w-4 h-4" />} hint="What are you here to find?">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{LOOKING_FOR_OPTS.map(opt => { const selected = (formData.looking_for || []).includes(opt.val); return (<button key={opt.val} type="button" onClick={() => toggleArrayField('looking_for', opt.val)} className={`flex flex-col items-center gap-2 py-4 px-2 rounded-2xl border-2 text-center transition-all ${selected ? 'border-[#98DE38] bg-[#98DE38]/10' : 'border-gray-200 bg-white hover:border-[#98DE38]/50'}`} aria-pressed={selected}><span className="text-2xl">{opt.icon}</span><span className="text-xs font-bold ss">{opt.val}</span><span className="text-[10px] text-gray-400">{opt.desc}</span>{selected && <span className="text-xs font-bold" style={{ color: '#98DE38' }}>✓ Selected</span>}</button>); })}</div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{LOOKING_FOR_OPTS.map(opt => { const selected = (formData.looking_for || []).includes(opt.val); return (<button key={opt.val} type="button" onClick={() => toggleArrayField('looking_for', opt.val)} className={`flex flex-col items-center gap-2 py-4 px-2 rounded-2xl border-2 text-center transition-all ${selected ? 'border-[#98DE38] bg-[#98DE38]/10' : 'border-gray-200 bg-white hover:border-[#98DE38]/50'}`} aria-pressed={selected}><span className="text-2xl">{opt.icon}</span><span className="text-xs font-bold ss">{opt.val}</span><span className="text-[10px] text-gray-400">{opt.desc}</span>{selected && <span className="text-xs font-bold" style={{ color: '#98DE38' }}>✓ Selected</span>}</button>); })}</div>
           </EditSection>
           <EditSection title="Help Needed" icon={<Heart className="w-4 h-4" />} hint="What do you need guidance on?">
             <div className="flex flex-wrap gap-2">{HELP_NEEDED_CHIPS.map(item => (<button key={item} type="button" onClick={() => toggleArrayField('help_needed', item)} className={`chip ${((formData.help_needed || []).includes(item)) ? 'selected' : ''}`} style={(formData.help_needed || []).includes(item) ? { borderColor: '#EF4444' } : {}} aria-pressed={(formData.help_needed || []).includes(item)}>{(formData.help_needed || []).includes(item) ? '✓' : '+'} {item}</button>))}</div>

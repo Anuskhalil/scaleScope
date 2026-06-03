@@ -1593,7 +1593,7 @@ function ViewMode({ formData, onEditClick }) {
 
       <Section title="Looking For" icon={<Target className="w-5 h-5 text-[#1B2D7F]" />}>
         {safeArray(formData.looking_for).length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {safeArray(formData.looking_for).map((val, i) => {
               const opt = LOOKING_FOR_OPTS.find((o) => o.val === val);
 
@@ -2244,7 +2244,7 @@ function EditMode({
       </EditSection>
 
       <EditSection title="Looking For" icon={<Target className="w-4 h-4" />} hint="What does your startup need right now?">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {LOOKING_FOR_OPTS.map((opt) => {
             const selected = safeArray(formData.looking_for).includes(opt.val);
 

@@ -25,7 +25,7 @@ export default function CTA() {
 
         <Link
           to="/register"
-          className="inline-flex items-center gap-3 px-9 py-4 bg-[#98DE38] text-black rounded-full font-black text-lg hover:shadow-2xl hover:shadow-lime-300/30 transition-all"
+          className="inline-flex w-full sm:w-auto items-center justify-center gap-3 px-7 sm:px-9 py-4 bg-[#98DE38] text-black rounded-full font-black text-base sm:text-lg hover:shadow-2xl hover:shadow-lime-300/30 transition-all"
         >
           Create Free Account
           <ArrowRight className="w-5 h-5" />

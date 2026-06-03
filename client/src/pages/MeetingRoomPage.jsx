@@ -413,7 +413,7 @@ export default function MeetingRoomPage() {
             </p>
           </div>
 
-          <div className="md:ml-auto flex items-center gap-2">
+          <div className="md:ml-auto flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={copyMeetingLink}
@@ -514,8 +514,8 @@ export default function MeetingRoomPage() {
           <AudioTrack key={item.id} track={item.track} />
         ))}
 
-        <footer className="fixed left-0 right-0 bottom-0 z-40 px-4 pb-4">
-          <div className="max-w-xl mx-auto meeting-panel rounded-2xl p-3 flex items-center justify-center gap-2">
+        <footer className="fixed left-0 right-0 bottom-0 z-40 px-3 sm:px-4 pb-3 sm:pb-4">
+          <div className="max-w-xl mx-auto meeting-panel rounded-2xl p-2 sm:p-3 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={toggleMic}
@@ -546,10 +546,10 @@ export default function MeetingRoomPage() {
             <button
               type="button"
               onClick={leaveMeeting}
-              className="meeting-control px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black inline-flex items-center gap-2"
+              className="meeting-control px-4 sm:px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black inline-flex items-center gap-2"
             >
               <PhoneOff className="w-5" />
-              Leave
+              <span className="hidden sm:inline">Leave</span>
             </button>
           </div>
         </footer>

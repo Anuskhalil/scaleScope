@@ -762,7 +762,7 @@ export default function MentorDashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
               {
                 label: 'Profile',

@@ -13,8 +13,15 @@ export default function Footer() {
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               {/* Logo */}
-              <div className="flex-shrink-0 flex items-center mt-5">
-                <Link to="/" className="flex items-center gap-2 group"> <img src={ScalScopeLogo} alt="Scale Scope Logo" className="h-auto w-60 md:h-14 lg:h-16 object-cover" /> </Link> </div>
+              <div className="flex-shrink-0 flex items-center mt-2 md:mt-5 min-w-0">
+                <Link to="/" className="flex items-center gap-2 group min-w-0">
+                  <img
+                    src={ScalScopeLogo}
+                    alt="Scale Scope Logo"
+                    className="h-auto w-40 sm:w-52 md:w-60 md:h-14 lg:h-16 object-cover"
+                  />
+                </Link>
+              </div>
             </div>
 
             <p className="text-slate-400 max-w-md leading-relaxed">

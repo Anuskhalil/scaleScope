@@ -37,7 +37,7 @@ export default function Hero() {
                 AI-powered startup matching platform
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black tracking-tight text-slate-950 mb-6 leading-[1.03]">
+              <h1 className="text-3xl sm:text-5xl lg:text-7xl font-black tracking-tight text-slate-950 mb-6 leading-[1.08] sm:leading-[1.03] text-balance">
                 Find the right people to build your startup with.
               </h1>
 
@@ -50,7 +50,7 @@ export default function Hero() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link
                   to="/register"
-                  className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-[#98DE38] text-black rounded-full font-black text-lg hover:shadow-xl hover:shadow-lime-300/50 transition-all"
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2 px-8 py-4 bg-[#98DE38] text-black rounded-full font-black text-base sm:text-lg hover:shadow-xl hover:shadow-lime-300/50 transition-all"
                 >
                   Start Free
                   <ArrowRight className="w-5 h-5" />
@@ -58,7 +58,7 @@ export default function Hero() {
 
                 <a
                   href="#how-it-works"
-                  className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-[#1B2D7F] rounded-full font-black text-lg border-2 border-slate-200 hover:border-[#98DE38] transition-all"
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2 px-8 py-4 bg-white text-[#1B2D7F] rounded-full font-black text-base sm:text-lg border-2 border-slate-200 hover:border-[#98DE38] transition-all"
                 >
                   See How It Works
                 </a>
@@ -115,7 +115,7 @@ export default function Hero() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid sm:grid-cols-2 gap-3">
                     <div className="p-4 rounded-2xl bg-[#1B2D7F] text-white">
                       <Users className="w-5 h-5 mb-2 text-[#98DE38]" />
                       <p className="text-xs text-white/70">Connection flow</p>
@@ -141,7 +141,7 @@ export default function Hero() {
       </section>
 
       <section className="py-12 bg-white border-y border-slate-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {platformSignals.map((stat) => (
             <div key={stat.label} className="text-center lg:text-left">
               <div className="text-3xl lg:text-4xl font-black text-[#1B2D7F]">

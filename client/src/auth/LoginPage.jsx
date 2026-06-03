@@ -1,15 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Mail,
   Lock,
-  Zap,
   ArrowRight,
   AlertCircle,
   ShieldCheck,
 } from 'lucide-react';
-import ScalScopeLogo from '../assets/Anus Tech logo.png';
+// import ScalScopeLogo from '../assets/Anus Tech logo.png';
 
 
 const GoogleIcon = () => (
@@ -35,13 +34,18 @@ export default function LoginPage() {
 
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState('');
-  const [mfaChecking, setMfaChecking] = useState(false);
   const [error, setError] = useState('');
 
   const navigate = useNavigate();
   const location = useLocation();
 
   const redirectAfterLogin = location.state?.from || '/dashboard';
+
+  useEffect(() => {
+    if (location.state?.error) {
+      setError(location.state.error);
+    }
+  }, [location.state]);
 
   async function updateLoginTracking(userId) {
     try {
@@ -120,46 +124,6 @@ export default function LoginPage() {
     }
   }
 
-  async function handleAuthenticatorShortcut() {
-    try {
-      setError('');
-      setMfaChecking(true);
-
-      const { data: sessionData } = await supabase.auth.getSession();
-
-      if (!sessionData.session) {
-        setError('First sign in with email/password or Google. Then enter your Google Authenticator code.');
-        return;
-      }
-
-      const { data: aalData, error: aalError } =
-        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-
-      if (aalError) throw aalError;
-
-      if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
-        navigate('/mfa', {
-          replace: true,
-          state: {
-            from: redirectAfterLogin,
-          },
-        });
-        return;
-      }
-
-      if (aalData?.currentLevel === 'aal2') {
-        navigate(redirectAfterLogin, { replace: true });
-        return;
-      }
-
-      setError('Google Authenticator is not enabled for this account yet. Sign in first, then set it up from Security Settings.');
-    } catch (err) {
-      setError(err.message || 'Could not open MFA verification');
-    } finally {
-      setMfaChecking(false);
-    }
-  }
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
@@ -172,11 +136,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob" />
-        <div className="absolute top-0 -right-4 w-72 h-72 bg-indigo-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000" />
-        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000" />
+        <div
+          className="absolute inset-0 opacity-70"
+          style={{
+            backgroundImage: 'radial-gradient(circle, rgba(152,222,56,.08) 1px, transparent 1px)',
+            backgroundSize: '28px 28px',
+          }}
+        />
       </div>
 
       <div className="w-full max-w-md relative z-10">
@@ -186,7 +154,7 @@ export default function LoginPage() {
               <Zap className="w-7 h-7 text-white" />
             </div> */}
             {/* Logo */}
-            <div className="flex-shrink-0 flex items-center">
+            {/* <div className="flex-shrink-0 flex items-center">
               <Link to="/" className="flex items-center gap-2 group">
                 <img
                   src={ScalScopeLogo}
@@ -194,16 +162,9 @@ export default function LoginPage() {
                   className="h-auto w-60 md:h-14 lg:h-16 object-cover"
                 />
               </Link>
-            </div>
+            </div> */}
           </div>
 
-          {/* <h1 className="text-3xl font-black text-slate-900 mb-2">
-            Welcome Back
-          </h1>
-
-          <p className="text-slate-600">
-            Sign in to continue your journey
-          </p> */}
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-100">
@@ -215,7 +176,7 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-3 py-3 px-4 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
             >
               <GoogleIcon />
-              {oauthLoading === 'google' ? 'Redirecting...' : 'Continue with Google'}
+              {oauthLoading === 'google' ? 'Redirecting...' : 'Sign in with Google'}
             </button>
 
             <button
@@ -225,18 +186,15 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-3 py-3 px-4 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
             >
               <GithubIcon />
-              {oauthLoading === 'github' ? 'Redirecting...' : 'Continue with GitHub'}
+              {oauthLoading === 'github' ? 'Redirecting...' : 'Sign in with GitHub'}
             </button>
+          </div>
 
-            <button
-              type="button"
-              onClick={handleAuthenticatorShortcut}
-              disabled={mfaChecking || loading}
-              className="w-full flex items-center justify-center gap-3 py-3 px-4 border-2 border-emerald-200 rounded-xl text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-all disabled:opacity-50"
-            >
-              <ShieldCheck className="w-5 h-5" />
-              {mfaChecking ? 'Checking...' : 'Use Google Authenticator Code'}
-            </button>
+          <div className="mb-6 flex items-start gap-2 rounded-xl border border-[#98DE38]/30 bg-[#98DE38]/10 p-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#1B2D7F]" />
+            <p className="text-xs font-medium text-slate-600">
+              Google Authenticator is used after your first sign-in step when MFA is enabled.
+            </p>
           </div>
 
           <div className="relative my-6">
@@ -268,7 +226,7 @@ export default function LoginPage() {
                   type="email"
                   required
                   autoComplete="email"
-                  className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-[#98DE38] focus:border-transparent transition-all"
                   placeholder="you@example.com"
                   value={form.email}
                   onChange={handleInputChange}
@@ -292,7 +250,7 @@ export default function LoginPage() {
                   type="password"
                   required
                   autoComplete="current-password"
-                  className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-[#98DE38] focus:border-transparent transition-all"
                   placeholder="••••••••"
                   value={form.password}
                   onChange={handleInputChange}
@@ -304,7 +262,7 @@ export default function LoginPage() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                  className="w-4 h-4 text-[#1B2D7F] border-slate-300 rounded focus:ring-[#98DE38]"
                 />
                 <span className="ml-2 text-sm text-slate-600">
                   Remember me
@@ -313,7 +271,7 @@ export default function LoginPage() {
 
               <Link
                 to="/forgot-password"
-                className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+                className="text-sm font-semibold text-[#1B2D7F] hover:underline"
               >
                 Forgot password?
               </Link>
@@ -329,7 +287,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading || Boolean(oauthLoading)}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-indigo-500/50 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#1B2D7F] text-white rounded-xl font-bold hover:bg-[#2A3F8F] transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               {loading ? (
                 <>
@@ -347,7 +305,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-slate-600">
           Don&apos;t have an account?{' '}
-          <Link to="/register" className="font-bold text-indigo-600 hover:text-indigo-700">
+          <Link to="/register" className="font-bold text-[#1B2D7F] hover:underline">
             Create Account
           </Link>
         </p>

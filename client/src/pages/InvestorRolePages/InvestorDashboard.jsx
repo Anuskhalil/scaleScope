@@ -206,7 +206,7 @@ export default function InvestorDashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
               { label: 'Profile', val: `${completion}%`, sub: completion > 70 ? 'Great' : 'Add more', Icon: Shield },
               { label: 'Pitches', val: requests.length, sub: 'Pending review', Icon: Inbox },

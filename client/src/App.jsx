@@ -7,6 +7,8 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 
 // ── Layout ──
 import RoleNavbar from './components/landing-page/RoleNavbar';
+import Navbar from './components/landing-page/Navbar';
+import Footer from './components/landing-page/Footer';
 
 // ── MFA ──
 import MfaChallenge from './components/MfaChallenge';
@@ -109,7 +111,7 @@ function getUserRole(user, profile) {
     profile?.user_type ||
     user?.user_metadata?.user_type ||
     user?.app_metadata?.user_type ||
-    'student'
+    null
   );
 }
 
@@ -128,16 +130,18 @@ function getRoleBasePath(role) {
       return '/investor';
 
     default:
-      return '/student';
+      return '/login';
   }
 }
 
 function getRoleDashboardPath(role) {
-  return `${getRoleBasePath(role)}/dashboard`;
+  const basePath = getRoleBasePath(role);
+  return basePath === '/login' ? '/login' : `${basePath}/dashboard`;
 }
 
 function getRoleProfilePath(role) {
-  return `${getRoleBasePath(role)}/profile`;
+  const basePath = getRoleBasePath(role);
+  return basePath === '/login' ? '/login' : `${basePath}/profile`;
 }
 
 function DashboardRouter() {
@@ -285,7 +289,10 @@ function PublicOnlyPage({ children }) {
 
   if (session && user && emailVerified && !needsMfa) {
     const role = getUserRole(user, profile);
-    return <Navigate to={getRoleDashboardPath(role)} replace />;
+
+    if (role) {
+      return <Navigate to={getRoleDashboardPath(role)} replace />;
+    }
   }
 
   return children;
@@ -305,6 +312,11 @@ const PUBLIC_PATHS_WITH_OWN_NAVBAR = [
   '/',
 ];
 
+const AUTH_PATHS_WITH_LANDING_CHROME = [
+  '/login',
+  '/register',
+];
+
 function AppLayout({ children }) {
   const { session, user, emailVerified, needsMfa } = useAuth();
   const location = useLocation();
@@ -317,6 +329,10 @@ function AppLayout({ children }) {
     location.pathname
   );
 
+  const showLandingChrome = AUTH_PATHS_WITH_LANDING_CHROME.includes(
+    location.pathname
+  );
+
   const showRoleNavbar =
     Boolean(session && user && emailVerified && !needsMfa) &&
     !isAuthPage &&
@@ -324,8 +340,14 @@ function AppLayout({ children }) {
 
   return (
     <>
+      {showLandingChrome && <Navbar />}
       {showRoleNavbar && <RoleNavbar />}
-      {children}
+      {showLandingChrome ? (
+        <main className="pt-16 md:pt-20">{children}</main>
+      ) : (
+        children
+      )}
+      {showLandingChrome && <Footer />}
     </>
   );
 }
