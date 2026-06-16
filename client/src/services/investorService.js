@@ -67,13 +67,13 @@ export function calcInvestorCompletion(p, ip) {
   // Investment criteria (45)
   if  (ip.investor_type)                       s += 8;
   if  (ip.firm_name || ip.fund_name)           s += 7;
-  if ((ip.investment_stage || ip.preferred_stages || []).length > 0)  s += 8;
-  if ((ip.industries_of_interest || ip.preferred_industries || []).length > 0) s += 8;
-  if  (ip.ticket_size_min || ip.ticket_size_max || ip.check_range_min || ip.check_range_max) s += 7;
+  if ((ip.preferred_stages || ip.investment_stage || []).length > 0)  s += 8;
+  if ((ip.preferred_industries || ip.industries_of_interest || []).length > 0) s += 8;
+  if  (ip.check_range_min || ip.check_range_max || ip.ticket_size_min || ip.ticket_size_max) s += 7;
   if  (ip.investment_thesis || ip.what_i_look_for) s += 7;
   // Credibility (20)
-  if  (ip.portfolio_count > 0)                 s += 7;
-  if  (ip.successful_exits > 0)               s += 7;
+  if  ((ip.total_investments || ip.portfolio_count) > 0) s += 7;
+  if  ((ip.exits || ip.successful_exits) > 0) s += 7;
   if  (ip.notable_investments)                 s += 6;
   // Preferences (10)
   if  (ip.typical_involvement)                 s += 4;
@@ -89,9 +89,9 @@ export function getInvestorProfileNudges(p, ip) {
   const nudges = [];
   if (!(p.bio && p.bio.trim().length > 30))
     nudges.push({ field: 'bio',              msg: 'Add a bio — founders read this before pitching' });
-  if (!(ip.investment_stage?.length > 0))
-    nudges.push({ field: 'investment_stage', msg: 'Add your investment stage to receive matched pitches' });
-  if (!(ip.industries_of_interest?.length > 0))
+  if (!((ip.preferred_stages || ip.investment_stage || []).length > 0))
+    nudges.push({ field: 'preferred_stages', msg: 'Add your investment stage to receive matched pitches' });
+  if (!((ip.preferred_industries || ip.industries_of_interest || []).length > 0))
     nudges.push({ field: 'industries',       msg: 'Set your industry focus for better founder matches' });
   if (!ip.investment_thesis)
     nudges.push({ field: 'thesis',           msg: 'Write your thesis — founders use it to self-qualify' });

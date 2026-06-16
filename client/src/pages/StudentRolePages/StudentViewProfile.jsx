@@ -27,6 +27,9 @@ import toast from 'react-hot-toast';
 
 import { supabase } from '../../lib/supabaseClient';
 import { backendApi } from '../../lib/backendApi';
+import GrowthSignalPanel from '../../components/GrowthSignalPanel';
+import MatchOutcomeFeedback from '../../components/MatchOutcomeFeedback';
+import { useAuth } from '../../auth/AuthContext';
 
 const CSS = `
   :root {
@@ -415,6 +418,7 @@ function InvestorDetails({ investor }) {
 export default function StudentViewProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [state, setState] = useState({ loading: true, error: null });
   const [data, setData] = useState({
@@ -633,6 +637,22 @@ export default function StudentViewProfile() {
           </div>
 
           <div className="space-y-5 mt-5">
+            <GrowthSignalPanel
+              profile={profile}
+              studentProfile={student}
+              founderProfile={founder}
+              mentorProfile={mentor}
+              investorProfile={investor}
+              role={profile.user_type}
+              compact
+            />
+            {user?.id !== profile.id && (
+              <MatchOutcomeFeedback
+                targetUserId={profile.id}
+                connectionStatus={connectionStatus}
+                context="profile_view"
+              />
+            )}
             <StudentDetails student={student} />
             <FounderDetails founder={founder} />
             <MentorDetails mentor={mentor} />

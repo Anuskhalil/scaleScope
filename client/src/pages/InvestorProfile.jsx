@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import RoleNavbar from '../components/landing-page/RoleNavbar';
+import AIProfileQualityChecker from '../components/AIProfileQualityChecker';
 import {
   fetchInvestorProfile,
   calcInvestorCompletion,
@@ -201,7 +202,39 @@ const normalizeProfile = (user, profile = {}, investorProfile = {}) => {
   };
 };
 
-const formatDate = (value) => value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+function getInvestorQualityChecks(form) {
+  const preferredStages = form.preferred_stages || form.investment_stage || [];
+  const preferredIndustries = form.preferred_industries || form.industries_of_interest || [];
+  const checkMin = Number(form.check_range_min || form.ticket_size_min || 0);
+  const checkMax = Number(form.check_range_max || form.ticket_size_max || 0);
+
+  const required = [
+    { field: 'full_name', condition: (form.full_name || '').trim().length > 1, label: 'Full name' },
+    { field: 'bio', condition: (form.bio || '').trim().length > 30, label: 'Investor bio with at least 30 characters' },
+    { field: 'location', condition: (form.location || '').trim().length > 1, label: 'City / country' },
+    { field: 'investor_type', condition: !!form.investor_type, label: 'Investor type' },
+    { field: 'preferred_stages', condition: preferredStages.length > 0, label: 'Preferred investment stages' },
+    { field: 'preferred_industries', condition: preferredIndustries.length > 0, label: 'Preferred industries' },
+    { field: 'check_range', condition: checkMin > 0 || checkMax > 0, label: 'Check range' },
+    { field: 'geography_focus', condition: !!(form.geography_focus || form.geographic_focus), label: 'Geography focus' },
+    { field: 'investment_thesis', condition: (form.investment_thesis || form.what_i_look_for || '').trim().length > 30, label: 'Investment thesis with at least 30 characters' },
+    { field: 'typical_involvement', condition: !!form.typical_involvement, label: 'Typical involvement' },
+    { field: 'preferred_contact_method', condition: !!form.preferred_contact_method, label: 'Preferred contact method' },
+  ];
+
+  const recommended = [
+    { field: 'linkedin_url', condition: !!form.linkedin_url, label: 'LinkedIn profile' },
+    { field: 'firm_name', condition: !!(form.firm_name || form.fund_name), label: 'Fund / firm name' },
+    { field: 'total_investments', condition: Number(form.total_investments || form.portfolio_count || 0) > 0, label: 'Total investments' },
+    { field: 'notable_investments', condition: (form.notable_investments || '').trim().length > 10, label: 'Notable investments' },
+    { field: 'response_time', condition: !!form.response_time, label: 'Response time' },
+    { field: 'lead_or_follow', condition: !!form.lead_or_follow, label: 'Lead or follow preference' },
+    { field: 'minimum_traction_required', condition: (form.minimum_traction_required || '').trim().length > 10, label: 'Minimum traction required' },
+    { field: 'due_diligence_requirements', condition: (form.due_diligence_requirements || '').trim().length > 10, label: 'Due diligence requirements' },
+  ];
+
+  return { required, recommended };
+}
 
 export default function InvestorProfilePage() {
   const { user } = useAuth();
@@ -316,6 +349,15 @@ export default function InvestorProfilePage() {
     if (event) event.preventDefault();
     if (saving) return;
 
+    const quality = getInvestorQualityChecks(formData);
+    const missingRequired = quality.required.filter((item) => !item.condition);
+    if (missingRequired.length > 0) {
+      const message = `Please complete required fields: ${missingRequired.map((item) => item.label).join(', ')}`;
+      setSaveError(message);
+      toast.error('Complete required investor fields first');
+      return;
+    }
+
     setSaving(true);
     setSaveError('');
 
@@ -407,6 +449,7 @@ export default function InvestorProfilePage() {
   }
 
   const completion = calcInvestorCompletion(formData, formData);
+  const qualityChecks = getInvestorQualityChecks(formData);
 
   return (
     <>
@@ -499,12 +542,20 @@ export default function InvestorProfilePage() {
             </aside>
 
             <section className="lg:col-span-3">
+              <div className="space-y-6">
+              <AIProfileQualityChecker
+                roleLabel="Investor profile"
+                completion={completion}
+                requiredItems={qualityChecks.required}
+                recommendedItems={qualityChecks.recommended}
+              />
               <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8">
                 {!isEditMode ? (
                   <ViewMode formData={formData} completion={completion} />
                 ) : (
                   <EditMode formData={formData} updateField={updateField} toggleArrayField={toggleArrayField} completion={completion} />
                 )}
+              </div>
               </div>
             </section>
           </div>
@@ -573,8 +624,8 @@ function ViewMode({ formData, completion }) {
       <Section title="Portfolio & Credibility" icon={<Star className="w-5 h-5 text-[#1B2D7F]" />}>
         <div className="grid md:grid-cols-3 gap-3 mb-4">
           {[
-            { label: 'Portfolio Count', value: `${formData.portfolio_count || 0} companies`, Icon: Briefcase },
-            { label: 'Successful Exits', value: formData.successful_exits || '0', Icon: CheckCircle },
+            { label: 'Total Investments', value: `${formData.total_investments || 0} companies`, Icon: Briefcase },
+            { label: 'Exits', value: formData.exits || '0', Icon: CheckCircle },
             { label: 'Completion', value: `${completion}%`, Icon: Shield },
           ].map((item) => <InfoTile key={item.label} item={item} />)}
         </div>
@@ -621,42 +672,6 @@ function ViewMode({ formData, completion }) {
             <p className="text-sm text-gray-700 leading-relaxed">{formData.due_diligence_requirements}</p>
           </div>
         )}
-      </Section>
-
-      <Section title="Investor Profile Fields" icon={<Shield className="w-5 h-5 text-[#1B2D7F]" />}>
-        <div className="grid md:grid-cols-2 gap-3 mb-4">
-          {[
-            { label: 'Fund Name', value: formData.fund_name, Icon: Building2 },
-            { label: 'Check Range', value: `${formData.check_range_min || '0'} - ${formData.check_range_max || 'Open'} USD`, Icon: DollarSign },
-            { label: 'Geography Focus', value: formData.geography_focus, Icon: Globe },
-            { label: 'Total Investments', value: `${formData.total_investments || 0}`, Icon: Briefcase },
-            { label: 'Exits', value: `${formData.exits || 0}`, Icon: CheckCircle },
-            { label: 'Public Profile', value: formData.is_public ? 'Public' : 'Private', Icon: Shield },
-            { label: 'Active Profile', value: formData.is_active ? 'Active' : 'Inactive', Icon: CheckCircle },
-            { label: 'Onboarding', value: formData.onboarding_completed ? 'Completed' : 'In progress', Icon: Target },
-          ].map((item) => <InfoTile key={item.label} item={item} />)}
-        </div>
-        <ChipGroup title="Preferred Stages" values={formData.preferred_stages} strong />
-        <ChipGroup title="Preferred Industries" values={formData.preferred_industries} />
-        {formData.what_i_look_for && (
-          <div className="p-4 bg-gray-50 rounded-xl border-l-4 mt-4" style={{ borderColor: '#98DE38' }}>
-            <p className="text-xs font-bold uppercase mb-1" style={{ color: '#98DE38' }}>What I Look For</p>
-            <p className="text-sm text-gray-700 leading-relaxed">{formData.what_i_look_for}</p>
-          </div>
-        )}
-      </Section>
-
-      <Section title="System Fields" icon={<Shield className="w-5 h-5 text-[#1B2D7F]" />}>
-        <div className="grid md:grid-cols-2 gap-3">
-          {[
-            { label: 'Investor Profile ID', value: formData.id, Icon: Shield },
-            { label: 'User ID', value: formData.user_id, Icon: User },
-            { label: 'Profile ID', value: formData.profile_id, Icon: User },
-            { label: 'Saved Completion', value: `${formData.profile_completion || 0}%`, Icon: Target },
-            { label: 'Created', value: formatDate(formData.created_at), Icon: Clock },
-            { label: 'Last Updated', value: formatDate(formData.updated_at), Icon: Clock },
-          ].map((item) => <InfoTile key={item.label} item={item} />)}
-        </div>
       </Section>
 
       <Section title="Links" icon={<LinkIcon className="w-5 h-5 text-[#1B2D7F]" />}>
@@ -726,8 +741,8 @@ function EditMode({ formData, updateField, toggleArrayField, completion }) {
 
       <EditSection title="Portfolio & Credibility" icon={<Star className="w-4 h-4" />} hint="Trust signals help serious founders prioritize your response.">
         <div className="grid md:grid-cols-2 gap-4">
-          <FormInput label="Portfolio Count" type="number" value={formData.portfolio_count ?? ''} onChange={(value) => updateField('portfolio_count', value === '' ? 0 : Number(value))} placeholder="e.g. 12" />
-          <FormInput label="Successful Exits" type="number" value={formData.successful_exits ?? ''} onChange={(value) => updateField('successful_exits', value === '' ? 0 : Number(value))} placeholder="e.g. 2" />
+          <FormInput label="Total Investments" type="number" value={formData.total_investments ?? ''} onChange={(value) => updateField('total_investments', value === '' ? 0 : Number(value))} placeholder="e.g. 12" />
+          <FormInput label="Exits" type="number" value={formData.exits ?? ''} onChange={(value) => updateField('exits', value === '' ? 0 : Number(value))} placeholder="e.g. 2" />
         </div>
         <FormTextarea label="Notable Investments" value={formData.notable_investments} onChange={(value) => updateField('notable_investments', value)} placeholder="Companies you've backed that founders will recognize." rows={2} max={400} />
       </EditSection>
@@ -758,41 +773,6 @@ function EditMode({ formData, updateField, toggleArrayField, completion }) {
         <ChipPicker label="Preferred Business Models" values={BUSINESS_MODEL_OPTS} selected={formData.preferred_business_models || []} onToggle={(value) => toggleArrayField('preferred_business_models', value)} />
         <FormTextarea label="Minimum Traction Required" value={formData.minimum_traction_required} onChange={(value) => updateField('minimum_traction_required', value)} placeholder="e.g. MVP launched, 1K MAU, paid pilots, revenue, LOIs, or founder-market fit signals." rows={3} max={500} />
         <FormTextarea label="Due Diligence Requirements" value={formData.due_diligence_requirements} onChange={(value) => updateField('due_diligence_requirements', value)} placeholder="Documents or proof you need before reviewing: pitch deck, cap table, financials, metrics, incorporation, customer evidence." rows={3} max={700} />
-      </EditSection>
-
-      <EditSection title="Investor Profile Fields" icon={<Shield className="w-4 h-4" />} hint="These map directly to investor_profiles, including alias fields used by matching and filters.">
-        <div className="grid md:grid-cols-2 gap-4">
-          <FormInput label="Fund Name" value={formData.fund_name || formData.firm_name} onChange={(value) => { updateField('fund_name', value); updateField('firm_name', value); }} icon={<Building2 className="w-4 h-4" />} placeholder="e.g. Indus Valley Capital" />
-          <FormInput label="Check Range Min (USD)" type="number" value={formData.check_range_min ?? formData.ticket_size_min ?? ''} onChange={(value) => { updateField('check_range_min', value); updateField('ticket_size_min', value); }} placeholder="e.g. 25000" />
-          <FormInput label="Check Range Max (USD)" type="number" value={formData.check_range_max ?? formData.ticket_size_max ?? ''} onChange={(value) => { updateField('check_range_max', value); updateField('ticket_size_max', value); }} placeholder="e.g. 150000" />
-          <SelectField label="Geography Focus" value={formData.geography_focus || formData.geographic_focus} onChange={(value) => { updateField('geography_focus', value); updateField('geographic_focus', value); }} options={GEO_OPTS} placeholder="Select geography..." />
-          <FormInput label="Total Investments" type="number" value={formData.total_investments ?? formData.portfolio_count ?? ''} onChange={(value) => { const next = value === '' ? 0 : Number(value); updateField('total_investments', next); updateField('portfolio_count', next); }} placeholder="e.g. 12" />
-          <FormInput label="Exits" type="number" value={formData.exits ?? formData.successful_exits ?? ''} onChange={(value) => { const next = value === '' ? 0 : Number(value); updateField('exits', next); updateField('successful_exits', next); }} placeholder="e.g. 2" />
-        </div>
-        <ChipPicker label="Preferred Stages" values={STAGE_OPTS} selected={formData.preferred_stages || formData.investment_stage || []} onToggle={(value) => { toggleArrayField('preferred_stages', value); toggleArrayField('investment_stage', value); }} />
-        <ChipPicker label="Preferred Industries" values={INDUSTRY_OPTS} selected={formData.preferred_industries || formData.industries_of_interest || []} onToggle={(value) => { toggleArrayField('preferred_industries', value); toggleArrayField('industries_of_interest', value); }} />
-        <FormTextarea label="What I Look For" value={formData.what_i_look_for || formData.investment_thesis} onChange={(value) => { updateField('what_i_look_for', value); updateField('investment_thesis', value); }} placeholder="Describe the signals, founder qualities, traction, and market conditions you care about." rows={3} max={700} />
-        <div className="grid md:grid-cols-2 gap-3">
-          {[
-            { field: 'is_public', title: 'Public profile', desc: 'Show this investor profile in founder discovery.' },
-            { field: 'is_active', title: 'Active profile', desc: 'Keep matching and pitch workflows enabled.' },
-            { field: 'is_verified', title: 'Verified investor', desc: 'Mark this profile as verified after admin review.' },
-          ].map((item) => (
-            <label key={item.field} className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#98DE38]/50 transition-all">
-              <input type="checkbox" checked={formData[item.field] === true} onChange={(event) => updateField(item.field, event.target.checked)} className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]" />
-              <div>
-                <p className="text-sm font-semibold text-gray-700">{item.title}</p>
-                <p className="text-xs text-gray-400">{item.desc}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-        <div className="grid md:grid-cols-2 gap-4">
-          <FormInput label="Investor Profile ID" value={formData.id || ''} disabled icon={<Shield className="w-4 h-4" />} />
-          <FormInput label="User ID" value={formData.user_id || ''} disabled icon={<User className="w-4 h-4" />} />
-          <FormInput label="Profile ID" value={formData.profile_id || ''} disabled icon={<User className="w-4 h-4" />} />
-          <FormInput label="Saved Completion" value={`${formData.profile_completion || 0}%`} disabled icon={<Target className="w-4 h-4" />} />
-        </div>
       </EditSection>
 
       <EditSection title="Links" icon={<LinkIcon className="w-4 h-4" />} hint="LinkedIn is the strongest investor verification signal.">

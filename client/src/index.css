@@ -18,6 +18,29 @@ body {
   overflow-x: hidden;
 }
 
+#root {
+  overflow-x: clip;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+span,
+li,
+a {
+  min-width: 0;
+}
+
+p,
+li,
+a {
+  overflow-wrap: anywhere;
+}
+
 img,
 svg,
 video,
@@ -30,6 +53,11 @@ select,
 textarea,
 button {
   max-width: 100%;
+}
+
+button,
+a {
+  touch-action: manipulation;
 }
 
 input,

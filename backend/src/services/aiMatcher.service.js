@@ -1,10 +1,14 @@
 const supabase = require('../config/supabase');
 const gemini = require('../config/gemini');
+const isDev = process.env.NODE_ENV !== 'production';
+const debugLog = (...args) => {
+    if (isDev) console.log(...args);
+};
 
 // ✅ ADD these logs inside getCoFounderMatches function:
 
 exports.getCoFounderMatches = async (currentUserId, limit = 8) => {
-    console.log(`🔍 Fetching matches for user: ${currentUserId}`);
+    debugLog(`🔍 Fetching matches for user: ${currentUserId}`);
 
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
@@ -20,14 +24,14 @@ exports.getCoFounderMatches = async (currentUserId, limit = 8) => {
         return [];
     }
 
-    console.log('✅ User profile fetched:', {
+    debugLog('✅ User profile fetched:', {
         id: profile.id,
         hasStudentProfile: !!profile.student_profiles,
         user_type: profile.user_type
     });
 
     if (!profile.student_profiles) {
-        console.warn('⚠️ No student profile found for user');
+        if (isDev) console.warn('No student profile found for user');
         return [];
     }
 
@@ -63,7 +67,7 @@ exports.getCoFounderMatches = async (currentUserId, limit = 8) => {
     // 3. Score each candidate WITH LOGS
     const scored = await Promise.all(candidates.map(async (c, idx) => {
         const result = await calculateScore(user, c);
-        console.log(`🎯 Candidate ${idx + 1}: ${c.full_name} → Score: ${result.matchScore}`, {
+        debugLog(`🎯 Candidate ${idx + 1}: ${c.full_name} → Score: ${result.matchScore}`, {
             reasons: result.reasons,
             hasIdea: c.has_startup_idea,
             commitment: c.commitment_level
@@ -74,11 +78,11 @@ exports.getCoFounderMatches = async (currentUserId, limit = 8) => {
     // 4. Filter & sort
     const filtered = scored.filter(s => {
         const keep = s.matchScore >= 0;
-        if (!keep) console.log(`❌ Filtered out: ${s.full_name} (score: ${s.matchScore})`);
+        if (!keep) debugLog(`❌ Filtered out: ${s.full_name} (score: ${s.matchScore})`);
         return keep;
     });
 
-    console.log(`✅ Returning ${filtered.length} matches after filtering`);
+    debugLog(`✅ Returning ${filtered.length} matches after filtering`);
 
     return filtered
         .sort((a, b) => b.matchScore - a.matchScore)

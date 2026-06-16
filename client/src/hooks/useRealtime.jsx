@@ -1,7 +1,7 @@
 // client/src/hooks/useRealtime.jsx — Simplified version
 import { useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { initSocket, getSocket } from '../lib/socketClient';
+import { initSocket } from '../lib/socketClient';
 import toast from 'react-hot-toast';
 
 export const useRealtime = ({ onConnectionRequest, onConnectionResponse, onMessage, onConvCreated } = {}) => {

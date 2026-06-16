@@ -8,6 +8,8 @@ const router = express.Router();
 router.use(auth);
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 2;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value) => UUID_RE.test(String(value || ''));
 
 function requireLiveKitConfig() {
   const apiKey = process.env.LIVEKIT_API_KEY;
@@ -130,6 +132,10 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'conversationId is required' });
     }
 
+    if (!isUuid(conversationId)) {
+      return res.status(400).json({ error: 'Invalid conversationId' });
+    }
+
     const participants = await assertConversationMember(conversationId, currentUserId);
     const roomName = `scalescope-${crypto.randomUUID()}`;
 
@@ -179,6 +185,10 @@ router.get('/:meetingId', async (req, res) => {
     const userId = req.user.id;
     const { meetingId } = req.params;
 
+    if (!isUuid(meetingId)) {
+      return res.status(400).json({ error: 'Invalid meetingId' });
+    }
+
     await assertMeetingParticipant(meetingId, userId);
     const meeting = await getMeeting(meetingId);
 
@@ -220,6 +230,10 @@ router.post('/:meetingId/token', async (req, res) => {
     const userId = req.user.id;
     const { meetingId } = req.params;
     const config = requireLiveKitConfig();
+
+    if (!isUuid(meetingId)) {
+      return res.status(400).json({ error: 'Invalid meetingId' });
+    }
 
     await assertMeetingParticipant(meetingId, userId);
     const meeting = await getMeeting(meetingId);
@@ -280,6 +294,11 @@ router.post('/:meetingId/end', async (req, res) => {
   try {
     const userId = req.user.id;
     const { meetingId } = req.params;
+
+    if (!isUuid(meetingId)) {
+      return res.status(400).json({ error: 'Invalid meetingId' });
+    }
+
     const participant = await assertMeetingParticipant(meetingId, userId);
 
     if (participant.role !== 'host') {

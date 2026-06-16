@@ -153,7 +153,7 @@ function DashboardRouter() {
   if (role === 'mentor') return <MentorDashboard />;
   if (role === 'investor') return <InvestorDashboard />;
 
-  return <Navigate to="/student/profile" replace />;
+  return <Navigate to="/register" replace />;
 }
 
 function ProfileRouter() {
@@ -163,6 +163,7 @@ function ProfileRouter() {
   if (role === 'early-stage-founder') return <FounderProfilePage />;
   if (role === 'mentor') return <MentorProfilePage />;
   if (role === 'investor') return <InvestorProfilePage />;
+  if (!role) return <Navigate to="/register" replace />;
 
   return <ProfilePage />;
 }
@@ -426,7 +427,7 @@ export default function App() {
           <Route
             path="/meetings/:meetingId"
             element={
-              <RolePage allowedRoles={['student', 'early-stage-founder', 'mentor']}>
+              <RolePage allowedRoles={['student', 'early-stage-founder', 'mentor', 'investor']}>
                 <MeetingRoomPage />
               </RolePage>
             }

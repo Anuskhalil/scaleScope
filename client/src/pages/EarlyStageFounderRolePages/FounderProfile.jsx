@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import RoleNavbar from '../../components/landing-page/RoleNavbar';
+import AIProfileQualityChecker from '../../components/AIProfileQualityChecker';
 import {
   User,
   Rocket,
@@ -482,8 +483,6 @@ const makeEmpty = (user) => ({
 });
 
 const safeArray = (v) => (Array.isArray(v) ? v : []);
-const formatDate = (value) => value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
-
 function calcFounderCompletionWithBreakdown(f) {
   const checks = [
     { field: 'full_name', condition: (f.full_name || '').trim().length > 1, points: 6, label: 'Full name' },
@@ -524,6 +523,28 @@ function calcFounderCompletionWithBreakdown(f) {
     missing,
     all: checks,
   };
+}
+
+function getFounderQualityChecks(f) {
+  const required = [
+    { field: 'full_name', condition: (f.full_name || '').trim().length > 1, label: 'Full name' },
+    { field: 'bio', condition: (f.bio || '').trim().length > 20, label: 'Founder bio with at least 20 characters' },
+    { field: 'location', condition: (f.location || '').trim().length > 1, label: 'City / country' },
+    { field: 'founder_skills', condition: safeArray(f.founder_skills).length >= 3, label: 'At least 3 founder skills' },
+    { field: 'startup_name', condition: !!(f.company_name || f.idea_title), label: 'Startup name or idea title' },
+    { field: 'industry', condition: !!f.industry, label: 'Startup industry' },
+    { field: 'stage', condition: !!f.startup_stage, label: 'Startup stage' },
+    { field: 'problem', condition: (f.problem_solving || f.problem_statement || '').trim().length > 30, label: 'Problem statement with at least 30 characters' },
+    { field: 'target_market', condition: (f.target_market || '').trim().length > 5, label: 'Target market' },
+    { field: 'looking_for', condition: safeArray(f.looking_for).length > 0, label: 'Looking for preference' },
+    { field: 'help_needed', condition: safeArray(f.help_needed).length > 0, label: 'Help needed areas' },
+  ];
+
+  const recommended = calcFounderCompletionWithBreakdown(f).all.filter((item) => {
+    return !required.some((req) => req.field === item.field);
+  });
+
+  return { required, recommended };
 }
 
 const generateFounderHelpSuggestions = (form) => {
@@ -988,6 +1009,15 @@ export default function FounderProfile() {
     if (e) e.preventDefault();
     if (saving || !user?.id) return;
 
+    const quality = getFounderQualityChecks(formData);
+    const missingRequired = quality.required.filter((item) => !item.condition);
+    if (missingRequired.length > 0) {
+      const message = `Please complete required fields: ${missingRequired.map((item) => item.label).join(', ')}`;
+      setSaveError(message);
+      toast.error('Complete required founder fields first');
+      return;
+    }
+
     setSaving(true);
     setSaveError('');
 
@@ -1175,6 +1205,7 @@ export default function FounderProfile() {
   }
 
   const completion = calcFounderCompletionWithBreakdown(formData);
+  const qualityChecks = getFounderQualityChecks(formData);
 
   return (
     <>
@@ -1356,6 +1387,13 @@ export default function FounderProfile() {
             </aside>
 
             <section className="lg:col-span-3">
+              <div className="space-y-6">
+              <AIProfileQualityChecker
+                roleLabel="Founder profile"
+                completion={completion}
+                requiredItems={qualityChecks.required}
+                recommendedItems={qualityChecks.recommended}
+              />
               <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8">
                 {!isEditMode ? (
                   <ViewMode
@@ -1380,6 +1418,7 @@ export default function FounderProfile() {
                     updateField={updateField}
                   />
                 )}
+              </div>
               </div>
             </section>
           </div>
@@ -1723,10 +1762,6 @@ function ViewMode({ formData, onEditClick }) {
           {[
             { l: 'Public Profile', v: formData.is_public ? 'Visible' : 'Private', I: Shield },
             { l: 'Active Startup', v: formData.is_active ? 'Active' : 'Inactive', I: Shield },
-            { l: 'Founder Profile ID', v: formData.id, I: Shield },
-            { l: 'User ID', v: formData.user_id, I: User },
-            { l: 'Created', v: formatDate(formData.created_at), I: Clock },
-            { l: 'Updated', v: formatDate(formData.updated_at), I: Clock },
           ].map((x, i) => (
             <div key={i} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
               <div className="p-2 bg-gray-100 rounded-lg" style={{ color: '#1B2D7F' }}><x.I className="w-4 h-4" /></div>
@@ -2433,12 +2468,6 @@ function EditMode({
             <input type="checkbox" checked={formData.is_active !== false} onChange={(e) => updateField('is_active', e.target.checked)} className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]" />
             <div><p className="text-sm font-semibold text-gray-700">Active startup</p><p className="text-xs text-gray-400">Keep on while you are looking for support or funding.</p></div>
           </label>
-        </div>
-        <div className="grid md:grid-cols-2 gap-4">
-          <FormInput label="Founder Profile ID" value={formData.id || ''} disabled icon={<Shield className="w-4 h-4" />} />
-          <FormInput label="User ID" value={formData.user_id || ''} disabled icon={<User className="w-4 h-4" />} />
-          <FormInput label="Created At" value={formatDate(formData.created_at)} disabled icon={<Clock className="w-4 h-4" />} />
-          <FormInput label="Updated At" value={formatDate(formData.updated_at)} disabled icon={<Clock className="w-4 h-4" />} />
         </div>
       </EditSection>
 

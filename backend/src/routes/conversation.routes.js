@@ -8,13 +8,16 @@ const router = express.Router();
 
 router.use(auth);
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value) => UUID_RE.test(String(value || ''));
+
 router.post('/with/:otherUserId', async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const otherUserId = req.params.otherUserId;
 
-    if (!otherUserId) {
-      return res.status(400).json({ error: 'otherUserId is required' });
+    if (!isUuid(otherUserId)) {
+      return res.status(400).json({ error: 'Valid otherUserId is required' });
     }
 
     if (currentUserId === otherUserId) {
@@ -182,6 +185,10 @@ router.get('/:conversationId/messages', async (req, res) => {
     const userId = req.user.id;
     const conversationId = req.params.conversationId;
 
+    if (!isUuid(conversationId)) {
+      return res.status(400).json({ error: 'Invalid conversationId' });
+    }
+
     const { data: membership, error: memberError } = await supabase
       .from('conversation_participants')
       .select('conversation_id, user_id, last_read_at')
@@ -249,6 +256,10 @@ router.get('/:conversationId/messages', async (req, res) => {
 
 router.post('/:conversationId/messages', async (req, res) => {
   try {
+    if (!isUuid(req.params.conversationId)) {
+      return res.status(400).json({ error: 'Invalid conversationId' });
+    }
+
     const message = await createMessage(
       req.params.conversationId,
       req.user.id,
@@ -267,6 +278,10 @@ router.put('/:conversationId/messages/:messageId', async (req, res) => {
     const userId = req.user.id;
     const { conversationId, messageId } = req.params;
     const content = String(req.body?.content || '').trim();
+
+    if (!isUuid(conversationId) || !isUuid(messageId)) {
+      return res.status(400).json({ error: 'Invalid conversation or message id' });
+    }
 
     if (!content) return res.status(400).json({ error: 'message content is required' });
     if (content.length > 2000) return res.status(400).json({ error: 'message content is too long' });
@@ -307,6 +322,10 @@ router.delete('/:conversationId/messages/:messageId', async (req, res) => {
   try {
     const userId = req.user.id;
     const { conversationId, messageId } = req.params;
+
+    if (!isUuid(conversationId) || !isUuid(messageId)) {
+      return res.status(400).json({ error: 'Invalid conversation or message id' });
+    }
 
     const { data: membership, error: memberError } = await supabase
       .from('conversation_participants')
@@ -351,6 +370,10 @@ router.post('/:conversationId/read', async (req, res) => {
     const userId = req.user.id;
     const conversationId = req.params.conversationId;
     const readAt = new Date().toISOString();
+
+    if (!isUuid(conversationId)) {
+      return res.status(400).json({ error: 'Invalid conversationId' });
+    }
 
     const { error } = await supabase
       .from('conversation_participants')

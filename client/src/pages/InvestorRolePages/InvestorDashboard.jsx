@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import GrowthSignalPanel from '../../components/GrowthSignalPanel';
 import {
   fetchInvestorDashboard,
   calcInvestorCompletion,
@@ -184,7 +185,10 @@ export default function InvestorDashboard() {
   const firstName = profile.full_name?.split(' ')[0] || 'Investor';
   const completion = calcInvestorCompletion(profile, investorProfile);
   const nudges = getInvestorProfileNudges(profile, investorProfile);
-  const ticket = formatTicketSize(investorProfile.ticket_size_min, investorProfile.ticket_size_max);
+  const ticket = formatTicketSize(
+    investorProfile.check_range_min || investorProfile.ticket_size_min,
+    investorProfile.check_range_max || investorProfile.ticket_size_max
+  );
   const strongStartups = startups.filter((startup) => getScore(startup) >= 60).slice(0, 5);
 
   return (
@@ -219,6 +223,16 @@ export default function InvestorDashboard() {
                 <p className="text-xs text-gray-500">{stat.label} · {stat.sub}</p>
               </div>
             ))}
+          </div>
+
+          <div className="mb-6">
+            <GrowthSignalPanel
+              profile={profile}
+              investorProfile={investorProfile}
+              role="investor"
+              enableAI
+              compact
+            />
           </div>
 
           <div className="grid lg:grid-cols-3 gap-6">
@@ -321,8 +335,8 @@ export default function InvestorDashboard() {
                 <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp className="w-4 text-[#1B2D7F]" />Investor Stats</h3>
                 <div className="space-y-3">
                   <InfoRow label="Ticket Size" value={ticket} />
-                  <InfoRow label="Portfolio" value={`${investorProfile.portfolio_count || 0} companies`} />
-                  <InfoRow label="Exits" value={`${investorProfile.successful_exits || 0}`} />
+                  <InfoRow label="Portfolio" value={`${investorProfile.total_investments || investorProfile.portfolio_count || 0} companies`} />
+                  <InfoRow label="Exits" value={`${investorProfile.exits || investorProfile.successful_exits || 0}`} />
                   <InfoRow label="Accepting" value={investorProfile.accepting_pitches !== false ? 'Yes' : 'Paused'} />
                 </div>
               </div>

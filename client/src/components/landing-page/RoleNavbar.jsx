@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Menu, X, LogOut, User, Settings, Search,
@@ -25,38 +25,9 @@ export default function RoleNavbar() {
     user?.user_metadata?.user_type ||
     null;
 
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  const fetchProfile = useCallback(async () => {
+    if (!user?.id) return;
 
-  useEffect(() => {
-    if (user) fetchProfile();
-  }, [user]);
-
-  const getRoleBasePath = (role) => {
-    switch (role) {
-      case 'student':
-        return '/student';
-
-      case 'early-stage-founder':
-        return '/founder';
-
-      case 'mentor':
-        return '/mentor';
-
-      case 'investor':
-        return '/investor';
-
-      default:
-        return '/login';
-    }
-  };
-
-  const roleBase = getRoleBasePath(userRole);
-
-  const fetchProfile = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -80,7 +51,7 @@ export default function RoleNavbar() {
         const avatarPath = data.avatar_url;
 
         if (avatarPath && !avatarPath.startsWith('http')) {
-          let cleanPath = avatarPath.replace(/^avatars\//, '');
+          const cleanPath = avatarPath.replace(/^avatars\//, '');
 
           const { data: urlData } = await supabase.storage
             .from('avatars')
@@ -94,7 +65,38 @@ export default function RoleNavbar() {
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
+  }, [user?.id]);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (user) fetchProfile();
+  }, [user, fetchProfile]);
+
+  const getRoleBasePath = (role) => {
+    switch (role) {
+      case 'student':
+        return '/student';
+
+      case 'early-stage-founder':
+        return '/founder';
+
+      case 'mentor':
+        return '/mentor';
+
+      case 'investor':
+        return '/investor';
+
+      default:
+        return '/login';
+    }
   };
+
+  const roleBase = getRoleBasePath(userRole);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

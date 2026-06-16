@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import { useRealtime } from '../../hooks/useRealtime';
 import CofounderCard from '../../components/CoFounderCard';
+import GrowthSignalPanel from '../../components/GrowthSignalPanel';
 import {
   fetchConversations,
   fetchIncomingRequests,
@@ -1526,6 +1527,16 @@ export default function StudentDashboard() {
                 </p>
               </div>
             ))}
+          </div>
+
+          <div className="mb-6">
+            <GrowthSignalPanel
+              profile={profile}
+              studentProfile={student}
+              role="student"
+              enableAI
+              compact
+            />
           </div>
 
           {/* MAIN LAYOUT */}

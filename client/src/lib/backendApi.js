@@ -310,6 +310,56 @@ export const backendApi = {
         return data;
     },
 
+    getGrowthPlan: async (signals = {}) => {
+        const res = await fetch(`${BASE}/api/growth/plan`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({ signals }),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to generate growth plan');
+        }
+
+        return data.data || data;
+    },
+
+    submitMatchOutcome: async ({
+        targetUserId,
+        context = 'profile_view',
+        outcome,
+        rating,
+        reasonTags = [],
+        notes,
+    } = {}) => {
+        if (!targetUserId) {
+            throw new Error('targetUserId is required');
+        }
+
+        const res = await fetch(`${BASE}/api/growth/match-outcome`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({
+                targetUserId,
+                context,
+                outcome,
+                rating,
+                reasonTags,
+                notes,
+            }),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to submit match feedback');
+        }
+
+        return data;
+    },
+
     // Feedback after ignoring invitation
     sendConnectionFeedback: async ({ targetUserId, requestId, feedback }) => {
         if (!targetUserId) {

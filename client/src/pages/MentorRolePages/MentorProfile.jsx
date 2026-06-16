@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import RoleNavbar from '../../components/landing-page/RoleNavbar';
+import AIProfileQualityChecker from '../../components/AIProfileQualityChecker';
 import {
   User,
   Briefcase,
@@ -196,6 +197,27 @@ function calcCompletionWithBreakdown(form) {
   };
 }
 
+function getMentorQualityChecks(form) {
+  const completion = calcCompletionWithBreakdown(form);
+  const required = [
+    { field: 'full_name', condition: (form.full_name || '').trim().length > 1, label: 'Full name' },
+    { field: 'bio', condition: (form.bio || '').trim().length > 30, label: 'Mentor bio with at least 30 characters' },
+    { field: 'location', condition: (form.location || '').trim().length > 1, label: 'City / country' },
+    { field: 'expertise_areas', condition: (form.expertise_areas || []).length >= 2, label: 'At least 2 expertise areas' },
+    { field: 'years_experience', condition: Number(form.years_experience || 0) > 0, label: 'Years of experience' },
+    { field: 'current_role', condition: !!form.current_role, label: 'Current role' },
+    { field: 'can_help_with', condition: (form.can_help_with || []).length >= 2, label: 'At least 2 help areas' },
+    { field: 'mentorship_style', condition: !!form.mentorship_style, label: 'Mentorship style' },
+    { field: 'available_for', condition: (form.available_for || []).length > 0, label: 'Available for' },
+  ];
+
+  const recommended = completion.all.filter((item) => {
+    return !required.some((req) => req.field === item.field);
+  });
+
+  return { required, recommended };
+}
+
 const normalizeProfile = (user, profile = {}, mentorProfile = {}) => ({
   ...makeEmpty(user),
   id: mentorProfile.id || null,
@@ -238,15 +260,6 @@ const normalizeProfile = (user, profile = {}, mentorProfile = {}) => ({
   created_at: mentorProfile.created_at || '',
   updated_at: mentorProfile.updated_at || profile.updated_at,
 });
-
-const formatDate = (value) => {
-  if (!value) return '';
-  return new Date(value).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-};
 
 export default function MentorProfilePage() {
   const { user } = useAuth();
@@ -433,6 +446,15 @@ export default function MentorProfilePage() {
     if (event) event.preventDefault();
     if (saving) return;
 
+    const quality = getMentorQualityChecks(formData);
+    const missingRequired = quality.required.filter((item) => !item.condition);
+    if (missingRequired.length > 0) {
+      const message = `Please complete required fields: ${missingRequired.map((item) => item.label).join(', ')}`;
+      setSaveError(message);
+      toast.error('Complete required mentor fields first');
+      return;
+    }
+
     setSaving(true);
     setSaveError('');
 
@@ -514,6 +536,7 @@ export default function MentorProfilePage() {
   }
 
   const completion = calcCompletionWithBreakdown(formData);
+  const qualityChecks = getMentorQualityChecks(formData);
   const spotsLeft = Math.max(0, Number(formData.mentorship_capacity || 3) - Number(formData.current_mentees || 0));
 
   return (
@@ -662,6 +685,13 @@ export default function MentorProfilePage() {
             </aside>
 
             <section className="lg:col-span-3">
+              <div className="space-y-6">
+              <AIProfileQualityChecker
+                roleLabel="Mentor profile"
+                completion={completion}
+                requiredItems={qualityChecks.required}
+                recommendedItems={qualityChecks.recommended}
+              />
               <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8">
                 {!isEditMode ? (
                   <ViewMode formData={formData} spotsLeft={spotsLeft} />
@@ -678,6 +708,7 @@ export default function MentorProfilePage() {
                     removeTag={removeTag}
                   />
                 )}
+              </div>
               </div>
             </section>
           </div>
@@ -840,36 +871,6 @@ function ViewMode({ formData, spotsLeft }) {
               label: 'Mentor Availability',
               value: formData.is_active ? 'Active mentor profile' : 'Inactive',
               Icon: formData.is_active ? CheckCircle : Clock,
-            },
-            {
-              label: 'Onboarding',
-              value: formData.onboarding_completed ? 'Completed' : 'Not completed',
-              Icon: formData.onboarding_completed ? CheckCircle : Clock,
-            },
-            {
-              label: 'Profile Completion',
-              value: `${formData.profile_completion || 0}%`,
-              Icon: Shield,
-            },
-            {
-              label: 'Mentor Profile ID',
-              value: formData.id,
-              Icon: Shield,
-            },
-            {
-              label: 'User ID',
-              value: formData.user_id,
-              Icon: User,
-            },
-            {
-              label: 'Created',
-              value: formatDate(formData.created_at),
-              Icon: Clock,
-            },
-            {
-              label: 'Last Updated',
-              value: formatDate(formData.updated_at),
-              Icon: Clock,
             },
           ].map((item) => (
             <InfoTile key={item.label} item={item} />
@@ -1098,14 +1099,6 @@ function EditMode({
           </label>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <FormInput label="Mentor Profile ID" value={formData.id || ''} disabled icon={<Shield className="w-4 h-4" />} hint="Generated by the mentor_profiles table" />
-          <FormInput label="User ID" value={formData.user_id || ''} disabled icon={<User className="w-4 h-4" />} hint="Linked to profiles.id" />
-          <FormInput label="Profile Completion" value={`${formData.profile_completion || 0}%`} disabled icon={<Shield className="w-4 h-4" />} />
-          <FormInput label="Onboarding Completed" value={formData.onboarding_completed ? 'Yes' : 'No'} disabled icon={<CheckCircle className="w-4 h-4" />} />
-          <FormInput label="Created At" value={formatDate(formData.created_at)} disabled icon={<Clock className="w-4 h-4" />} />
-          <FormInput label="Updated At" value={formatDate(formData.updated_at)} disabled icon={<Clock className="w-4 h-4" />} />
-        </div>
       </EditSection>
 
       <EditSection title="Links" icon={<LinkIcon className="w-4 h-4" />} hint="Boosts verification & discoverability.">

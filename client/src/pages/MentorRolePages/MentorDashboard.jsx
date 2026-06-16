@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import GrowthSignalPanel from '../../components/GrowthSignalPanel';
 import {
   fetchMentorDashboard,
   calcMentorCompletion,
@@ -806,6 +807,16 @@ export default function MentorDashboard() {
                 </p>
               </div>
             ))}
+          </div>
+
+          <div className="mb-6">
+            <GrowthSignalPanel
+              profile={profile}
+              mentorProfile={mentorProfile}
+              role="mentor"
+              enableAI
+              compact
+            />
           </div>
 
           <div className="grid lg:grid-cols-3 gap-6">

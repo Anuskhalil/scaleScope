@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import { useRealtime } from '../../hooks/useRealtime';
+import GrowthSignalPanel from '../../components/GrowthSignalPanel';
 import {
   Rocket,
   Users,
@@ -1352,6 +1353,16 @@ export default function FounderDashboard() {
                 </p>
               </div>
             ))}
+          </div>
+
+          <div className="mb-6">
+            <GrowthSignalPanel
+              profile={profile}
+              founderProfile={founder}
+              role="early-stage-founder"
+              enableAI
+              compact
+            />
           </div>
 
           {/* MAIN LAYOUT */}

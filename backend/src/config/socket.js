@@ -6,6 +6,8 @@ const { createMessage, triggerAIReply } = require('../services/messaging.service
 let io;
 const onlineUsers = new Map();
 const AUTO_REPLY_DELAY_MS = Number(process.env.AUTO_REPLY_DELAY_MS || 60 * 1000);
+const SOCKET_MESSAGE_WINDOW_MS = Number(process.env.SOCKET_MESSAGE_WINDOW_MS || 60 * 1000);
+const SOCKET_MESSAGE_MAX_PER_WINDOW = Number(process.env.SOCKET_MESSAGE_MAX_PER_WINDOW || 30);
 
 exports.isUserOnline = (userId) => {
   return onlineUsers.has(userId);
@@ -50,6 +52,7 @@ exports.setupSocket = (server) => {
   io.on('connection', (socket) => {
     console.log(`🔌 Connected: ${socket.data.userId}`);
 
+    socket.data.messageTimestamps = [];
     onlineUsers.set(socket.data.userId, socket.id);
     socket.join(`user:${socket.data.userId}`);
     io.emit('presence:update', {
@@ -76,10 +79,29 @@ exports.setupSocket = (server) => {
     });
 
     socket.on('msg:send', async ({ convId, content }) => {
-      if (!content?.trim()) return;
+      const cleanContent = String(content || '').trim();
+
+      if (!cleanContent) return;
+
+      if (cleanContent.length > 2000) {
+        socket.emit('error', { message: 'message content is too long' });
+        return;
+      }
+
+      const now = Date.now();
+      const bucket = (socket.data.messageTimestamps || []).filter((ts) => now - ts < SOCKET_MESSAGE_WINDOW_MS);
+
+      if (bucket.length >= SOCKET_MESSAGE_MAX_PER_WINDOW) {
+        socket.data.messageTimestamps = bucket;
+        socket.emit('error', { message: 'Too many messages. Please slow down.' });
+        return;
+      }
+
+      bucket.push(now);
+      socket.data.messageTimestamps = bucket;
 
       try {
-        const msg = await createMessage(convId, socket.data.userId, content);
+        const msg = await createMessage(convId, socket.data.userId, cleanContent);
 
         io.to(`conv:${convId}`).emit('msg:new', msg);
 

@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 const AuthCtx = createContext(null);
@@ -11,7 +12,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  const loadProfile = async (userId) => {
+  const loadProfile = useCallback(async (userId) => {
     if (!userId) {
       setProfile(null);
       return null;
@@ -31,9 +32,9 @@ export function AuthProvider({ children }) {
 
     setProfile(data || null);
     return data || null;
-  };
+  }, []);
 
-  const refreshMfaLevel = async () => {
+  const refreshMfaLevel = useCallback(async () => {
     try {
       const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
@@ -50,9 +51,9 @@ export function AuthProvider({ children }) {
       setMfaLevel(null);
       return null;
     }
-  };
+  }, []);
 
-  const hydrateAuth = async () => {
+  const hydrateAuth = useCallback(async () => {
     try {
       setLoading(true);
       setAuthError(null);
@@ -86,7 +87,7 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadProfile, refreshMfaLevel]);
 
   useEffect(() => {
     let mounted = true;
@@ -154,7 +155,7 @@ export function AuthProvider({ children }) {
       mounted = false;
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [loadProfile, refreshMfaLevel]);
 
   const emailVerified = Boolean(
     user?.email_confirmed_at ||
@@ -184,7 +185,7 @@ export function AuthProvider({ children }) {
     refreshAuth: hydrateAuth,
     refreshMfaLevel,
     signOut: () => supabase.auth.signOut(),
-  }), [session, user, profile, loading, authError, emailVerified, mfaLevel, needsMfa, isAuthenticated]);
+  }), [session, user, profile, loading, authError, emailVerified, mfaLevel, needsMfa, isAuthenticated, hydrateAuth, refreshMfaLevel]);
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

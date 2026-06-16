@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import RoleNavbar from '../../components/landing-page/RoleNavbar';
+import AIProfileQualityChecker from '../../components/AIProfileQualityChecker';
 import {
   User, GraduationCap, Briefcase, Trash2, Save, AlertTriangle,
   Edit3, MapPin, Mail, Link as LinkIcon, CheckCircle, Camera,
@@ -185,6 +186,34 @@ function calcCompletionWithBreakdown(f) {
   return { percentage: Math.min(Math.round((earned / total) * 100), 100), missing, all: checks };
 }
 
+function getStudentQualityChecks(f) {
+  const required = [
+    { field: 'full_name', condition: (f.full_name || '').trim().length > 1, label: 'Full name' },
+    { field: 'bio', condition: (f.bio || '').trim().length > 20, label: 'Bio with at least 20 characters' },
+    { field: 'location', condition: (f.location || '').trim().length > 1, label: 'City / country' },
+    { field: 'university', condition: (f.university || '').trim().length > 1, label: 'University / institute' },
+    { field: 'degree', condition: (f.degree || '').trim().length > 1, label: 'Degree' },
+    { field: 'skills', condition: (f.skills || []).length >= 3, label: 'At least 3 skills' },
+    { field: 'interests', condition: (f.interests || []).length >= 2, label: 'At least 2 interests' },
+    { field: 'looking_for', condition: (f.looking_for || []).length > 0, label: 'Looking for preference' },
+    { field: 'commitment_level', condition: !!f.commitment_level, label: 'Commitment level' },
+  ];
+
+  if (f.has_startup_idea) {
+    required.push(
+      { field: 'idea_title', condition: (f.idea_title || '').trim().length > 1, label: 'Startup idea title' },
+      { field: 'idea_domain', condition: !!f.idea_domain, label: 'Startup domain / industry' },
+      { field: 'startup_idea_description', condition: (f.startup_idea_description || '').trim().length > 30, label: 'Startup idea description with at least 30 characters' }
+    );
+  }
+
+  const recommended = calcCompletionWithBreakdown(f).all.filter((item) => {
+    return !required.some((req) => req.field === item.field);
+  });
+
+  return { required, recommended };
+}
+
 // ✅ MAIN COMPONENT
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -342,6 +371,14 @@ export default function ProfilePage() {
   const handleUpdate = async (e) => {
     if (e) e.preventDefault();
     if (saving) return;
+    const quality = getStudentQualityChecks(formData);
+    const missingRequired = quality.required.filter((item) => !item.condition);
+    if (missingRequired.length > 0) {
+      const message = `Please complete required fields: ${missingRequired.map((item) => item.label).join(', ')}`;
+      setSaveError(message);
+      toast.error('Complete required profile fields first');
+      return;
+    }
     setSaving(true); setSaveError('');
     try {
       const now = new Date().toISOString();
@@ -465,6 +502,7 @@ export default function ProfilePage() {
   );
 
   const completion = calcCompletionWithBreakdown(formData);
+  const qualityChecks = getStudentQualityChecks(formData);
 
   return (
     <>
@@ -523,12 +561,20 @@ export default function ProfilePage() {
               )}
             </aside>
             <section className="lg:col-span-3">
+              <div className="space-y-6">
+              <AIProfileQualityChecker
+                roleLabel="Student profile"
+                completion={completion}
+                requiredItems={qualityChecks.required}
+                recommendedItems={qualityChecks.recommended}
+              />
               <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 md:p-8">
                 {!isEditMode ? (
                   <ViewMode formData={formData} isStudent={isStudent} onEditClick={() => { setFormData(prev => ({ ...prev, has_startup_idea: true })); setIsEditMode(true); toast('🚀 Ready to share an idea? Edit your profile!', { style: { background: '#98DE38', color: '#000' } }); }} />
                 ) : (
                   <EditMode formData={formData} setFormData={setFormData} isStudent={isStudent} toggleSkill={toggleSkill} toggleInterest={toggleInterest} toggleArrayField={toggleArrayField} skillInput={skillInput} setSkillInput={setSkillInput} interestInput={interestInput} setInterestInput={setInterestInput} addCustomSkill={addCustomSkill} addCustomInterest={addCustomInterest} onSave={handleUpdate} saving={saving} updateField={updateField} />
                 )}
+              </div>
               </div>
             </section>
           </div>

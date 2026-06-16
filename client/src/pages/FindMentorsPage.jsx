@@ -92,26 +92,6 @@ async function safeFetch(promise, fallback = [], onError = null) {
 }
 
 // 🔧 CHANGED: Simple avatar cache to reduce Supabase storage calls
-const AVATAR_CACHE = new Map();
-const CACHE_TTL = 30 * 60 * 1000; // 30 mins
-
-async function getCachedSignedUrl(path) {
-  if (!path || path.startsWith('http')) return path;
-  const cacheKey = `avatar:${path}`;
-  const cached = AVATAR_CACHE.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.url;
-
-  try {
-    const cleanPath = path.replace(/^avatars\//, '');
-    const { data } = await supabase.storage.from('avatars').createSignedUrl(cleanPath, 3600);
-    if (data?.signedUrl) {
-      AVATAR_CACHE.set(cacheKey, { url: data.signedUrl, timestamp: Date.now() });
-      return data.signedUrl;
-    }
-  } catch (e) { console.warn('Avatar URL error:', e); }
-  return path;
-}
-
 // 🔧 CHANGED: AI match explanation generator for transparency
 function getMatchExplanation(userProfile, mentor) {
   if (!userProfile) return ['Based on your profile activity'];
@@ -704,7 +684,6 @@ const MentorCard = memo(({ m, onView, onRequest, onMessage, userProfile }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 export default function FindMentorsPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   const [mentors, setMentors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1014,7 +993,7 @@ export default function FindMentorsPage() {
                 {activeN > 0 && <button onClick={clearAll} className="text-sm text-indigo-600 font-semibold hover:underline">Clear all filters</button>}
               </div>
             ) : (
-              filtered.map((m, i) => (
+              filtered.map((m) => (
                 <MentorCard
                   key={m.id}
                   m={m}

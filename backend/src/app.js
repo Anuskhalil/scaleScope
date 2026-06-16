@@ -13,9 +13,43 @@ const connectionRoutes = require('./routes/connection.routes');
 const conversationRoutes = require('./routes/conversation.routes');
 const opportunityRoutes = require('./routes/opportunity.routes');
 const meetingRoutes = require('./routes/meeting.routes');
+const growthRoutes = require('./routes/growth.routes');
 
 const app = express();
 const server = http.createServer(app);
+const jsonLimit = process.env.JSON_BODY_LIMIT || '1mb';
+
+function createApiRateLimiter({
+  windowMs = Number(process.env.API_RATE_LIMIT_WINDOW_MS || 60 * 1000),
+  max = Number(process.env.API_RATE_LIMIT_MAX || 120),
+} = {}) {
+  const hits = new Map();
+
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const bucket = (hits.get(key) || []).filter((ts) => now - ts < windowMs);
+
+    if (bucket.length >= max) {
+      return res.status(429).json({
+        error: 'Too many requests. Please wait and try again.',
+      });
+    }
+
+    bucket.push(now);
+    hits.set(key, bucket);
+
+    if (hits.size > 10000) {
+      for (const [entryKey, timestamps] of hits.entries()) {
+        const active = timestamps.filter((ts) => now - ts < windowMs);
+        if (active.length) hits.set(entryKey, active);
+        else hits.delete(entryKey);
+      }
+    }
+
+    return next();
+  };
+}
 
 // Trust proxy for Render / reverse proxies
 app.set('trust proxy', 1);
@@ -32,11 +66,13 @@ app.use(
 // CORS
 app.use(cors(corsOptions));
 
-console.log('Allowed CORS origins:', allowedOrigins);
-console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+if (process.env.NODE_ENV !== 'production') {
+  console.log('Allowed CORS origins:', allowedOrigins);
+  console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+}
 
 // Body parser
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: jsonLimit }));
 
 // Logger
 app.use(
@@ -55,12 +91,15 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.use('/api', createApiRateLimiter());
+
 // API routes
 app.use('/api/cofounders', cofounderRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/opportunities', opportunityRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/growth', growthRoutes);
 
 // Not found handler
 app.use((req, res) => {

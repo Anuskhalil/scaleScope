@@ -7,9 +7,16 @@ const { getIO } = require('../config/socket');
 const router = express.Router();
 router.use(auth);
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const isUuid = (value) => UUID_RE.test(String(value || ''));
+
 router.post('/request', async (req, res) => {
     try {
         const { receiverId, type = 'cofounder_request', message } = req.body;
+
+        if (!isUuid(receiverId)) {
+            return res.status(400).json({ error: 'Invalid receiverId' });
+        }
 
         const result = await sendRequest(
             req.user.id,
@@ -55,6 +62,10 @@ router.get('/status/:userId', async (req, res) => {
         const currentUserId = req.user.id;
         const otherUserId = req.params.userId;
 
+        if (!isUuid(otherUserId)) {
+            return res.status(400).json({ error: 'Invalid userId' });
+        }
+
         const { data, error } = await supabase
             .from('connection_requests')
             .select('*')
@@ -79,6 +90,11 @@ router.get('/status/:userId', async (req, res) => {
 router.post('/respond', async (req, res) => {
     try {
         const { requestId, action } = req.body;
+
+        if (!isUuid(requestId)) {
+            return res.status(400).json({ error: 'Invalid requestId' });
+        }
+
         const result = await respondRequest(requestId, action, req.user.id);
 
         const accepted = action === 'accept' || result.status === 'accepted';
@@ -167,8 +183,12 @@ router.post('/feedback', async (req, res) => {
     try {
         const { targetUserId, requestId, feedback } = req.body;
 
-        if (!targetUserId || !feedback) {
-            return res.status(400).json({ error: 'targetUserId and feedback are required' });
+        if (!isUuid(targetUserId) || !feedback) {
+            return res.status(400).json({ error: 'valid targetUserId and feedback are required' });
+        }
+
+        if (requestId && !isUuid(requestId)) {
+            return res.status(400).json({ error: 'Invalid requestId' });
         }
 
         const { error } = await supabase

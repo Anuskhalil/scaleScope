@@ -19,6 +19,7 @@ import {
   X, Sparkles, Linkedin, Twitter, Info,
   ArrowRight, SlidersHorizontal, Building2,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
@@ -270,9 +271,9 @@ export default function FindInvestorsPage() {
       setPitchStates(p => ({ ...p, [uid]: 'sent' }));
       setPitchModal(null);
       setPitchText('');
-      alert('Pitch sent. You can message once the investor accepts your request.');
+      toast.success('Pitch sent. You can message once the investor accepts your request.');
     } catch (e) {
-      if (!e.message?.includes('23505')) alert(e.message);
+      if (!e.message?.includes('23505')) toast.error(e.message || 'Could not send pitch');
       else { setPitchModal(null); navigate('/messages'); }
     } finally { setSending(false); }
   };
