@@ -17,12 +17,11 @@ import {
   Link as LinkIcon,
   Camera,
   Loader,
-  Github,
-  Twitter,
   Linkedin,
+  FileText,
+  Globe,
+  Upload,
   X,
-  Shield,
-  CheckCircle,
   BookOpen,
   Users,
   DollarSign,
@@ -105,6 +104,32 @@ const HELP_CHIPS = [
   'Founder resilience',
 ];
 
+const ROLE_EXPERTISE_MAP = {
+  product: ['Product Strategy', 'Roadmapping', 'User Research', 'MVP Planning', 'Product Analytics'],
+  founder: ['Startup Strategy', 'Fundraising', 'Hiring', 'Go-To-Market', 'Investor Readiness'],
+  growth: ['Growth Loops', 'Marketing Strategy', 'Sales Funnel', 'Community Building', 'Retention'],
+  engineer: ['Technical Architecture', 'MVP Build', 'Code Review', 'Scalability', 'AI / ML'],
+  design: ['Design / UX', 'User Research', 'Product Discovery', 'Branding', 'Prototype Review'],
+  finance: ['Financial Modelling', 'Pricing Strategy', 'Unit Economics', 'Fundraising Readiness'],
+  legal: ['Legal / Compliance', 'Company Setup', 'IP Strategy', 'Contracts'],
+  operations: ['Operations', 'Process Design', 'Hiring Systems', 'Customer Success'],
+};
+
+const EXTRA_HELP_CHIPS = [
+  'Pitch deck review',
+  'Investor introductions',
+  'Pricing strategy',
+  'Hiring interview practice',
+  'Product analytics',
+  'Customer discovery',
+  'MVP scoping',
+  'Go-to-market experiments',
+  'Unit economics',
+  'Leadership coaching',
+  'Security review',
+  'Compliance planning',
+];
+
 const AVAIL_CHIPS = [
   '1:1 Video calls',
   'Async messages',
@@ -112,6 +137,12 @@ const AVAIL_CHIPS = [
   'Co-working sessions',
   'Pitch practice',
   'Portfolio review',
+  'Platform live meeting',
+  'Office hours',
+  'Startup teardown',
+  'Mock investor meeting',
+  'Document review',
+  'Accountability sprint',
 ];
 
 const STYLE_OPTS = [
@@ -120,12 +151,96 @@ const STYLE_OPTS = [
   'Sounding Board (as needed)',
   'Peer accountability',
   'Group sessions',
+  'Coach-led sprint',
+  'Office-hours style',
+  'Tactical problem solving',
+  'Accountability partner',
+  'Deep-dive workshop',
+  'Board advisor style',
 ];
-const MENTEE_OPTS = ['Students', 'Early-stage founders', 'Solo founders', 'Technical founders', 'Non-technical founders', 'Women founders', 'First-time founders'];
+const MENTEE_OPTS = ['Students', 'Early-stage founders', 'Solo founders', 'Technical founders', 'Non-technical founders', 'Women founders', 'First-time founders', 'Student founders', 'Pre-MVP founders', 'Post-MVP founders', 'Fundraising founders', 'Growth-stage founders'];
 const INDUSTRY_SUPPORT_OPTS = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'E-commerce', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'AI / ML', 'Social Impact', 'Gaming'];
-const LANGUAGE_OPTS = ['English', 'Urdu', 'Hindi', 'Arabic', 'Punjabi', 'Sindhi', 'Pashto', 'Balochi'];
+const LANGUAGE_OPTS = ['English', 'Urdu', 'Hindi', 'Arabic', 'Punjabi', 'Sindhi', 'Pashto', 'Balochi', 'Persian', 'Turkish', 'French', 'Spanish', 'German', 'Chinese', 'Japanese', 'Korean', 'Bengali', 'Tamil', 'Malay', 'Indonesian'];
 const TIMEZONE_OPTS = ['Asia/Karachi', 'UTC', 'Asia/Dubai', 'Asia/Kolkata', 'Europe/London', 'America/New_York', 'Remote / flexible'];
-const MENTORSHIP_MODE_OPTS = ['Video calls', 'Async messaging', 'Hybrid', 'In-person', 'Group office hours'];
+const MENTORSHIP_MODE_OPTS = ['Platform live meeting', 'Async messaging', 'Hybrid', 'In-person', 'Group office hours'];
+
+const slugify = (text) =>
+  String(text || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+
+const normalizeText = (value) => String(value || '').toLowerCase();
+
+function getSuggestedExpertise(form) {
+  const text = normalizeText(`${form.current_role} ${form.current_company} ${form.years_experience}`);
+  const suggestions = new Set();
+
+  Object.entries(ROLE_EXPERTISE_MAP).forEach(([keyword, values]) => {
+    if (text.includes(keyword)) values.forEach((item) => suggestions.add(item));
+  });
+
+  if (Number(form.years_experience || 0) >= 5) {
+    ['Leadership', 'Strategy', 'Team Building'].forEach((item) => suggestions.add(item));
+  }
+
+  return Array.from(new Set([...suggestions, ...EXPERTISE_CHIPS])).slice(0, 18);
+}
+
+function getSuggestedHelp(form) {
+  const base = new Set([...HELP_CHIPS, ...EXTRA_HELP_CHIPS]);
+  getSuggestedExpertise(form).forEach((item) => {
+    if (normalizeText(item).includes('product')) base.add('Product roadmap review');
+    if (normalizeText(item).includes('fund')) base.add('Fundraising pitch');
+    if (normalizeText(item).includes('technical') || normalizeText(item).includes('architecture')) base.add('Technical architecture');
+    if (normalizeText(item).includes('growth')) base.add('Marketing strategy');
+  });
+
+  return Array.from(base).slice(0, 20);
+}
+
+function getSuggestedIndustries(form) {
+  const text = normalizeText([
+    form.current_role,
+    form.current_company,
+    ...(form.expertise_areas || []),
+    ...(form.companies_worked || []),
+    ...(form.companies_founded || []),
+  ].join(' '));
+
+  const suggested = INDUSTRY_SUPPORT_OPTS.filter((item) => {
+    const key = normalizeText(item).replace(/[^a-z0-9]/g, '');
+    return text.includes(normalizeText(item)) || text.replace(/[^a-z0-9]/g, '').includes(key);
+  });
+
+  return Array.from(new Set([...suggested, ...INDUSTRY_SUPPORT_OPTS]));
+}
+
+function hasWorkHistory(form) {
+  return Boolean(
+    form.current_company ||
+    (form.companies_worked || []).length > 0 ||
+    (form.companies_founded || []).length > 0
+  );
+}
+
+function hasEvidence(form, key) {
+  return Boolean(
+    form.metadata?.[`${key}_url`] ||
+    form.metadata?.[`${key}_file_url`]
+  );
+}
+
+function getLinkStatus(url) {
+  if (!url) return 'Not added';
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) ? 'Format verified' : 'Invalid protocol';
+  } catch {
+    return 'Invalid URL';
+  }
+}
 
 const makeEmpty = (user) => ({
   id: null,
@@ -163,6 +278,7 @@ const makeEmpty = (user) => ({
   success_stories: '',
   is_public: true,
   is_active: true,
+  metadata: {},
   profile_completion: 0,
   onboarding_completed: false,
   created_at: '',
@@ -184,6 +300,7 @@ function calcCompletionWithBreakdown(form) {
     { field: 'can_help_with', condition: (form.can_help_with || []).length >= 2, label: '2+ help areas' },
     { field: 'mentorship_style', condition: !!form.mentorship_style, label: 'Mentorship style' },
     { field: 'companies_worked', condition: (form.companies_worked || []).length > 0, label: 'Company experience' },
+    { field: 'work_evidence', condition: !hasWorkHistory(form) || hasEvidence(form, 'work_evidence'), label: 'Work evidence' },
     { field: 'pricing', condition: !!form.hourly_rate || form.is_pro_bono, label: 'Pricing preference' },
     { field: 'available_for', condition: (form.available_for || []).length > 0, label: 'Availability' },
     { field: 'timezone', condition: !!form.timezone, label: 'Timezone' },
@@ -209,6 +326,8 @@ function getMentorQualityChecks(form) {
     { field: 'can_help_with', condition: (form.can_help_with || []).length >= 2, label: 'At least 2 help areas' },
     { field: 'mentorship_style', condition: !!form.mentorship_style, label: 'Mentorship style' },
     { field: 'available_for', condition: (form.available_for || []).length > 0, label: 'Available for' },
+    { field: 'work_evidence', condition: !hasWorkHistory(form) || hasEvidence(form, 'work_evidence'), label: 'Work/startup evidence' },
+    { field: 'mentees_evidence', condition: Number(form.current_mentees || 0) <= 0 || hasEvidence(form, 'mentees_evidence'), label: 'Current mentees evidence' },
   ];
 
   const recommended = completion.all.filter((item) => {
@@ -255,6 +374,7 @@ const normalizeProfile = (user, profile = {}, mentorProfile = {}) => ({
   success_stories: mentorProfile.success_stories || '',
   is_public: mentorProfile.is_public !== false,
   is_active: mentorProfile.is_active !== false,
+  metadata: mentorProfile.metadata || {},
   profile_completion: mentorProfile.profile_completion || 0,
   onboarding_completed: Boolean(mentorProfile.onboarding_completed),
   created_at: mentorProfile.created_at || '',
@@ -455,6 +575,25 @@ export default function MentorProfilePage() {
       return;
     }
 
+    const linkValues = {
+      linkedin_url: formData.linkedin_url,
+      mentor_portfolio_url: formData.metadata?.mentor_portfolio_url,
+      mentor_video_url: formData.metadata?.mentor_video_url,
+      work_evidence_url: formData.metadata?.work_evidence_url,
+      mentees_evidence_url: formData.metadata?.mentees_evidence_url,
+      success_story_url: formData.metadata?.success_story_url,
+    };
+    const invalidLinks = Object.entries(linkValues)
+      .filter(([, value]) => value && getLinkStatus(value) !== 'Format verified')
+      .map(([field]) => field);
+
+    if (invalidLinks.length > 0) {
+      const message = `Please fix invalid links: ${invalidLinks.join(', ')}`;
+      setSaveError(message);
+      toast.error('Fix invalid mentor links first');
+      return;
+    }
+
     setSaving(true);
     setSaveError('');
 
@@ -462,6 +601,16 @@ export default function MentorProfilePage() {
       const completion = calcCompletionWithBreakdown(formData).percentage;
       const payload = {
         ...formData,
+        booking_url: '',
+        github_url: '',
+        twitter_url: '',
+        metadata: {
+          ...(formData.metadata || {}),
+          link_verification: Object.fromEntries(
+            Object.entries(linkValues).map(([field, value]) => [field, getLinkStatus(value)])
+          ),
+          verified_at: new Date().toISOString(),
+        },
         profile_completion: completion,
         onboarding_completed: true,
       };
@@ -504,6 +653,38 @@ export default function MentorProfilePage() {
       toast.success('Avatar updated!');
     } catch (err) {
       console.error('Avatar upload error:', err);
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleMentorFileUpload = async ({ file, folder, metadataKey }) => {
+    if (!file || !user?.id) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Select a file under 10MB');
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+      const cleanName = slugify(file.name.replace(/\.[^.]+$/, '')) || 'document';
+      const filePath = `mentors/${user.id}/${folder}/${Date.now()}-${cleanName}.${ext}`;
+      const { error } = await supabase.storage
+        .from('profile-documents')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+      if (error) throw error;
+
+      updateField('metadata', {
+        ...(formData.metadata || {}),
+        [metadataKey]: filePath,
+      });
+      toast.success('File uploaded. Click Save Changes to keep it.');
+    } catch (err) {
+      console.error('Mentor document upload error:', err);
       toast.error(err.message || 'Upload failed');
     } finally {
       setUploading(false);
@@ -706,6 +887,8 @@ export default function MentorProfilePage() {
                     setFoundedInput={setFoundedInput}
                     addTag={addTag}
                     removeTag={removeTag}
+                    onFileUpload={handleMentorFileUpload}
+                    uploading={uploading}
                   />
                 )}
               </div>
@@ -859,42 +1042,27 @@ function ViewMode({ formData, spotsLeft }) {
         )}
       </Section>
 
-      <Section title="Visibility & Status" icon={<Shield className="w-5 h-5 text-[#1B2D7F]" />}>
-        <div className="grid md:grid-cols-2 gap-3">
-          {[
-            {
-              label: 'Public Profile',
-              value: formData.is_public ? 'Visible to founders' : 'Private',
-              Icon: formData.is_public ? CheckCircle : Shield,
-            },
-            {
-              label: 'Mentor Availability',
-              value: formData.is_active ? 'Active mentor profile' : 'Inactive',
-              Icon: formData.is_active ? CheckCircle : Clock,
-            },
-          ].map((item) => (
-            <InfoTile key={item.label} item={item} />
-          ))}
-        </div>
-      </Section>
-
       <Section title="Links" icon={<LinkIcon className="w-5 h-5 text-[#1B2D7F]" />}>
-        {[formData.linkedin_url, formData.github_url, formData.twitter_url].some(Boolean) ? (
+        {[formData.linkedin_url, formData.metadata?.mentor_portfolio_url, formData.metadata?.mentor_video_url].some(Boolean) ? (
           <div className="grid md:grid-cols-2 gap-3">
             {[
               { key: 'linkedin_url', label: 'LinkedIn', Icon: Linkedin, bg: 'bg-blue-50', color: 'text-blue-600' },
-              { key: 'github_url', label: 'GitHub', Icon: Github, bg: 'bg-gray-50', color: 'text-gray-600' },
-              { key: 'twitter_url', label: 'Twitter', Icon: Twitter, bg: 'bg-sky-50', color: 'text-sky-600' },
-            ].filter((link) => formData[link.key]).map((link) => (
-              <a key={link.key} href={formData[link.key]} target="_blank" rel="noreferrer" className={`flex items-center gap-3 p-4 rounded-xl hover:opacity-80 transition-all ${link.bg} ${link.color}`}>
+              { key: 'mentor_portfolio_url', label: 'Portfolio', Icon: FileText, bg: 'bg-gray-50', color: 'text-[#1B2D7F]', meta: true },
+              { key: 'mentor_video_url', label: 'Video', Icon: Globe, bg: 'bg-gray-50', color: 'text-[#1B2D7F]', meta: true },
+            ].filter((link) => link.meta ? formData.metadata?.[link.key] : formData[link.key]).map((link) => {
+              const url = link.meta ? formData.metadata?.[link.key] : formData[link.key];
+
+              return (
+              <a key={link.key} href={url} target="_blank" rel="noreferrer" className={`flex items-center gap-3 p-4 rounded-xl hover:opacity-80 transition-all ${link.bg} ${link.color}`}>
                 <link.Icon className="w-4 h-4 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold uppercase tracking-wide">{link.label}</p>
-                  <p className="text-xs truncate opacity-80">{formData[link.key].replace(/^https?:\/\//, '')}</p>
+                  <p className="text-xs truncate opacity-80">{url.replace(/^https?:\/\//, '')}</p>
                 </div>
                 <LinkIcon className="w-3.5 h-3.5 flex-shrink-0 opacity-50" />
               </a>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <Empty label="No links added yet. Connect your profiles to boost verification." />
@@ -914,8 +1082,13 @@ function EditMode({
   setFoundedInput,
   addTag,
   removeTag,
+  onFileUpload,
+  uploading,
 }) {
   const completion = calcCompletionWithBreakdown(formData);
+  const suggestedExpertise = getSuggestedExpertise(formData);
+  const suggestedHelp = getSuggestedHelp(formData);
+  const suggestedIndustries = getSuggestedIndustries(formData);
 
   return (
     <form onSubmit={(event) => event.preventDefault()} className="space-y-10 dm">
@@ -955,9 +1128,20 @@ function EditMode({
           <FormInput label="Years of Experience" type="number" value={formData.years_experience ?? ''} onChange={(value) => updateField('years_experience', value === '' ? 0 : Number(value))} placeholder="e.g. 8" />
         </div>
         <ChipPicker
-          values={EXPERTISE_CHIPS}
+          values={suggestedExpertise}
           selected={formData.expertise_areas || []}
           onToggle={(value) => toggleArrayField('expertise_areas', value)}
+        />
+        <InlineArrayAdder
+          value={formData.metadata?.custom_expertise || ''}
+          onChange={(value) => updateField('metadata', { ...(formData.metadata || {}), custom_expertise: value })}
+          onAdd={() => {
+            const value = (formData.metadata?.custom_expertise || '').trim();
+            if (!value) return;
+            if (!(formData.expertise_areas || []).includes(value)) toggleArrayField('expertise_areas', value);
+            updateField('metadata', { ...(formData.metadata || {}), custom_expertise: '' });
+          }}
+          placeholder="Other expertise..."
         />
       </EditSection>
 
@@ -975,9 +1159,20 @@ function EditMode({
         <div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">What I Can Help With</p>
           <ChipPicker
-            values={HELP_CHIPS}
+            values={suggestedHelp}
             selected={formData.can_help_with || []}
             onToggle={(value) => toggleArrayField('can_help_with', value)}
+          />
+          <InlineArrayAdder
+            value={formData.metadata?.custom_help || ''}
+            onChange={(value) => updateField('metadata', { ...(formData.metadata || {}), custom_help: value })}
+            onAdd={() => {
+              const value = (formData.metadata?.custom_help || '').trim();
+              if (!value) return;
+              if (!(formData.can_help_with || []).includes(value)) toggleArrayField('can_help_with', value);
+              updateField('metadata', { ...(formData.metadata || {}), custom_help: '' });
+            }}
+            placeholder="Other help area..."
           />
         </div>
 
@@ -987,6 +1182,17 @@ function EditMode({
             values={AVAIL_CHIPS}
             selected={formData.available_for || []}
             onToggle={(value) => toggleArrayField('available_for', value)}
+          />
+          <InlineArrayAdder
+            value={formData.metadata?.custom_available_for || ''}
+            onChange={(value) => updateField('metadata', { ...(formData.metadata || {}), custom_available_for: value })}
+            onAdd={() => {
+              const value = (formData.metadata?.custom_available_for || '').trim();
+              if (!value) return;
+              if (!(formData.available_for || []).includes(value)) toggleArrayField('available_for', value);
+              updateField('metadata', { ...(formData.metadata || {}), custom_available_for: '' });
+            }}
+            placeholder="Other availability..."
           />
         </div>
       </EditSection>
@@ -1011,6 +1217,17 @@ function EditMode({
           onRemove={(value) => removeTag('companies_founded', value)}
           placeholder="e.g. MyStartup"
         />
+        {hasWorkHistory(formData) && (
+          <ProofBox
+            title="Work / Startup Evidence"
+            description="Upload or link proof such as portfolio, company profile, case study, product demo, docs, or a short video."
+            url={formData.metadata?.work_evidence_url || ''}
+            onUrlChange={(value) => updateField('metadata', { ...(formData.metadata || {}), work_evidence_url: value })}
+            filePath={formData.metadata?.work_evidence_file_url}
+            onFileChange={(file) => onFileUpload?.({ file, folder: 'credibility', metadataKey: 'work_evidence_file_url' })}
+            uploading={uploading}
+          />
+        )}
       </EditSection>
 
       <EditSection title="Availability & Pricing" icon={<DollarSign className="w-4 h-4" />} hint="Capacity and pricing help founders understand your availability.">
@@ -1034,11 +1251,21 @@ function EditMode({
             <p className="text-xs text-gray-400">This helps students and early founders find you faster.</p>
           </div>
         </label>
+        {Number(formData.current_mentees || 0) > 0 && (
+          <ProofBox
+            title="Current Mentees Evidence"
+            description="Add proof that you are actively mentoring, such as a testimonial, session screenshot, program page, PDF, video, or public mentor profile."
+            url={formData.metadata?.mentees_evidence_url || ''}
+            onUrlChange={(value) => updateField('metadata', { ...(formData.metadata || {}), mentees_evidence_url: value })}
+            filePath={formData.metadata?.mentees_evidence_file_url}
+            onFileChange={(file) => onFileUpload?.({ file, folder: 'mentees-proof', metadataKey: 'mentees_evidence_file_url' })}
+            uploading={uploading}
+          />
+        )}
       </EditSection>
 
-      <EditSection title="Mentorship Logistics" icon={<Clock className="w-4 h-4" />} hint="These fields make booking and scheduling safer for both sides.">
+      <EditSection title="Mentorship Logistics" icon={<Clock className="w-4 h-4" />} hint="Scheduling happens inside the platform, so this only captures availability, fit, and support preferences.">
         <div className="grid md:grid-cols-2 gap-4">
-          <FormInput label="Booking URL" value={formData.booking_url} onChange={(value) => updateField('booking_url', value)} icon={<LinkIcon className="w-4 h-4" />} placeholder="https://calendly.com/your-link" />
           <FormInput label="Availability Hours" value={formData.availability_hours} onChange={(value) => updateField('availability_hours', value)} icon={<Clock className="w-4 h-4" />} placeholder="e.g. Sat-Sun, 6-9 PM" />
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Timezone</label>
@@ -1058,55 +1285,66 @@ function EditMode({
         <div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Preferred Mentees</p>
           <ChipPicker values={MENTEE_OPTS} selected={formData.preferred_mentees || []} onToggle={(value) => toggleArrayField('preferred_mentees', value)} />
+          <InlineArrayAdder
+            value={formData.metadata?.custom_preferred_mentee || ''}
+            onChange={(value) => updateField('metadata', { ...(formData.metadata || {}), custom_preferred_mentee: value })}
+            onAdd={() => {
+              const value = (formData.metadata?.custom_preferred_mentee || '').trim();
+              if (!value) return;
+              if (!(formData.preferred_mentees || []).includes(value)) toggleArrayField('preferred_mentees', value);
+              updateField('metadata', { ...(formData.metadata || {}), custom_preferred_mentee: '' });
+            }}
+            placeholder="Other mentee type..."
+          />
         </div>
         <div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Industries Supported</p>
-          <ChipPicker values={INDUSTRY_SUPPORT_OPTS} selected={formData.industries_supported || []} onToggle={(value) => toggleArrayField('industries_supported', value)} />
+          <ChipPicker values={suggestedIndustries} selected={formData.industries_supported || []} onToggle={(value) => toggleArrayField('industries_supported', value)} />
+          <InlineArrayAdder
+            value={formData.metadata?.custom_industry || ''}
+            onChange={(value) => updateField('metadata', { ...(formData.metadata || {}), custom_industry: value })}
+            onAdd={() => {
+              const value = (formData.metadata?.custom_industry || '').trim();
+              if (!value) return;
+              if (!(formData.industries_supported || []).includes(value)) toggleArrayField('industries_supported', value);
+              updateField('metadata', { ...(formData.metadata || {}), custom_industry: '' });
+            }}
+            placeholder="Other industry..."
+          />
         </div>
         <div>
           <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Languages</p>
           <ChipPicker values={LANGUAGE_OPTS} selected={formData.languages || []} onToggle={(value) => toggleArrayField('languages', value)} />
+          <InlineArrayAdder
+            value={formData.metadata?.custom_language || ''}
+            onChange={(value) => updateField('metadata', { ...(formData.metadata || {}), custom_language: value })}
+            onAdd={() => {
+              const value = (formData.metadata?.custom_language || '').trim();
+              if (!value) return;
+              if (!(formData.languages || []).includes(value)) toggleArrayField('languages', value);
+              updateField('metadata', { ...(formData.metadata || {}), custom_language: '' });
+            }}
+            placeholder="Search/add another language..."
+          />
         </div>
         <FormTextarea label="Success Stories" value={formData.success_stories} onChange={(value) => updateField('success_stories', value)} placeholder="Share outcomes, mentee wins, exits, funding, launches, or career progress you helped with." rows={3} max={700} />
-      </EditSection>
-
-      <EditSection title="Visibility & Status" icon={<Shield className="w-4 h-4" />} hint="Control whether founders can discover this mentor profile.">
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#98DE38]/50 transition-all">
-            <input
-              type="checkbox"
-              checked={formData.is_public !== false}
-              onChange={(event) => updateField('is_public', event.target.checked)}
-              className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]"
-            />
-            <div>
-              <p className="text-sm font-semibold text-gray-700">Public profile</p>
-              <p className="text-xs text-gray-400">Founders can discover your mentor profile.</p>
-            </div>
-          </label>
-
-          <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#98DE38]/50 transition-all">
-            <input
-              type="checkbox"
-              checked={formData.is_active !== false}
-              onChange={(event) => updateField('is_active', event.target.checked)}
-              className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]"
-            />
-            <div>
-              <p className="text-sm font-semibold text-gray-700">Active mentor profile</p>
-              <p className="text-xs text-gray-400">Keep this on when you are accepting mentorship requests.</p>
-            </div>
-          </label>
-        </div>
-
+        <ProofBox
+          title="Success Story Proof"
+          description="Optional but recommended: attach a short video, image, testimonial, deck, or public link related to a mentee outcome."
+          url={formData.metadata?.success_story_url || ''}
+          onUrlChange={(value) => updateField('metadata', { ...(formData.metadata || {}), success_story_url: value })}
+          filePath={formData.metadata?.success_story_file_url}
+          onFileChange={(file) => onFileUpload?.({ file, folder: 'success-stories', metadataKey: 'success_story_file_url' })}
+          uploading={uploading}
+        />
       </EditSection>
 
       <EditSection title="Links" icon={<LinkIcon className="w-4 h-4" />} hint="Boosts verification & discoverability.">
         <div className="grid md:grid-cols-2 gap-4">
           {[
             { field: 'linkedin_url', Icon: Linkedin, label: 'LinkedIn URL', points: 3, placeholder: 'https://linkedin.com/in/you' },
-            { field: 'github_url', Icon: Github, label: 'GitHub URL', points: 2, placeholder: 'https://github.com/you' },
-            { field: 'twitter_url', Icon: Twitter, label: 'Twitter URL', points: 1, placeholder: 'https://twitter.com/you' },
+            { field: 'mentor_portfolio_url', Icon: FileText, label: 'Mentor Portfolio URL', points: 3, placeholder: 'https://yourportfolio.com/mentorship' },
+            { field: 'mentor_video_url', Icon: Globe, label: 'Mentor Video URL', points: 2, placeholder: 'https://youtube.com/... or https://loom.com/...' },
           ].map((item) => (
             <div key={item.field}>
               <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
@@ -1114,12 +1352,96 @@ function EditMode({
                 {item.label}
                 <span className="ml-auto text-white font-bold px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: '#98DE38' }}>+{item.points}</span>
               </label>
-              <input type="url" placeholder={item.placeholder} value={formData[item.field] || ''} onChange={(event) => updateField(item.field, event.target.value)} className="inp" aria-label={`${item.label} input`} />
+              <input
+                type="url"
+                placeholder={item.placeholder}
+                value={item.field in formData ? formData[item.field] || '' : formData.metadata?.[item.field] || ''}
+                onChange={(event) => {
+                  if (item.field in formData) {
+                    updateField(item.field, event.target.value);
+                  } else {
+                    updateField('metadata', { ...(formData.metadata || {}), [item.field]: event.target.value });
+                  }
+                }}
+                className="inp"
+                aria-label={`${item.label} input`}
+              />
+              <p className={`text-xs mt-1 font-semibold ${getLinkStatus(item.field in formData ? formData[item.field] : formData.metadata?.[item.field]) === 'Format verified' ? 'text-green-700' : (item.field in formData ? formData[item.field] : formData.metadata?.[item.field]) ? 'text-red-600' : 'text-gray-400'}`}>
+                {getLinkStatus(item.field in formData ? formData[item.field] : formData.metadata?.[item.field])}
+              </p>
             </div>
           ))}
         </div>
       </EditSection>
     </form>
+  );
+}
+
+function InlineArrayAdder({ value, onChange, onAdd, placeholder }) {
+  return (
+    <div className="flex flex-col sm:flex-row gap-2 mb-4">
+      <input
+        className="inp flex-1"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            onAdd();
+          }
+        }}
+        placeholder={placeholder}
+      />
+      <button
+        type="button"
+        onClick={onAdd}
+        className="px-4 py-2.5 g-brand text-black rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
+      >
+        Add
+      </button>
+    </div>
+  );
+}
+
+function ProofBox({ title, description, url, onUrlChange, filePath, onFileChange, uploading }) {
+  return (
+    <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+      <div>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">{title}</p>
+        <p className="text-xs text-gray-400 mt-1">{description}</p>
+      </div>
+
+      <div>
+        <input
+          type="url"
+          value={url || ''}
+          onChange={(event) => onUrlChange(event.target.value)}
+          placeholder="https://proof-link.com"
+          className="inp"
+        />
+        <p className={`text-xs mt-1 font-semibold ${getLinkStatus(url) === 'Format verified' ? 'text-green-700' : url ? 'text-red-600' : 'text-gray-400'}`}>
+          {getLinkStatus(url)}
+        </p>
+      </div>
+
+      <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-[#98DE38]/60 bg-white text-sm font-bold text-gray-600">
+        {uploading ? <Loader className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+        Upload proof file
+        <input
+          type="file"
+          accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg,.mp4,.mov"
+          disabled={uploading}
+          onChange={(event) => onFileChange(event.target.files?.[0])}
+          className="sr-only"
+        />
+      </label>
+
+      {filePath && (
+        <p className="text-xs text-green-700 font-semibold">
+          Uploaded: {filePath}
+        </p>
+      )}
+    </div>
   );
 }
 

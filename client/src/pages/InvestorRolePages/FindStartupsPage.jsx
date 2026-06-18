@@ -10,6 +10,13 @@ import {
   getOrCreateConversation,
 } from '../../services/investorService';
 import { backendApi } from '../../lib/backendApi';
+import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import {
+  DISCOVERY_INDUSTRIES,
+  DISCOVERY_LOCATIONS,
+  STARTUP_STAGE_OPTIONS,
+  mergeFilterOptions,
+} from '../../constants/discoveryFilters';
 import {
   Search,
   Rocket,
@@ -58,9 +65,6 @@ const CSS = `
   .tooltip-box::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--secondary); }
 `;
 
-const INDUSTRIES = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'E-commerce', 'AI / ML', 'Social Impact'];
-const STAGES = ['Idea', 'Just an Idea', 'Researching', 'Building MVP', 'MVP Built', 'Growing', 'Pre-seed', 'Seed', 'Series A'];
-
 const initials = (name) => {
   if (!name) return '?';
   return name.split(' ').map((word) => word[0]).join('').slice(0, 2).toUpperCase();
@@ -69,7 +73,7 @@ const initials = (name) => {
 const getScore = (item) => Number(item?._score || item?.matchScore || item?.score || 0);
 const profileOf = (item) => item?.profiles || item?.profile || {};
 
-function StartupCard({ startup, expressState, connectionStatus, onExpress, onMessage }) {
+function StartupCard({ startup, investorProfile, expressState, connectionStatus, onExpress, onMessage }) {
   const p = profileOf(startup);
   const name = startup.company_name || startup.idea_title || 'Unnamed Startup';
   const stage = startup.funding_stage || startup.startup_stage || startup.company_stage || '';
@@ -121,6 +125,12 @@ function StartupCard({ startup, expressState, connectionStatus, onExpress, onMes
             {startup.demo_url && <a href={startup.demo_url} target="_blank" rel="noreferrer" className="text-xs text-[#1B2D7F] font-bold hover:underline flex items-center gap-1"><Globe className="w-3" />Demo</a>}
           </div>
 
+          <IntelligentMatchPanel
+            currentProfile={investorProfile}
+            candidate={startup}
+            context="investor-to-startup"
+          />
+
           <div className="tooltip-wrap mt-3 inline-block">
             <button type="button" className="text-xs text-[#1B2D7F] hover:underline flex items-center gap-1" aria-label="Why recommended?"><Info className="w-3" />Why this match?</button>
             <div className="tooltip-box"><p className="font-semibold mb-1">Match Reason:</p><p>{reason}</p></div>
@@ -166,7 +176,7 @@ export default function FindStartupsPage() {
   const [state, setState] = useState({ loading: true, error: null });
   const [startups, setStartups] = useState([]);
   const [profile, setProfile] = useState(null);
-  const [filters, setFilters] = useState({ query: '', matchBand: 'all', industry: '', stage: '' });
+  const [filters, setFilters] = useState({ query: '', matchBand: 'all', industry: '', stage: '', location: '', source: '' });
   const [expressStates, setExpressStates] = useState({});
   const [connStatusMap, setConnStatusMap] = useState({});
   const [msgModal, setMsgModal] = useState(null);
@@ -224,8 +234,10 @@ export default function FindStartupsPage() {
       ].filter(Boolean).join(' ').toLowerCase();
       return (
         (!filters.query || searchText.includes(filters.query.toLowerCase())) &&
-        (!filters.industry || startup.industry === filters.industry) &&
-        (!filters.stage || stage === filters.stage) &&
+        (!filters.industry || String(startup.industry || '').toLowerCase().includes(filters.industry.toLowerCase())) &&
+        (!filters.stage || stage.toLowerCase() === filters.stage.toLowerCase()) &&
+        (!filters.location || String(p.location || startup.startup_location || '').toLowerCase().includes(filters.location.toLowerCase())) &&
+        (!filters.source || startup.source_role === filters.source) &&
         (filters.matchBand === 'all' || (filters.matchBand === '60plus' && score >= 60) || (filters.matchBand === 'below60' && score < 60))
       );
     }).sort((a, b) => getScore(b) - getScore(a));
@@ -274,7 +286,20 @@ export default function FindStartupsPage() {
     }
   };
 
-  const resetFilters = () => setFilters({ query: '', matchBand: 'all', industry: '', stage: '' });
+  const industryOptions = useMemo(() => mergeFilterOptions(
+    DISCOVERY_INDUSTRIES,
+    startups.map((startup) => startup.industry)
+  ), [startups]);
+  const stageOptions = useMemo(() => mergeFilterOptions(
+    STARTUP_STAGE_OPTIONS,
+    startups.map((startup) => startup.funding_stage || startup.startup_stage || startup.company_stage)
+  ), [startups]);
+  const locationOptions = useMemo(() => mergeFilterOptions(
+    DISCOVERY_LOCATIONS,
+    startups.flatMap((startup) => [profileOf(startup).location, startup.startup_location])
+  ), [startups]);
+
+  const resetFilters = () => setFilters({ query: '', matchBand: 'all', industry: '', stage: '', location: '', source: '' });
   const strongCount = startups.filter((startup) => getScore(startup) >= 60).length;
   const below60Count = startups.length - strongCount;
 
@@ -308,10 +333,12 @@ export default function FindStartupsPage() {
               <input type="text" value={filters.query} onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))} placeholder="Search by startup, student idea, founder, industry, problem..." className="flex-1 outline-none text-sm" />
               {filters.query && <button type="button" onClick={() => setFilters((prev) => ({ ...prev, query: '' }))} className="p-1 hover:bg-gray-100 rounded" aria-label="Clear search"><X className="w-4 text-gray-400" /></button>}
             </div>
-            <div className="grid md:grid-cols-4 gap-3 mt-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-3 mt-4">
               <SelectFilter label="Match band" value={filters.matchBand} onChange={(value) => setFilters((prev) => ({ ...prev, matchBand: value }))}><option value="all">All matches</option><option value="60plus">60%+</option><option value="below60">Below 60%</option></SelectFilter>
-              <SelectFilter label="Industry" value={filters.industry} onChange={(value) => setFilters((prev) => ({ ...prev, industry: value }))}><option value="">All</option>{INDUSTRIES.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
-              <SelectFilter label="Stage" value={filters.stage} onChange={(value) => setFilters((prev) => ({ ...prev, stage: value }))}><option value="">All</option>{STAGES.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
+              <SelectFilter label="Industry" value={filters.industry} onChange={(value) => setFilters((prev) => ({ ...prev, industry: value }))}><option value="">All industries</option>{industryOptions.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
+              <SelectFilter label="Stage" value={filters.stage} onChange={(value) => setFilters((prev) => ({ ...prev, stage: value }))}><option value="">All stages</option>{stageOptions.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
+              <SelectFilter label="Location" value={filters.location} onChange={(value) => setFilters((prev) => ({ ...prev, location: value }))}><option value="">All locations</option>{locationOptions.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
+              <SelectFilter label="Source" value={filters.source} onChange={(value) => setFilters((prev) => ({ ...prev, source: value }))}><option value="">Students & founders</option><option value="student">Student ideas</option><option value="founder">Founder startups</option></SelectFilter>
               <div className="flex items-end"><button type="button" onClick={resetFilters} className="w-full py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2"><SlidersHorizontal className="w-4" />Reset</button></div>
             </div>
           </section>
@@ -329,6 +356,7 @@ export default function FindStartupsPage() {
                 <StartupCard
                   key={startup.id || startup.user_id}
                   startup={startup}
+                  investorProfile={profile}
                   expressState={expressStates[startup.user_id] || connStatusMap[startup.user_id]}
                   connectionStatus={connStatusMap[startup.user_id]}
                   onExpress={() => handleExpress(startup)}

@@ -1,5 +1,6 @@
 // src/services/studentService.js — PRODUCTION-READY, FIXED & OPTIMIZED
 import { supabase } from '../lib/supabaseClient';
+import { attachMatchIntelligence } from './intelligentMatching';
 
 const CACHE = new Map();
 const DEFAULT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -319,12 +320,15 @@ export async function fetchCoFounders({
     }
 
     // 🔹 Step 7: Score & rank candidates
-    const scored = candidates
+    const scored = attachMatchIntelligence(
+      candidates
       .map(candidate => ({
         ...candidate,
         matchScore: calculateCoFounderScore(currentUser, candidate)
-      }))
-      .sort((a, b) => b.matchScore - a.matchScore)
+      })),
+      currentUser,
+      'cofounder'
+    )
       .slice(0, limit);
 
     // 🔹 Step 8: Cache result (only if not fresh)

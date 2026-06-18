@@ -12,6 +12,12 @@ import {
   getOrCreateConversation,
 } from '../../services/mentorService';
 import { backendApi } from '../../lib/backendApi';
+import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import {
+  DISCOVERY_INDUSTRIES,
+  MENTOR_HELP_AREAS,
+  STARTUP_STAGE_OPTIONS,
+} from '../../constants/discoveryFilters';
 import {
   Search,
   Users,
@@ -134,9 +140,6 @@ const CSS = `
   }
 `;
 
-const INDUSTRIES = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'AI / ML', 'Social Impact'];
-const STAGES = ['Just an Idea', 'Researching', 'Building MVP', 'MVP Built', 'Growing'];
-const HELP_AREAS = ['Fundraising', 'Marketing', 'Technical', 'Product', 'Legal', 'Finance', 'Design', 'Sales'];
 
 const initials = (name) => {
   if (!name) return '?';
@@ -160,7 +163,7 @@ function Avatar({ name }) {
   );
 }
 
-function MatchCard({ item, type, offerState, connectionStatus, onOffer, onMessage }) {
+function MatchCard({ item, type, mentorProfile, offerState, connectionStatus, onOffer, onMessage }) {
   const p = profileOf(item);
   const score = getScore(item);
   const isFounder = type === 'founder';
@@ -227,6 +230,12 @@ function MatchCard({ item, type, offerState, connectionStatus, onOffer, onMessag
               ))}
             </div>
           )}
+
+          <IntelligentMatchPanel
+            currentProfile={mentorProfile}
+            candidate={item}
+            context="mentor-to-founder"
+          />
 
           <div className="tooltip-wrap mt-3 inline-block">
             <button type="button" className="text-xs text-[#1B2D7F] hover:underline flex items-center gap-1" aria-label="Why recommended?">
@@ -301,6 +310,7 @@ export default function FindFoundersPage() {
 
   const [state, setState] = useState({ loading: true, error: null });
   const [data, setData] = useState({ founders: [], students: [] });
+  const [mentorProfile, setMentorProfile] = useState({});
   const [filters, setFilters] = useState({
     type: 'founders',
     query: '',
@@ -326,6 +336,8 @@ export default function FindFoundersPage() {
         fetchFoundersForMentor({ limit: 80 }),
         fetchStudentsWithIdeas({ limit: 80 }),
       ]);
+
+      setMentorProfile(mentorProfile || {});
 
       setData({
         founders: rankFoundersForMentor(founderRows, mentorProfile),
@@ -381,8 +393,10 @@ export default function FindFoundersPage() {
         ].filter(Boolean).join(' ').toLowerCase();
 
         const matchQuery = !filters.query || searchText.includes(filters.query.toLowerCase());
-        const matchIndustry = !filters.industry || item.industry === filters.industry;
-        const matchStage = !filters.stage || item.startup_stage === filters.stage || item.company_stage === filters.stage;
+        const itemIndustry = item.industry || item.idea_domain || '';
+        const itemStage = item.startup_stage || item.company_stage || item.idea_stage || '';
+        const matchIndustry = !filters.industry || itemIndustry.toLowerCase().includes(filters.industry.toLowerCase());
+        const matchStage = !filters.stage || itemStage.toLowerCase() === filters.stage.toLowerCase();
         const matchHelp = !filters.helpArea || (item.help_needed || []).some((help) => help.toLowerCase().includes(filters.helpArea.toLowerCase()));
         const matchBand = filters.matchBand === 'all'
           || (filters.matchBand === '60plus' && score >= 60)
@@ -572,17 +586,17 @@ export default function FindFoundersPage() {
 
               <SelectFilter label="Industry" value={filters.industry} onChange={(value) => setFilters((prev) => ({ ...prev, industry: value }))}>
                 <option value="">All</option>
-                {INDUSTRIES.map((industry) => <option key={industry} value={industry}>{industry}</option>)}
+                {DISCOVERY_INDUSTRIES.map((industry) => <option key={industry} value={industry}>{industry}</option>)}
               </SelectFilter>
 
               <SelectFilter label="Stage" value={filters.stage} onChange={(value) => setFilters((prev) => ({ ...prev, stage: value }))}>
                 <option value="">All</option>
-                {STAGES.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
+                {STARTUP_STAGE_OPTIONS.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
               </SelectFilter>
 
               <SelectFilter label="Help Area" value={filters.helpArea} onChange={(value) => setFilters((prev) => ({ ...prev, helpArea: value }))}>
                 <option value="">All</option>
-                {HELP_AREAS.map((area) => <option key={area} value={area}>{area}</option>)}
+                {MENTOR_HELP_AREAS.map((area) => <option key={area} value={area}>{area}</option>)}
               </SelectFilter>
 
               <div className="flex items-end">
@@ -610,6 +624,7 @@ export default function FindFoundersPage() {
                     key={`${filters.type}-${targetId || item.id}`}
                     item={item}
                     type={filters.type === 'founders' ? 'founder' : 'student'}
+                    mentorProfile={mentorProfile}
                     offerState={offerStates[targetId] || connStatusMap[targetId]}
                     connectionStatus={connStatusMap[targetId]}
                     onOffer={() => handleOffer(targetId)}

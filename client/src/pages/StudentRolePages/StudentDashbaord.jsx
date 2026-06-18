@@ -983,28 +983,10 @@ export default function StudentDashboard() {
       });
 
       const { data: mentorCandidates, error: mentorError } = await supabase
-        .from('student_profiles')
+        .from('mentor_profiles')
         .select(`
-    id,
-    user_id,
-    university,
-    degree,
-    major,
-    current_year,
-    skills_with_levels,
-    interests,
-    help_needed,
-    looking_for,
-    commitment_level,
-    has_startup_idea,
-    startup_idea_description,
-    idea_title,
-    idea_domain,
-    idea_stage,
-    target_audience,
-    unique_value_prop,
-    profile_completion,
-    profiles(
+    *,
+    profiles!mentor_profiles_user_id_fkey(
       id,
       full_name,
       avatar_url,
@@ -1014,7 +996,8 @@ export default function StudentDashboard() {
     )
   `)
         .neq('user_id', user.id)
-        .contains('looking_for', ['Mentor'])
+        .eq('is_public', true)
+        .eq('is_active', true)
         .limit(50);
 
       if (mentorError) {
@@ -1034,6 +1017,11 @@ export default function StudentDashboard() {
             {
               ...candidate,
               profile_id: candidate.user_id,
+              skills_with_levels: (candidate.expertise_areas || []).map((skill) => ({ skill })),
+              interests: candidate.industries_supported || [],
+              help_needed: candidate.can_help_with || [],
+              commitment_level: candidate.availability_hours || candidate.mentorship_mode || '',
+              looking_for: ['Mentor'],
             },
             {
               ...student,

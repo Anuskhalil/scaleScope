@@ -30,6 +30,12 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import { fetchCoFounders } from '../../services/studentService';
+import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import {
+  COMMITMENT_OPTIONS,
+  DISCOVERY_SKILLS,
+  mergeFilterOptions,
+} from '../../constants/discoveryFilters';
 
 const CSS = `
   :root {
@@ -578,6 +584,12 @@ const CoFounderCard = memo(function CoFounderCard({
             </p>
           )}
 
+          <IntelligentMatchPanel
+            currentProfile={currentUserProfile}
+            candidate={candidate}
+            context="cofounder"
+          />
+
           <div className="tooltip-wrap mt-3 inline-block">
             <button
               type="button"
@@ -841,21 +853,21 @@ export default function FindCoFoundersPage() {
   }, [load]);
 
   const allSkills = useMemo(() => {
-    const skills = new Set();
+    const skills = [];
 
     data.coFounders.forEach((candidate) => {
       (candidate.skills_with_levels || []).forEach((skill) => {
         const name = normalizeSkill(skill);
-        if (name) skills.add(name);
+        if (name) skills.push(name);
       });
 
       (candidate.skills || []).forEach((skill) => {
         const name = normalizeSkill(skill);
-        if (name) skills.add(name);
+        if (name) skills.push(name);
       });
     });
 
-    return ['All', ...Array.from(skills).slice(0, 14)];
+    return ['All', ...mergeFilterOptions(DISCOVERY_SKILLS, skills)];
   }, [data.coFounders]);
 
   const filtered = useMemo(() => {
@@ -1118,10 +1130,9 @@ export default function FindCoFoundersPage() {
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm"
                 >
                   <option value="All">All</option>
-                  <option value="Exploring">Exploring</option>
-                  <option value="Casual (2–5 hrs/week)">Casual (2–5 hrs/week)</option>
-                  <option value="Serious (5–15 hrs/week)">Serious (5–15 hrs/week)</option>
-                  <option value="Full-time (15–30 hrs/week)">Full-time (15–30 hrs/week)</option>
+                  {COMMITMENT_OPTIONS.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
                 </select>
               </div>
 

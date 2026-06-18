@@ -2,7 +2,7 @@
 // Source: student_profiles WHERE looking_for contains 'Co-Founder' OR 'Startup'
 // Founder invites a student to their team â†’ creates connection_request (type: 'team_invite')
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
@@ -13,11 +13,19 @@ import {
   getMyConnections,
   getOrCreateConversation,
 } from '../../services/founderService';
+import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import {
+  AVAILABILITY_OPTIONS,
+  COMMITMENT_OPTIONS,
+  DISCOVERY_SKILLS,
+  TEAM_ROLE_OPTIONS,
+  mergeFilterOptions,
+} from '../../constants/discoveryFilters';
 import {
   Search, Users, MessageSquare, UserPlus, CheckCircle,
   MapPin, Clock, Info, ArrowRight, SlidersHorizontal,
   Loader, AlertTriangle, RefreshCw, Sparkles, X,
-  Rocket, Zap, Code, BarChart2, Palette, BookOpen,
+  Rocket, Zap, BookOpen,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -83,13 +91,6 @@ async function getCachedUrl(path) {
   return null;
 }
 
-const ROLE_FILTERS = [
-  { val: 'Co-Founder', icon: <Rocket className="w-3 h-3" />, col: 'from-amber-500 to-orange-500' },
-  { val: 'Startup', icon: <Zap className="w-3 h-3" />, col: 'from-indigo-500 to-violet-500' },
-  { val: 'Developer', icon: <Code className="w-3 h-3" />, col: 'from-blue-500 to-indigo-500' },
-  { val: 'Marketer', icon: <BarChart2 className="w-3 h-3" />, col: 'from-green-500 to-emerald-500' },
-  { val: 'Designer', icon: <Palette className="w-3 h-3" />, col: 'from-rose-500 to-pink-500' },
-];
 function initials(name) {
   if (!name) return '?';
   return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -161,7 +162,7 @@ function lfBadge(val) {
 }
 
 // â”€â”€ Candidate Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function CandidateCard({ candidate, onInvite, onMessage, inviteState }) {
+function CandidateCard({ candidate, founderProfile, onInvite, onMessage, inviteState }) {
   const skills = candidate.skills || [];
   const lf = candidate.looking_for || [];
   const ideaContext = candidate.startup_idea_description || candidate.idea_title || candidate.company_name;
@@ -218,6 +219,12 @@ function CandidateCard({ candidate, onInvite, onMessage, inviteState }) {
           {(candidate.interests || []).length > 0 && (
             <p className="text-xs text-slate-500 mt-2">Interests: {candidate.interests.slice(0, 3).join(', ')}</p>
           )}
+
+          <IntelligentMatchPanel
+            currentProfile={founderProfile}
+            candidate={candidate}
+            context="team"
+          />
 
           <div className="tooltip-wrap mt-3 inline-block">
             <button type="button" className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
@@ -297,16 +304,25 @@ export default function FindTeamPage() {
   const [invStates, setInvStates] = useState({});
   const [connStatusMap, setConnStatusMap] = useState({});
   const [founderProfile, setFounderProfile] = useState({});
+  const founderProfileRef = useRef(null);
+  const activeLoadRef = useRef('');
 
   const load = useCallback(async (role = roleFilter) => {
     if (!user?.id) return;
+    const requestKey = `${user.id}:${role || 'all'}`;
+    if (activeLoadRef.current === requestKey) return;
+
+    activeLoadRef.current = requestKey;
     setLoading(true); setError('');
     try {
-      const founderData = founderProfile.user_id
-        ? founderProfile
+      const founderData = founderProfileRef.current
+        ? founderProfileRef.current
         : (await fetchFounderProfile(user?.id)).founderProfile || {};
 
-      if (!founderProfile.user_id) setFounderProfile(founderData);
+      if (!founderProfileRef.current) {
+        founderProfileRef.current = founderData;
+        setFounderProfile(founderData);
+      }
 
       const [data, connectionsRes] = await Promise.all([
         fetchTeamCandidates({
@@ -329,8 +345,11 @@ export default function FindTeamPage() {
       setConnStatusMap(statusMap);
       setCandidates(data);
     } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  }, [roleFilter, user?.id, founderProfile]);
+    finally {
+      setLoading(false);
+      activeLoadRef.current = '';
+    }
+  }, [roleFilter, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -388,11 +407,12 @@ export default function FindTeamPage() {
   };
 
   const commitmentOptions = useMemo(() => {
-    return ['', ...new Set(candidates.map((candidate) => candidate.commitment).filter(Boolean))];
+    const values = candidates.flatMap((candidate) => [candidate.availability, candidate.commitment]);
+    return ['', ...mergeFilterOptions([...AVAILABILITY_OPTIONS, ...COMMITMENT_OPTIONS], values)];
   }, [candidates]);
 
   const skillOptions = useMemo(() => {
-    return ['', ...new Set(candidates.flatMap((candidate) => candidate.skills || []).filter(Boolean))].slice(0, 13);
+    return ['', ...mergeFilterOptions(DISCOVERY_SKILLS, candidates.flatMap((candidate) => candidate.skills || []))];
   }, [candidates]);
 
   const shown = candidates.filter(c => {
@@ -402,7 +422,7 @@ export default function FindTeamPage() {
         !(c.bio || '').toLowerCase().includes(q) &&
         !(c.skills || []).some(s => s.toLowerCase().includes(q))) return false;
     }
-    if (commFilter && c.commitment !== commFilter) return false;
+    if (commFilter && c.availability !== commFilter && c.commitment !== commFilter) return false;
     if (skillFilter) {
       if (!(c.skills || []).some(s => s.toLowerCase().includes(skillFilter.toLowerCase()))) return false;
     }
@@ -461,9 +481,9 @@ export default function FindTeamPage() {
             </div>
             <div className="grid md:grid-cols-5 gap-3 mt-4">
               <div><label className="text-xs font-bold text-slate-500 mb-1 block">Match band</label><select value={matchBand} onChange={e => setMatchBand(e.target.value)} className="inp"><option value="all">All matches</option><option value="60plus">60%+</option><option value="below60">Below 60%</option></select></div>
-              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Role</label><select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); load(e.target.value); }} className="inp"><option value="">All candidates</option>{ROLE_FILTERS.map(role => <option key={role.val} value={role.val}>{role.val}</option>)}</select></div>
+              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Role</label><select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); load(e.target.value); }} className="inp"><option value="">All candidates</option>{TEAM_ROLE_OPTIONS.map(role => <option key={role} value={role}>{role}</option>)}</select></div>
               <div><label className="text-xs font-bold text-slate-500 mb-1 block">Skill</label><select value={skillFilter} onChange={e => setSkillFilter(e.target.value)} className="inp">{skillOptions.map(skill => <option key={skill || 'all'} value={skill}>{skill || 'All'}</option>)}</select></div>
-              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Availability</label><select value={commFilter} onChange={e => setCommFilter(e.target.value)} className="inp">{commitmentOptions.map(item => <option key={item || 'all'} value={item}>{item || 'All'}</option>)}</select></div>
+              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Availability</label><select value={commFilter} onChange={e => setCommFilter(e.target.value)} className="inp">{commitmentOptions.map(item => <option key={item || 'all'} value={item}>{item || 'All availability'}</option>)}</select></div>
               <div className="flex items-end gap-2"><button onClick={resetFilters} className="w-full py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 flex items-center justify-center gap-2"><SlidersHorizontal className="w-4" />Reset</button><button onClick={() => load(roleFilter)} className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-[#1B2D7F]"><RefreshCw className="w-4" /></button></div>
             </div>
           </section>
@@ -535,6 +555,7 @@ export default function FindTeamPage() {
                     <div key={c.id || i} className={`slide-in`} style={{ animationDelay: `${Math.min(i, 8) * 0.05}s` }}>
                       <CandidateCard
                         candidate={c}
+                        founderProfile={founderProfile}
                         onInvite={() => handleInvite(c)}
                         onMessage={() => handleMessage(c)}
                         inviteState={connStatusMap[c.user_id] || invStates[c.user_id]} />

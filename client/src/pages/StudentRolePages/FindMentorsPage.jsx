@@ -5,6 +5,7 @@ import React, {
   useCallback,
   memo,
   useMemo,
+  useRef,
 } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -33,6 +34,13 @@ import toast from 'react-hot-toast';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
+import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import { attachMatchIntelligence } from '../../services/intelligentMatching';
+import {
+  DISCOVERY_LOCATIONS,
+  DISCOVERY_SKILLS,
+  mergeFilterOptions,
+} from '../../constants/discoveryFilters';
 
 const CSS = `
   :root {
@@ -146,6 +154,8 @@ const CSS = `
 
 const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
+const FIND_MENTORS_PAGE_CACHE = new Map();
+const FIND_MENTORS_PAGE_TTL = 45 * 1000;
 
 async function getCachedUrl(path) {
   if (!path || path.startsWith('http')) return path;
@@ -273,22 +283,6 @@ const normalizeProfile = (candidate) => {
       nestedProfile?.skills ||
       [],
   };
-};
-
-const hasLookingFor = (candidate, option) => {
-  const values =
-    candidate?.looking_for ||
-    candidate?.student_profile?.looking_for ||
-    candidate?.student_profiles?.looking_for ||
-    candidate?.profile?.looking_for ||
-    candidate?.profiles?.looking_for ||
-    [];
-
-  if (Array.isArray(values)) {
-    return values.includes(option);
-  }
-
-  return String(values || '').toLowerCase().includes(option.toLowerCase());
 };
 
 const getScore = (candidate) => {
@@ -524,10 +518,9 @@ const MentorCard = memo(function MentorCard({
               <p className="font-bold text-gray-900 truncate">{p.full_name}</p>
 
               <p className="text-xs text-gray-500">
-                {mentor.university || 'University not added'}
-                {mentor.degree ? ` · ${mentor.degree}` : ''}
-                {mentor.major ? ` · ${mentor.major}` : ''}
-                {mentor.current_year ? ` · ${mentor.current_year}` : ''}
+                {mentor.current_role || 'Mentor'}
+                {mentor.current_company ? ` · ${mentor.current_company}` : ''}
+                {mentor.years_experience ? ` · ${mentor.years_experience} years` : ''}
               </p>
             </div>
 
@@ -555,15 +548,15 @@ const MentorCard = memo(function MentorCard({
             </p>
           )}
 
-          {mentor.startup_idea_description && (
+          {(mentor.success_stories || mentor.mentorship_style) && (
             <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl mt-3">
               <p className="text-xs font-bold text-indigo-600 flex items-center gap-1 mb-1">
                 <BookOpen className="w-3" />
-                Background / Idea Context
+                Mentorship Context
               </p>
 
               <p className="text-sm text-gray-700 line-clamp-2">
-                {mentor.startup_idea_description}
+                {mentor.success_stories || mentor.mentorship_style}
               </p>
             </div>
           )}
@@ -581,19 +574,25 @@ const MentorCard = memo(function MentorCard({
             </div>
           )}
 
-          {mentor.help_needed?.length > 0 && (
+          {mentor.can_help_with?.length > 0 && (
             <p className="text-xs text-gray-500 mt-2 flex items-start gap-1">
               <Heart className="w-3 mt-0.5 flex-shrink-0" />
-              Areas: {mentor.help_needed.slice(0, 3).join(', ')}
+              Can help with: {mentor.can_help_with.slice(0, 3).join(', ')}
             </p>
           )}
 
-          {mentor.commitment_level && (
+          {(mentor.availability_hours || mentor.mentorship_mode) && (
             <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
               <Clock className="w-3" />
-              {mentor.commitment_level}
+              {[mentor.availability_hours, mentor.mentorship_mode].filter(Boolean).join(' · ')}
             </p>
           )}
+
+          <IntelligentMatchPanel
+            currentProfile={currentUserProfile}
+            candidate={mentor}
+            context="mentor"
+          />
 
           <div className="tooltip-wrap mt-3 inline-block">
             <button
@@ -712,6 +711,7 @@ export default function FindMentorsPage() {
 
   const [connecting, setConnecting] = useState({});
   const [connStatusMap, setConnStatusMap] = useState({});
+  const activeLoadRef = useRef('');
 
   const normalizeCandidate = useCallback((candidate, currentProfile) => {
     const personId = getPersonId(candidate);
@@ -742,6 +742,19 @@ export default function FindMentorsPage() {
 
   const load = useCallback(async () => {
     if (!user?.id) return;
+    if (activeLoadRef.current === user.id) return;
+
+    const cacheKey = `mentors:${user.id}`;
+    const cached = FIND_MENTORS_PAGE_CACHE.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+      setConnStatusMap(cached.statusMap);
+      setData(cached.data);
+      setState({ loading: false, error: null });
+      return;
+    }
+
+    activeLoadRef.current = user.id;
 
     setState({
       loading: true,
@@ -811,25 +824,10 @@ export default function FindMentorsPage() {
       };
 
       const { data: mentorRows, error: mentorsError } = await supabase
-        .from('student_profiles')
+        .from('mentor_profiles')
         .select(`
-          id,
-          user_id,
-          university,
-          degree,
-          major,
-          current_year,
-          skills_with_levels,
-          interests,
-          help_needed,
-          looking_for,
-          commitment_level,
-          has_startup_idea,
-          startup_idea_description,
-          idea_title,
-          idea_domain,
-          profile_completion,
-          profiles(
+          *,
+          profiles!mentor_profiles_user_id_fkey(
             id,
             full_name,
             avatar_url,
@@ -838,23 +836,34 @@ export default function FindMentorsPage() {
             user_type
           )
         `)
-        .contains('looking_for', ['Mentor'])
+        .eq('is_public', true)
+        .eq('is_active', true)
         .neq('user_id', user.id)
         .limit(80);
 
       if (mentorsError) throw mentorsError;
 
-      const mentors = (mentorRows || [])
+      const mentors = attachMatchIntelligence(
+        (mentorRows || [])
         .map((candidate) =>
           normalizeCandidate(
             {
               ...candidate,
               profile_id: candidate.user_id,
+              skills_with_levels: (candidate.expertise_areas || []).map((skill) => ({ skill })),
+              skills: candidate.expertise_areas || [],
+              interests: candidate.industries_supported || [],
+              help_needed: candidate.can_help_with || [],
+              commitment_level: candidate.availability_hours || candidate.mentorship_mode || '',
+              looking_for: ['Mentor'],
             },
             currentProfile
           )
         )
-        .filter((candidate) => hasLookingFor(candidate, 'Mentor'));
+        .filter((candidate) => getPersonId(candidate)),
+        currentProfile,
+        'mentor'
+      );
 
       const myConnections =
         myConnectionsRes.status === 'fulfilled'
@@ -871,11 +880,19 @@ export default function FindMentorsPage() {
 
       setConnStatusMap(statusMap);
 
-      setData({
+      const nextData = {
         profile: currentProfile,
         mentors,
         myConnections,
+      };
+
+      FIND_MENTORS_PAGE_CACHE.set(cacheKey, {
+        data: nextData,
+        statusMap,
+        expiresAt: Date.now() + FIND_MENTORS_PAGE_TTL,
       });
+
+      setData(nextData);
 
       setState({
         loading: false,
@@ -890,6 +907,8 @@ export default function FindMentorsPage() {
       });
 
       toast.error('Failed to load mentors');
+    } finally {
+      activeLoadRef.current = '';
     }
   }, [user?.id, normalizeCandidate]);
 
@@ -898,32 +917,32 @@ export default function FindMentorsPage() {
   }, [load]);
 
   const allSkills = useMemo(() => {
-    const skills = new Set();
+    const skills = [];
 
     data.mentors.forEach((candidate) => {
       (candidate.skills_with_levels || []).forEach((skill) => {
         const name = normalizeSkill(skill);
-        if (name) skills.add(name);
+        if (name) skills.push(name);
       });
 
       (candidate.skills || []).forEach((skill) => {
         const name = normalizeSkill(skill);
-        if (name) skills.add(name);
+        if (name) skills.push(name);
       });
     });
 
-    return ['All', ...Array.from(skills).slice(0, 12)];
+    return ['All', ...mergeFilterOptions(DISCOVERY_SKILLS, skills)];
   }, [data.mentors]);
 
   const allLocations = useMemo(() => {
-    const locations = new Set();
+    const locations = [];
 
     data.mentors.forEach((candidate) => {
       const p = normalizeProfile(candidate);
-      if (p.location) locations.add(p.location);
+      if (p.location) locations.push(p.location);
     });
 
-    return ['All', ...Array.from(locations).slice(0, 12)];
+    return ['All', ...mergeFilterOptions(DISCOVERY_LOCATIONS, locations)];
   }, [data.mentors]);
 
   const filtered = useMemo(() => {
@@ -933,8 +952,6 @@ export default function FindMentorsPage() {
       .filter((mentor) => {
         const personId = getPersonId(mentor);
         if (!personId) return false;
-
-        if (!hasLookingFor(mentor, 'Mentor')) return false;
 
         const p = normalizeProfile(mentor);
         const score = getScore(mentor);
@@ -953,16 +970,16 @@ export default function FindMentorsPage() {
           p.full_name,
           p.bio,
           p.location,
-          mentor.university,
-          mentor.degree,
-          mentor.major,
-          mentor.current_year,
-          mentor.startup_idea_description,
-          mentor.idea_title,
-          mentor.idea_domain,
-          mentor.commitment_level,
+          mentor.current_role,
+          mentor.current_company,
+          mentor.mentorship_style,
+          mentor.mentorship_mode,
+          mentor.availability_hours,
+          mentor.success_stories,
           skills.join(' '),
-          (mentor.help_needed || []).join(' '),
+          (mentor.can_help_with || []).join(' '),
+          (mentor.expertise_areas || []).join(' '),
+          (mentor.industries_supported || []).join(' '),
           (mentor.interests || []).join(' '),
         ]
           .filter(Boolean)
@@ -1107,17 +1124,17 @@ export default function FindMentorsPage() {
 
   const totalMentors = (data.mentors || []).filter((mentor) => {
     const id = getPersonId(mentor);
-    return Boolean(id) && hasLookingFor(mentor, 'Mentor');
+    return Boolean(id);
   }).length;
 
   const below60Count = (data.mentors || []).filter((mentor) => {
     const id = getPersonId(mentor);
-    return id && hasLookingFor(mentor, 'Mentor') && getScore(mentor) < 60;
+    return id && getScore(mentor) < 60;
   }).length;
 
   const strongCount = (data.mentors || []).filter((mentor) => {
     const id = getPersonId(mentor);
-    return id && hasLookingFor(mentor, 'Mentor') && getScore(mentor) >= 60;
+    return id && getScore(mentor) >= 60;
   }).length;
 
   const { skill, location, proBono, query, matchBand } = filters;

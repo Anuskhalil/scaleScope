@@ -41,6 +41,40 @@ export default function AuthCallbackPage() {
         const user = data.session.user;
         const provider = getPrimaryProvider(user);
         const metadataRole = getMetadataRole(user);
+        const oauthWasPrechecked = sessionStorage.getItem('oauth_registered_login') === '1';
+        const oauthRegisteredEmail = sessionStorage.getItem('oauth_registered_email') || '';
+
+        if (OAUTH_PROVIDERS.has(provider) && !oauthWasPrechecked) {
+          await supabase.auth.signOut();
+
+          navigate('/register', {
+            replace: true,
+            state: {
+              email: user.email || oauthRegisteredEmail,
+              error:
+                'Please register first, select your role, and set a password. Google/GitHub login works after registration.',
+            },
+          });
+
+          return;
+        }
+
+        if (
+          OAUTH_PROVIDERS.has(provider) &&
+          oauthRegisteredEmail &&
+          user.email?.toLowerCase() !== oauthRegisteredEmail.toLowerCase()
+        ) {
+          await supabase.auth.signOut();
+
+          navigate('/login', {
+            replace: true,
+            state: {
+              error: 'The OAuth email did not match the registered email you entered.',
+            },
+          });
+
+          return;
+        }
 
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -121,6 +155,8 @@ export default function AuthCallbackPage() {
           return;
         }
 
+        sessionStorage.removeItem('oauth_registered_login');
+        sessionStorage.removeItem('oauth_registered_email');
         navigate('/dashboard', { replace: true });
       } catch (err) {
         if (mounted) {

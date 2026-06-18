@@ -232,12 +232,17 @@ const INDUSTRIES = [
 
 const STARTUP_STAGES = [
   'Just an Idea',
+  'Wireframes',
+  'Prototype',
   'Researching',
   'Building MVP',
   'MVP Built',
+  'Live Product',
   'Growing',
   'Revenue',
 ];
+const TRACTION_READY_STAGES = ['MVP Built', 'Live Product', 'Growing', 'Revenue'];
+const SHOW_LEGACY_FOUNDER_FIELDS = false;
 
 const FUNDING_STAGES = [
   'Bootstrapped',
@@ -382,6 +387,11 @@ const HIRING_ROLE_CHIPS = [
   'Finance / CFO',
   'Content Creator',
 ];
+const EXTRA_LOOKING_FOR_OPTS = [
+  { val: 'Sales Lead', icon: 'S', desc: 'Revenue support' },
+  { val: 'Advisor', icon: 'A', desc: 'Strategic support' },
+  { val: 'Operations Lead', icon: 'O', desc: 'Execution support' },
+];
 
 const KEY_RISK_CHIPS = [
   'Technical risk',
@@ -483,6 +493,13 @@ const makeEmpty = (user) => ({
 });
 
 const safeArray = (v) => (Array.isArray(v) ? v : []);
+const slugify = (text) =>
+  String(text || '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+
 function calcFounderCompletionWithBreakdown(f) {
   const checks = [
     { field: 'full_name', condition: (f.full_name || '').trim().length > 1, points: 6, label: 'Full name' },
@@ -499,7 +516,7 @@ function calcFounderCompletionWithBreakdown(f) {
     { field: 'startup_name', condition: !!(f.company_name || f.idea_title), points: 7, label: 'Startup name / idea title' },
     { field: 'industry', condition: !!f.industry, points: 5, label: 'Industry' },
     { field: 'stage', condition: !!f.startup_stage, points: 5, label: 'Startup stage' },
-    { field: 'product_status', condition: !!f.product_status, points: 4, label: 'Product status' },
+    { field: 'stage_proof', condition: !!f.startup_stage, points: 4, label: 'Startup stage proof' },
     { field: 'startup_location', condition: !!f.startup_location, points: 3, label: 'Startup location' },
     { field: 'investment_readiness', condition: !!f.investment_readiness, points: 3, label: 'Investment readiness' },
     { field: 'validation_status', condition: !!f.validation_status, points: 5, label: 'Validation status' },
@@ -510,7 +527,6 @@ function calcFounderCompletionWithBreakdown(f) {
     { field: 'challenges', condition: (f.current_challenges || '').trim().length > 10, points: 4, label: 'Current challenges' },
     { field: 'looking_for', condition: safeArray(f.looking_for).length > 0, points: 4, label: 'Looking for' },
     { field: 'help_needed', condition: safeArray(f.help_needed).length > 0, points: 4, label: 'Help needed' },
-    { field: 'skills_needed', condition: safeArray(f.skills_needed).length > 0, points: 4, label: 'Skills needed' },
     { field: 'pitch_deck', condition: !!f.pitch_deck_url, points: 4, label: 'Pitch deck' },
   ];
 
@@ -526,6 +542,13 @@ function calcFounderCompletionWithBreakdown(f) {
 }
 
 function getFounderQualityChecks(f) {
+  const stageProof = getFounderStageProof(f.startup_stage);
+  const stageProofValue = f.metadata?.[stageProof.key] || '';
+  const stageProofOk =
+    !f.startup_stage ||
+    Boolean(stageProofValue) ||
+    Boolean(f.demo_url && ['mvp_url', 'live_product_url'].includes(stageProof.key));
+
   const required = [
     { field: 'full_name', condition: (f.full_name || '').trim().length > 1, label: 'Full name' },
     { field: 'bio', condition: (f.bio || '').trim().length > 20, label: 'Founder bio with at least 20 characters' },
@@ -534,6 +557,7 @@ function getFounderQualityChecks(f) {
     { field: 'startup_name', condition: !!(f.company_name || f.idea_title), label: 'Startup name or idea title' },
     { field: 'industry', condition: !!f.industry, label: 'Startup industry' },
     { field: 'stage', condition: !!f.startup_stage, label: 'Startup stage' },
+    { field: 'stage_proof', condition: stageProofOk, label: 'Startup stage verification proof' },
     { field: 'problem', condition: (f.problem_solving || f.problem_statement || '').trim().length > 30, label: 'Problem statement with at least 30 characters' },
     { field: 'target_market', condition: (f.target_market || '').trim().length > 5, label: 'Target market' },
     { field: 'looking_for', condition: safeArray(f.looking_for).length > 0, label: 'Looking for preference' },
@@ -676,6 +700,34 @@ const generateFounderSkillSuggestions = (form) => {
   }
 
   return Array.from(suggestions).slice(0, 6);
+};
+
+const shouldShowTractionFunding = (stage) => TRACTION_READY_STAGES.includes(stage);
+
+const getFounderStageProof = (stage) => {
+  const map = {
+    'Just an Idea': { key: 'idea_research_url', label: 'Upload idea research / concept deck', accept: '.pdf,.ppt,.pptx,.doc,.docx' },
+    Wireframes: { key: 'wireframe_url', label: 'Upload wireframes or prototype screenshots', accept: '.pdf,.ppt,.pptx,.png,.jpg,.jpeg' },
+    Prototype: { key: 'prototype_url', label: 'Upload prototype file or add demo link', accept: '.pdf,.ppt,.pptx,.png,.jpg,.jpeg' },
+    Researching: { key: 'research_validation_url', label: 'Upload research / validation notes', accept: '.pdf,.doc,.docx,.csv,.xlsx' },
+    'Building MVP': { key: 'mvp_progress_url', label: 'Upload MVP progress proof', accept: '.pdf,.ppt,.pptx,.png,.jpg,.jpeg' },
+    'MVP Built': { key: 'mvp_url', label: 'MVP website or demo link', accept: '' },
+    'Live Product': { key: 'live_product_url', label: 'Live product URL', accept: '' },
+    Growing: { key: 'traction_proof_url', label: 'Upload traction proof', accept: '.pdf,.ppt,.pptx,.csv,.xlsx,.png,.jpg,.jpeg' },
+    Revenue: { key: 'revenue_proof_url', label: 'Upload revenue proof', accept: '.pdf,.csv,.xlsx,.png,.jpg,.jpeg' },
+  };
+
+  return map[stage] || map['Just an Idea'];
+};
+
+const getLinkStatus = (url) => {
+  if (!url) return 'Not added';
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) ? 'Format verified' : 'Invalid protocol';
+  } catch {
+    return 'Invalid URL';
+  }
 };
 
 function initials(name) {
@@ -916,6 +968,7 @@ export default function FounderProfile() {
         product_status: source.product_status || '',
         tech_stack: safeArray(source.tech_stack),
         key_risks: safeArray(source.key_risks),
+        metadata: source.metadata || {},
       };
 
       snapRef.current = normalized;
@@ -1018,6 +1071,25 @@ export default function FounderProfile() {
       return;
     }
 
+    const linkFields = ['pitch_deck_url', 'pitch_video_url', 'demo_url', 'website_url', 'linkedin_url', 'github_url', 'twitter_url'];
+    const invalidLinks = linkFields.filter((field) => formData[field] && getLinkStatus(formData[field]) !== 'Format verified');
+    const stageProof = getFounderStageProof(formData.startup_stage);
+    const stageProofUrl = formData.metadata?.[stageProof.key] || '';
+    const invalidStageProof =
+      ['mvp_url', 'live_product_url'].includes(stageProof.key) &&
+      stageProofUrl &&
+      getLinkStatus(stageProofUrl) !== 'Format verified';
+
+    if (invalidLinks.length > 0 || invalidStageProof) {
+      const message = `Please fix invalid links: ${[
+        ...invalidLinks,
+        ...(invalidStageProof ? [stageProof.label] : []),
+      ].join(', ')}`;
+      setSaveError(message);
+      toast.error('Fix invalid founder links first');
+      return;
+    }
+
     setSaving(true);
     setSaveError('');
 
@@ -1048,6 +1120,10 @@ export default function FounderProfile() {
         metadata: {
           updated_from: 'founder_profile_page',
           updated_at: now,
+          link_verification: linkFields.reduce((acc, field) => ({
+            ...acc,
+            [field]: getLinkStatus(formData[field]),
+          }), {}),
         },
       });
 
@@ -1114,9 +1190,17 @@ export default function FounderProfile() {
         milestones_next_6_months: formData.milestones_next_6_months,
 
         market_size: formData.market_size,
-        product_status: formData.product_status,
-        tech_stack: safeArray(formData.tech_stack),
-        key_risks: safeArray(formData.key_risks),
+        product_status: formData.startup_stage,
+        tech_stack: [],
+        key_risks: [],
+        metadata: {
+          ...(formData.metadata || {}),
+          link_verification: linkFields.reduce((acc, field) => ({
+            ...acc,
+            [field]: getLinkStatus(formData[field]),
+          }), {}),
+          verified_at: now,
+        },
       });
 
       clearDraft();
@@ -1168,6 +1252,37 @@ export default function FounderProfile() {
       toast.success('Avatar uploaded. Click Save Changes to keep it.');
     } catch (err) {
       console.error('Founder avatar upload error:', err);
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFounderFileUpload = async ({ file, folder, metadataKey }) => {
+    if (!file || !user?.id) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Select a file under 10MB');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+      const cleanName = slugify(file.name.replace(/\.[^.]+$/, '')) || 'document';
+      const filePath = `founders/${user.id}/${folder}/${Date.now()}-${cleanName}.${ext}`;
+      const { error } = await supabase.storage
+        .from('profile-documents')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+      if (error) throw error;
+
+      updateField('metadata', {
+        ...(formData.metadata || {}),
+        [metadataKey]: filePath,
+      });
+      toast.success('File uploaded. Click Save Changes to keep it.');
+    } catch (err) {
+      console.error('Founder document upload error:', err);
       toast.error(err.message || 'Upload failed');
     } finally {
       setUploading(false);
@@ -1416,6 +1531,8 @@ export default function FounderProfile() {
                     onSave={handleUpdate}
                     saving={saving}
                     updateField={updateField}
+                    onFileUpload={handleFounderFileUpload}
+                    uploading={uploading}
                   />
                 )}
               </div>
@@ -1507,12 +1624,6 @@ function ViewMode({ formData, onEditClick }) {
                   {formData.startup_stage && (
                     <span className="inline-block px-2 py-0.5 bg-white/10 text-white/80 text-xs rounded">
                       {formData.startup_stage}
-                    </span>
-                  )}
-
-                  {formData.product_status && (
-                    <span className="inline-block px-2 py-0.5 bg-white/10 text-white/80 text-xs rounded">
-                      {formData.product_status}
                     </span>
                   )}
 
@@ -1681,6 +1792,7 @@ function ViewMode({ formData, onEditClick }) {
         )}
       </Section>
 
+      {SHOW_LEGACY_FOUNDER_FIELDS && (
       <Section title="Skills Needed" icon={<Sparkles className="w-5 h-5 text-[#98DE38]" />}>
         {safeArray(formData.skills_needed).length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -1702,8 +1814,15 @@ function ViewMode({ formData, onEditClick }) {
           <Empty label="No required team skills added yet." />
         )}
       </Section>
+      )}
 
       <Section title="Hiring & Co-Founder Requirements" icon={<Users className="w-5 h-5 text-[#1B2D7F]" />}>
+        {(safeArray(formData.hiring_roles).length > 0 || formData.cofounder_requirements) && (
+          <div className="mb-4 rounded-xl bg-[#98DE38]/10 border border-[#98DE38]/30 p-3 text-xs font-bold text-[#1B2D7F]">
+            This founder is hiring a co-founder with these requirements.
+          </div>
+        )}
+
         {safeArray(formData.hiring_roles).length > 0 ? (
           <div className="flex flex-wrap gap-2 mb-4">
             {safeArray(formData.hiring_roles).map((item, i) => (
@@ -1757,6 +1876,7 @@ function ViewMode({ formData, onEditClick }) {
         </div>
       </Section>
 
+      {SHOW_LEGACY_FOUNDER_FIELDS && (
       <Section title="Visibility & Status" icon={<Shield className="w-5 h-5 text-[#1B2D7F]" />}>
         <div className="grid md:grid-cols-2 gap-3">
           {[
@@ -1773,6 +1893,7 @@ function ViewMode({ formData, onEditClick }) {
           ))}
         </div>
       </Section>
+      )}
 
       <Section title="Links & Assets" icon={<LinkIcon className="w-5 h-5 text-[#1B2D7F]" />}>
         {[
@@ -1835,10 +1956,15 @@ function EditMode({
   onSave,
   saving,
   updateField,
+  onFileUpload,
+  uploading,
 }) {
   const completion = calcFounderCompletionWithBreakdown(formData);
   const autoHelpSuggestions = generateFounderHelpSuggestions(formData);
   const autoSkillSuggestions = generateFounderSkillSuggestions(formData);
+  const allLookingForOptions = [...LOOKING_FOR_OPTS, ...EXTRA_LOOKING_FOR_OPTS];
+  const stageProof = getFounderStageProof(formData.startup_stage);
+  const tractionReady = shouldShowTractionFunding(formData.startup_stage);
 
   const addAutoHelpSuggestions = () => {
     const merged = Array.from(
@@ -1967,18 +2093,23 @@ function EditMode({
           <SelectField
             label="Startup Stage"
             value={formData.startup_stage}
-            onChange={(v) => updateField('startup_stage', v)}
+            onChange={(v) => {
+              updateField('startup_stage', v);
+              updateField('product_status', v);
+            }}
             options={STARTUP_STAGES}
             placeholder="Select stage…"
           />
 
-          <SelectField
-            label="Product Status"
-            value={formData.product_status}
-            onChange={(v) => updateField('product_status', v)}
-            options={PRODUCT_STATUS}
-            placeholder="Select product status…"
-          />
+          {SHOW_LEGACY_FOUNDER_FIELDS && (
+            <SelectField
+              label="Product Status"
+              value={formData.product_status}
+              onChange={(v) => updateField('product_status', v)}
+              options={PRODUCT_STATUS}
+              placeholder="Select product status…"
+            />
+          )}
 
           <SelectField
             label="Validation Status"
@@ -2012,6 +2143,48 @@ function EditMode({
             placeholder="e.g. $2B EdTech market in MENA"
           />
         </div>
+
+        {stageProof.key === 'mvp_url' || stageProof.key === 'live_product_url' ? (
+          <FormInput
+            label={stageProof.label}
+            value={formData.metadata?.[stageProof.key] || formData.demo_url || ''}
+            onChange={(v) =>
+              updateField('metadata', {
+                ...(formData.metadata || {}),
+                [stageProof.key]: v,
+              })
+            }
+            icon={<Globe className="w-4 h-4" />}
+            placeholder="https://your-product.com"
+            hint={getLinkStatus(formData.metadata?.[stageProof.key] || formData.demo_url)}
+          />
+        ) : (
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+              {stageProof.label}
+            </p>
+
+            <input
+              type="file"
+              accept={stageProof.accept}
+              disabled={uploading}
+              onChange={(e) =>
+                onFileUpload?.({
+                  file: e.target.files?.[0],
+                  folder: 'startup-proof',
+                  metadataKey: stageProof.key,
+                })
+              }
+              className="block w-full text-sm text-gray-600"
+            />
+
+            {formData.metadata?.[stageProof.key] && (
+              <p className="text-xs text-green-700 font-semibold mt-2">
+                Uploaded: {formData.metadata[stageProof.key]}
+              </p>
+            )}
+          </div>
+        )}
 
         <FormTextarea
           label="Problem Statement *"
@@ -2140,6 +2313,19 @@ function EditMode({
         icon={<TrendingUp className="w-4 h-4" />}
         hint="Even early signals help mentors and investors understand your stage."
       >
+        {!tractionReady && (
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+            <p className="text-sm font-bold text-gray-800">
+              Traction fields unlock when the startup reaches MVP Built, Live Product, Growing, or Revenue.
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              For now, focus on startup proof, problem, validation, target market, and go-to-market details.
+            </p>
+          </div>
+        )}
+
+        {tractionReady && (
+          <>
         <div className="grid md:grid-cols-2 gap-4">
           <FormInput
             label="Team Size"
@@ -2223,6 +2409,8 @@ function EditMode({
           <SelectField label="Co-Founder Status" value={formData.cofounder_status} onChange={(v) => updateField('cofounder_status', v)} options={COFOUNDER_STATUS_OPTS} placeholder="Select co-founder status..." />
           <FormInput label="Startup Location" value={formData.startup_location} onChange={(v) => updateField('startup_location', v)} icon={<MapPin className="w-4 h-4" />} placeholder="e.g. Karachi, Remote, LUMS Lahore" />
         </div>
+          </>
+        )}
       </EditSection>
 
       <EditSection title="Founder Skills" icon={<Briefcase className="w-4 h-4" />} hint="AI uses your skills for matching. Add at least 3.">
@@ -2259,6 +2447,7 @@ function EditMode({
         </div>
       </EditSection>
 
+      {SHOW_LEGACY_FOUNDER_FIELDS && (
       <EditSection
         title="Current / Planned Tech Stack"
         icon={<Sparkles className="w-4 h-4" />}
@@ -2277,10 +2466,11 @@ function EditMode({
           ))}
         </div>
       </EditSection>
+      )}
 
       <EditSection title="Looking For" icon={<Target className="w-4 h-4" />} hint="What does your startup need right now?">
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {LOOKING_FOR_OPTS.map((opt) => {
+          {allLookingForOptions.map((opt) => {
             const selected = safeArray(formData.looking_for).includes(opt.val);
 
             return (
@@ -2354,6 +2544,7 @@ function EditMode({
         </div>
       </EditSection>
 
+      {SHOW_LEGACY_FOUNDER_FIELDS && (
       <EditSection
         title="Skills Needed"
         icon={<Sparkles className="w-4 h-4" />}
@@ -2400,6 +2591,7 @@ function EditMode({
           ))}
         </div>
       </EditSection>
+      )}
 
       <EditSection
         title="Hiring & Co-Founder Requirements"
@@ -2418,6 +2610,45 @@ function EditMode({
             </button>
           ))}
         </div>
+
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <input
+            className="inp flex-1"
+            value={formData.metadata?.custom_hiring_role || ''}
+            onChange={(e) =>
+              updateField('metadata', {
+                ...(formData.metadata || {}),
+                custom_hiring_role: e.target.value,
+              })
+            }
+            placeholder="Add custom co-founder requirement..."
+          />
+
+          <button
+            type="button"
+            onClick={() => {
+              const value = (formData.metadata?.custom_hiring_role || '').trim();
+              if (!value) return;
+
+              updateField('hiring_roles', [
+                ...new Set([...safeArray(formData.hiring_roles), value]),
+              ]);
+              updateField('metadata', {
+                ...(formData.metadata || {}),
+                custom_hiring_role: '',
+              });
+            }}
+            className="px-4 py-2.5 g-brand text-black rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
+          >
+            Add
+          </button>
+        </div>
+
+        {(safeArray(formData.hiring_roles).length > 0 || formData.cofounder_requirements) && (
+          <div className="mb-4 rounded-xl bg-[#98DE38]/10 border border-[#98DE38]/30 p-3 text-xs font-bold text-[#1B2D7F]">
+            This founder is hiring a co-founder with these requirements.
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-4">
           <FormInput
@@ -2439,6 +2670,7 @@ function EditMode({
         </div>
       </EditSection>
 
+      {SHOW_LEGACY_FOUNDER_FIELDS && (
       <EditSection
         title="Risks & Constraints"
         icon={<Shield className="w-4 h-4" />}
@@ -2457,7 +2689,9 @@ function EditMode({
           ))}
         </div>
       </EditSection>
+      )}
 
+      {SHOW_LEGACY_FOUNDER_FIELDS && (
       <EditSection title="Visibility & Status" icon={<Shield className="w-4 h-4" />} hint="Control whether mentors, investors, and team candidates can discover this startup profile.">
         <div className="grid md:grid-cols-2 gap-3">
           <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#98DE38]/50 transition-all">
@@ -2470,6 +2704,7 @@ function EditMode({
           </label>
         </div>
       </EditSection>
+      )}
 
       <EditSection title="Links & Assets" icon={<LinkIcon className="w-4 h-4" />} hint="Boosts investor trust and discoverability.">
         <div className="grid md:grid-cols-2 gap-4">
@@ -2498,8 +2733,46 @@ function EditMode({
                 onChange={(e) => updateField(item.field, e.target.value)}
                 className="inp"
               />
+
+              <p
+                className={`text-xs mt-1 font-semibold ${
+                  getLinkStatus(formData[item.field]) === 'Format verified'
+                    ? 'text-green-700'
+                    : formData[item.field]
+                      ? 'text-red-600'
+                      : 'text-gray-400'
+                }`}
+              >
+                {getLinkStatus(formData[item.field])}
+              </p>
             </div>
           ))}
+        </div>
+
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+            Upload Pitch Deck / Founder Assets
+          </p>
+
+          <input
+            type="file"
+            accept=".pdf,.ppt,.pptx,.doc,.docx"
+            disabled={uploading}
+            onChange={(e) =>
+              onFileUpload?.({
+                file: e.target.files?.[0],
+                folder: 'assets',
+                metadataKey: 'pitch_deck_file_url',
+              })
+            }
+            className="block w-full text-sm text-gray-600"
+          />
+
+          {formData.metadata?.pitch_deck_file_url && (
+            <p className="text-xs text-green-700 font-semibold mt-2">
+              Uploaded: {formData.metadata.pitch_deck_file_url}
+            </p>
+          )}
         </div>
       </EditSection>
 

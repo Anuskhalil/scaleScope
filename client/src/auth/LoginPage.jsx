@@ -106,6 +106,38 @@ export default function LoginPage() {
       setError('');
       setOauthLoading(provider);
 
+      const email = form.email.trim().toLowerCase();
+
+      if (!email) {
+        setError('Enter your registered email first. New users must register and select a role before Google or GitHub login.');
+        setOauthLoading('');
+        return;
+      }
+
+      const { data: registeredProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, user_type')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+
+      if (!registeredProfile?.user_type) {
+        sessionStorage.setItem('oauth_register_email', email);
+        setError('Please register first and select your role. Google/GitHub login is only available after registration.');
+        setOauthLoading('');
+        navigate('/register', {
+          state: {
+            email,
+            error: 'Please create your account, select your role, and set a password first.',
+          },
+        });
+        return;
+      }
+
+      sessionStorage.setItem('oauth_registered_login', '1');
+      sessionStorage.setItem('oauth_registered_email', email);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -113,6 +145,7 @@ export default function LoginPage() {
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
+            login_hint: email,
           },
         },
       });

@@ -38,20 +38,33 @@ const STYLES = `
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   .animate-fadeIn { animation: fadeIn 0.3s ease-out both; }
   .line-clamp-4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .chip { display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:2px solid var(--gray-200);background:#fff;color:#374151;font-size:12px;font-weight:700;transition:all .15s ease; }
+  .chip:hover { border-color: var(--primary); background: rgba(152,222,56,.08); }
+  .chip.selected { border-color: var(--primary); background: rgba(152,222,56,.14); color: var(--secondary); }
 `;
 
 // 📊 CONSTANTS
 const GRADUATION_YEARS = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i - 2);
 const CURRENT_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', 'Graduate'];
-const SKILL_CHIPS = ['Technical / Dev', 'AI / ML', 'Marketing', 'Design / UI-UX', 'Business Strategy', 'Sales', 'Finance', 'Operations', 'Content Creation', 'Community Building', 'Fundraising', 'Data Analysis'];
-const INTEREST_CHIPS = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'E-commerce', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'AI / ML', 'Social Impact', 'Gaming'];
-const HELP_NEEDED_CHIPS = ['Product Strategy', 'Technical Architecture', 'Design / UX', 'Marketing & Growth', 'Fundraising', 'Market Research', 'Legal & Compliance', 'Team Building', 'Pitch Deck Review', 'Mentorship', 'User Research', 'Business Model'];
+const SKILL_CHIPS = ['Technical / Dev', 'AI / ML', 'Marketing', 'Design / UI-UX', 'Business Strategy', 'Sales', 'Finance', 'Operations', 'Content Creation', 'Community Building', 'Fundraising', 'Data Analysis', 'Frontend', 'Backend', 'Mobile Apps', 'No-Code', 'Product Management', 'Pitch Decks', 'SEO', 'Customer Research'];
+const INTEREST_CHIPS = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'E-commerce', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'AI / ML', 'Social Impact', 'Gaming', 'Cybersecurity', 'DevTools', 'Creator Economy', 'Logistics', 'TravelTech', 'PropTech', 'FoodTech', 'RetailTech', 'ClimateTech', 'DeepTech', 'Web3', 'Media', 'Consumer Apps'];
+const HELP_NEEDED_CHIPS = ['Product Strategy', 'Technical Architecture', 'Design / UX', 'Marketing & Growth', 'Fundraising', 'Market Research', 'Legal & Compliance', 'Team Building', 'Pitch Deck Review', 'Mentorship', 'User Research', 'Business Model', 'MVP Development', 'Revenue Strategy', 'Customer Acquisition', 'Investor Readiness'];
 const COMMITMENT_LEVELS = ['Exploring', 'Casual (2–5 hrs/week)', 'Serious (5–15 hrs/week)', 'Full-time (15–30 hrs/week)'];
 const HOURS_PER_WEEK_OPTS = ['0-5 hrs/week', '5-10 hrs/week', '10-20 hrs/week', '20-30 hrs/week', '30+ hrs/week'];
 const COLLABORATION_OPTS = ['Remote only', 'Hybrid', 'In-person', 'Flexible', 'Async first'];
 const STUDENT_ROLE_OPTS = ['Technical Co-Founder', 'Product / Strategy', 'Design / UI-UX', 'Marketing / Growth', 'Sales / BD', 'Operations', 'Research'];
 const AVAILABILITY_STATUS_OPTS = ['Exploring', 'Available now', 'Available part-time', 'Busy this month', 'Not available'];
-const LANGUAGE_OPTS = ['English', 'Urdu', 'Hindi', 'Arabic', 'Punjabi', 'Sindhi', 'Pashto', 'Balochi'];
+const LANGUAGE_OPTS = ['English', 'Urdu', 'Hindi', 'Arabic', 'Punjabi', 'Sindhi', 'Pashto', 'Balochi', 'French', 'Spanish', 'German', 'Chinese', 'Japanese', 'Korean', 'Turkish', 'Persian', 'Bengali', 'Tamil', 'Malay', 'Indonesian'];
+const STARTUP_LOOKING_FOR_OPTS = [
+  { val: 'Co-Founder', icon: 'CF', desc: 'Build together' },
+  { val: 'Mentor', icon: 'M', desc: 'Guidance & advice' },
+  { val: 'Investor', icon: '$', desc: 'Funding & network' },
+];
+const EXPLORING_LOOKING_FOR_OPTS = [
+  { val: 'Internship', icon: 'IN', desc: 'Work experience' },
+  { val: 'Startup', icon: 'ST', desc: 'Join a startup' },
+];
+const SHOW_LEGACY_STUDENT_FIELDS = false;
 const LOOKING_FOR_OPTS = [
   { val: 'Co-Founder', icon: '👥', desc: 'Build together' },
   { val: 'Mentor', icon: '🧠', desc: 'Guidance & advice' },
@@ -111,6 +124,73 @@ const generateHelpSuggestions = (interests, ideaDescription) => {
     suggestions.add('Mentorship');
   }
   return Array.from(suggestions).slice(0, 5);
+};
+
+const generateContextualHelpSuggestions = (formData) => {
+  const base = generateHelpSuggestions(
+    [formData.idea_domain, ...(formData.interests || [])].filter(Boolean),
+    [
+      formData.startup_idea_description,
+      formData.unique_value_prop,
+      formData.idea_stage,
+    ].filter(Boolean).join(' ')
+  );
+
+  const stageMap = {
+    idea: ['Problem Validation', 'Market Research', 'User Research', 'Business Model'],
+    problem: ['User Research', 'Product Strategy', 'MVP Development', 'Design / UX'],
+    mvp: ['Technical Architecture', 'Design / UX', 'Customer Acquisition', 'Marketing & Growth'],
+    traction: ['Marketing & Growth', 'Revenue Strategy', 'Analytics', 'Fundraising'],
+    revenue: ['Revenue Strategy', 'Operations', 'Fundraising', 'Investor Readiness'],
+  };
+
+  return [
+    ...new Set([
+      ...base,
+      ...(stageMap[formData.idea_stage] || []),
+      ...HELP_NEEDED_CHIPS,
+    ]),
+  ].slice(0, 12);
+};
+
+const generateSkillSuggestions = (formData) => {
+  const text = [
+    formData.degree,
+    formData.major,
+    formData.idea_domain,
+    formData.startup_idea_description,
+    formData.preferred_role,
+  ].join(' ').toLowerCase();
+
+  const dynamic = [];
+  if (/ai|ml|data|computer|software|technical|dev|app|platform/.test(text)) dynamic.push('AI / ML', 'Technical / Dev', 'Frontend', 'Backend', 'Data Analysis');
+  if (/design|ui|ux|product/.test(text)) dynamic.push('Design / UI-UX', 'Product Management', 'Customer Research');
+  if (/business|marketing|sales|commerce|growth/.test(text)) dynamic.push('Business Strategy', 'Marketing', 'Sales', 'SEO');
+  if (/finance|fintech|fund|invest|revenue/.test(text)) dynamic.push('Finance', 'Fundraising', 'Pitch Decks');
+
+  return [...new Set([...dynamic, ...SKILL_CHIPS])].slice(0, 15);
+};
+
+const getIdeaStageProof = (stage) => {
+  const map = {
+    idea: { label: 'Research / problem PDF or PPT', accept: '.pdf,.ppt,.pptx,.doc,.docx', key: 'idea_research_url' },
+    problem: { label: 'Validation notes, survey, or interview proof', accept: '.pdf,.ppt,.pptx,.csv,.xlsx,.doc,.docx', key: 'validation_proof_url' },
+    mvp: { label: 'MVP website or demo link', accept: '', key: 'mvp_url' },
+    traction: { label: 'User traction proof', accept: '.pdf,.ppt,.pptx,.csv,.xlsx,.png,.jpg,.jpeg', key: 'traction_proof_url' },
+    revenue: { label: 'Revenue proof document', accept: '.pdf,.csv,.xlsx,.png,.jpg,.jpeg', key: 'revenue_proof_url' },
+  };
+
+  return map[stage] || { label: 'Idea document or pitch deck', accept: '.pdf,.ppt,.pptx', key: 'idea_asset_url' };
+};
+
+const getLinkStatus = (url) => {
+  if (!url) return 'Not added';
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) ? 'Format verified' : 'Invalid protocol';
+  } catch {
+    return 'Invalid URL';
+  }
 };
 
 // ✅ SAFE INITIAL STATE
@@ -194,9 +274,7 @@ function getStudentQualityChecks(f) {
     { field: 'university', condition: (f.university || '').trim().length > 1, label: 'University / institute' },
     { field: 'degree', condition: (f.degree || '').trim().length > 1, label: 'Degree' },
     { field: 'skills', condition: (f.skills || []).length >= 3, label: 'At least 3 skills' },
-    { field: 'interests', condition: (f.interests || []).length >= 2, label: 'At least 2 interests' },
     { field: 'looking_for', condition: (f.looking_for || []).length > 0, label: 'Looking for preference' },
-    { field: 'commitment_level', condition: !!f.commitment_level, label: 'Commitment level' },
   ];
 
   if (f.has_startup_idea) {
@@ -204,6 +282,12 @@ function getStudentQualityChecks(f) {
       { field: 'idea_title', condition: (f.idea_title || '').trim().length > 1, label: 'Startup idea title' },
       { field: 'idea_domain', condition: !!f.idea_domain, label: 'Startup domain / industry' },
       { field: 'startup_idea_description', condition: (f.startup_idea_description || '').trim().length > 30, label: 'Startup idea description with at least 30 characters' }
+    );
+  } else {
+    required.push(
+      { field: 'interests', condition: (f.interests || []).length >= 2, label: 'At least 2 interests' },
+      { field: 'commitment_level', condition: !!f.commitment_level, label: 'Commitment level' },
+      { field: 'preferred_role', condition: !!f.preferred_role, label: 'Preferred role' }
     );
   }
 
@@ -379,6 +463,14 @@ export default function ProfilePage() {
       toast.error('Complete required profile fields first');
       return;
     }
+    const linkFields = ['linkedin_url', 'github_url', 'twitter_url', 'portfolio_url', 'resume_url'];
+    const invalidLinks = linkFields.filter((field) => formData[field] && getLinkStatus(formData[field]) !== 'Format verified');
+    if (invalidLinks.length > 0) {
+      const message = `Please fix invalid links: ${invalidLinks.join(', ')}`;
+      setSaveError(message);
+      toast.error('Fix invalid profile links first');
+      return;
+    }
     setSaving(true); setSaveError('');
     try {
       const now = new Date().toISOString();
@@ -391,11 +483,13 @@ export default function ProfilePage() {
       if (pe) throw pe;
 
       const skillsWithLevels = (formData.skills || []).map(skill => ({ skill, level: (formData.skills_with_levels || []).find(s => s.skill === skill)?.level || 'Intermediate' }));
+      const allowedLookingFor = (formData.has_startup_idea ? STARTUP_LOOKING_FOR_OPTS : EXPLORING_LOOKING_FOR_OPTS).map((item) => item.val);
+      const cleanLookingFor = (formData.looking_for || []).filter((item) => allowedLookingFor.includes(item));
 
       const { error: se } = await supabase.from('student_profiles').upsert({
         user_id: user.id, university: formData.university?.trim() || null, degree: formData.degree?.trim() || null, major: formData.major?.trim() || null,
         graduation_year_int: formData.graduation_year_int ? parseInt(formData.graduation_year_int, 10) : null, current_year: formData.current_year || null,
-        career_goals: formData.career_goals?.trim() || null, interests: formData.interests || [], looking_for: formData.looking_for || [], help_needed: formData.help_needed || [],
+        career_goals: formData.career_goals?.trim() || null, interests: formData.has_startup_idea ? [] : (formData.interests || []), looking_for: cleanLookingFor, help_needed: formData.has_startup_idea ? (formData.help_needed || []) : [],
         // ✅ NEW startup idea fields
         has_startup_idea: formData.has_startup_idea || false,
         idea_title: formData.has_startup_idea ? (formData.idea_title?.trim() || null) : null,
@@ -419,7 +513,14 @@ export default function ProfilePage() {
         city_or_campus: formData.city_or_campus?.trim() || null,
         projects: formData.projects || [],
         launch_risk_flags: formData.launch_risk_flags || [],
-        metadata: formData.metadata || {},
+        metadata: {
+          ...(formData.metadata || {}),
+          link_verification: linkFields.reduce((acc, field) => ({
+            ...acc,
+            [field]: getLinkStatus(formData[field]),
+          }), {}),
+          verified_at: now,
+        },
         skills_with_levels: skillsWithLevels, profile_completion: calcCompletionWithBreakdown(formData).percentage, onboarding_completed: true, updated_at: now,
       }, { onConflict: 'user_id' });
       if (se) throw se;
@@ -436,7 +537,7 @@ export default function ProfilePage() {
     setUploading(true);
     try {
       const ext = file.name.split('.').pop()?.toLowerCase();
-      const filePath = `${slugify(formData.full_name || 'user')}_${user.id}.${ext}`;
+      const filePath = `students/${user.id}/avatar/${slugify(formData.full_name || 'user')}.${ext}`;
       if (avatarPath) await supabase.storage.from('avatars').remove([avatarPath]);
       const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file, { cacheControl: '3600', upsert: true });
       if (uploadError) throw uploadError;
@@ -450,6 +551,41 @@ export default function ProfilePage() {
       setFormData((prev) => ({ ...prev, avatar_url: signedUrl }));
       setHasUnsavedChanges(true); toast.success('Avatar updated!');
     } catch (err) { console.error('Avatar upload error:', err); toast.error(err.message || 'Upload failed'); } finally { setUploading(false); }
+  };
+
+  const handleProfileFileUpload = async ({ file, folder, metadataKey }) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Select a file under 10MB');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+      const cleanName = slugify(file.name.replace(/\.[^.]+$/, '')) || 'document';
+      const filePath = `students/${user.id}/${folder}/${Date.now()}-${cleanName}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('profile-documents')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      setFormData((prev) => ({
+        ...prev,
+        metadata: {
+          ...(prev.metadata || {}),
+          [metadataKey]: filePath,
+        },
+      }));
+      setHasUnsavedChanges(true);
+      toast.success('File uploaded');
+    } catch (err) {
+      console.error('Profile document upload error:', err);
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const updateField = useCallback((key, value) => { setFormData(prev => { const newData = { ...prev, [key]: value }; setHasUnsavedChanges(true); return newData; }); }, []);
@@ -572,7 +708,7 @@ export default function ProfilePage() {
                 {!isEditMode ? (
                   <ViewMode formData={formData} isStudent={isStudent} onEditClick={() => { setFormData(prev => ({ ...prev, has_startup_idea: true })); setIsEditMode(true); toast('🚀 Ready to share an idea? Edit your profile!', { style: { background: '#98DE38', color: '#000' } }); }} />
                 ) : (
-                  <EditMode formData={formData} setFormData={setFormData} isStudent={isStudent} toggleSkill={toggleSkill} toggleInterest={toggleInterest} toggleArrayField={toggleArrayField} skillInput={skillInput} setSkillInput={setSkillInput} interestInput={interestInput} setInterestInput={setInterestInput} addCustomSkill={addCustomSkill} addCustomInterest={addCustomInterest} onSave={handleUpdate} saving={saving} updateField={updateField} />
+                  <EditMode formData={formData} setFormData={setFormData} isStudent={isStudent} toggleSkill={toggleSkill} toggleInterest={toggleInterest} toggleArrayField={toggleArrayField} skillInput={skillInput} setSkillInput={setSkillInput} interestInput={interestInput} setInterestInput={setInterestInput} addCustomSkill={addCustomSkill} addCustomInterest={addCustomInterest} onSave={handleUpdate} saving={saving} updateField={updateField} onFileUpload={handleProfileFileUpload} uploading={uploading} />
                 )}
               </div>
               </div>
@@ -807,7 +943,7 @@ function ViewMode({ formData, isStudent, onEditClick }) {
         ) : <Empty label="No skills added yet. Add at least 3 to improve matching." />}
       </Section>
 
-      <Section title="Projects & Launch Risks" icon={<Rocket className="w-5 h-5 text-[#1B2D7F]" />}>
+      {SHOW_LEGACY_STUDENT_FIELDS && <Section title="Projects & Launch Risks" icon={<Rocket className="w-5 h-5 text-[#1B2D7F]" />}>
         {(formData.projects || []).length > 0 ? (
           <div className="space-y-2 mb-4">
             {(formData.projects || []).map((project, i) => (
@@ -822,7 +958,7 @@ function ViewMode({ formData, isStudent, onEditClick }) {
             ))}
           </div>
         )}
-      </Section>
+      </Section>}
 
       {/* Looking For - Always show for students */}
       {isStudent && (
@@ -853,8 +989,14 @@ function ViewMode({ formData, isStudent, onEditClick }) {
 }
 
 // ─── EDIT MODE COMPONENT ───
-function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInterest, toggleArrayField, skillInput, setSkillInput, interestInput, setInterestInput, addCustomSkill, addCustomInterest, updateField }) {
+function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInterest, toggleArrayField, skillInput, setSkillInput, interestInput, setInterestInput, addCustomSkill, addCustomInterest, updateField, onFileUpload, uploading }) {
   const completion = calcCompletionWithBreakdown(formData);
+  const suggestedHelp = generateContextualHelpSuggestions(formData);
+  const suggestedSkills = generateSkillSuggestions(formData);
+  const lookingForOptions = formData.has_startup_idea ? STARTUP_LOOKING_FOR_OPTS : EXPLORING_LOOKING_FOR_OPTS;
+  const stageProof = getIdeaStageProof(formData.idea_stage);
+  const languageQuery = String(formData.metadata?.language_query || '').toLowerCase();
+  const visibleLanguages = LANGUAGE_OPTS.filter((language) => language.toLowerCase().includes(languageQuery));
   return (
     <form onSubmit={(e) => { e.preventDefault(); }} className="space-y-10 dm">
       <header><h1 className="text-3xl font-black text-gray-900 ss mb-1">Edit Profile</h1><p className="text-gray-400 text-sm">Basic info + Education + Startup details.</p></header>
@@ -956,8 +1098,80 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
         </EditSection>
       )}
 
-      {/* Availability & Commitment */}
       {isStudent && (
+        <EditSection title="Startup Idea" icon={<Lightbulb className="w-4 h-4" />} hint="Select this only if you are actively shaping a startup idea.">
+          <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.has_startup_idea || false}
+                onChange={(e) => {
+                  const hasIdea = e.target.checked;
+                  updateField('has_startup_idea', hasIdea);
+                  updateField('looking_for', hasIdea ? ['Co-Founder'] : ['Internship']);
+                  if (hasIdea && !formData.help_needed?.length) {
+                    updateField('help_needed', generateContextualHelpSuggestions({ ...formData, has_startup_idea: true }));
+                  }
+                }}
+                className="w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]"
+              />
+              <span className="text-sm font-semibold text-gray-700">I have a startup idea</span>
+            </label>
+          </div>
+
+          {formData.has_startup_idea && (
+            <div className="space-y-4 animate-fadeIn">
+              <FormInput label="Idea Title *" value={formData.idea_title || ''} onChange={(v) => updateField('idea_title', v)} placeholder="e.g. EduMatch - AI Tutor Finder" required />
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Domain / Industry *</label>
+                <select className="sel" value={formData.idea_domain || ''} onChange={(e) => updateField('idea_domain', e.target.value)} required>
+                  <option value="">Select domain...</option>
+                  {INTEREST_CHIPS.map(domain => (<option key={domain} value={domain}>{domain}</option>))}
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Current Stage</label>
+                <select className="sel" value={formData.idea_stage || ''} onChange={(e) => updateField('idea_stage', e.target.value)}>
+                  <option value="">Select stage...</option>
+                  <option value="idea">Just an idea</option>
+                  <option value="problem">Problem validated</option>
+                  <option value="mvp">MVP built</option>
+                  <option value="traction">Getting users</option>
+                  <option value="revenue">Generating revenue</option>
+                </select>
+              </div>
+              <FormInput label="Target Audience" value={formData.target_audience || ''} onChange={(v) => updateField('target_audience', v)} placeholder="e.g. University students in Pakistan" />
+              <FormTextarea label="What Makes It Unique?" value={formData.unique_value_prop || ''} onChange={(v) => updateField('unique_value_prop', v)} placeholder="Why will users choose you over alternatives?" rows={2} max={200} />
+              <FormTextarea label="Detailed Description *" value={formData.startup_idea_description || ''} onChange={(v) => updateField('startup_idea_description', v)} placeholder="What problem are you solving? Who has this problem? How does your solution work?" rows={4} max={600} />
+
+              {stageProof.key === 'mvp_url' ? (
+                <FormInput label={stageProof.label} value={formData.metadata?.mvp_url || ''} onChange={(v) => updateField('metadata', { ...(formData.metadata || {}), mvp_url: v })} placeholder="https://your-mvp.com" icon={<LinkIcon className="w-4 h-4" />} />
+              ) : (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{stageProof.label}</p>
+                  <input
+                    type="file"
+                    accept={stageProof.accept}
+                    disabled={uploading}
+                    onChange={(e) => onFileUpload?.({ file: e.target.files?.[0], folder: 'startup-proof', metadataKey: stageProof.key })}
+                    className="block w-full text-sm text-gray-600"
+                  />
+                  {formData.metadata?.[stageProof.key] && <p className="text-xs text-green-700 font-semibold mt-2">Uploaded: {formData.metadata[stageProof.key]}</p>}
+                </div>
+              )}
+
+              <div className="pt-2">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Customize Help Needed</p>
+                <div className="flex flex-wrap gap-2">{suggestedHelp.map(item => { const selected = (formData.help_needed || []).includes(item); return (<button key={item} type="button" onClick={() => toggleArrayField('help_needed', item)} className={`chip ${selected ? 'selected' : ''}`}>{selected ? '✓' : '+'} {item}</button>); })}</div>
+              </div>
+            </div>
+          )}
+        </EditSection>
+      )}
+
+      {/* Availability & Commitment */}
+      {isStudent && !formData.has_startup_idea && (
         <EditSection
           title="Availability & Commitment"
           icon={<Clock className="w-4 h-4" />}
@@ -1027,6 +1241,28 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
 
           <FormInput label="City / Campus" value={formData.city_or_campus || ''} onChange={(v) => updateField('city_or_campus', v)} icon={<MapPin className="w-4 h-4" />} placeholder="e.g. FAST Karachi, LUMS, Remote" />
 
+          {formData.preferred_role && (
+            <div className="grid md:grid-cols-2 gap-4">
+              <FormInput
+                label={`Experience in ${formData.preferred_role}`}
+                value={formData.metadata?.role_experience || ''}
+                onChange={(v) => updateField('metadata', { ...(formData.metadata || {}), role_experience: v })}
+                placeholder="e.g. 1 year, 3 projects, internship"
+              />
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Upload Role Proof</label>
+                <input
+                  type="file"
+                  disabled={uploading}
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  onChange={(e) => onFileUpload?.({ file: e.target.files?.[0], folder: 'role-proof', metadataKey: 'role_proof_url' })}
+                  className="block w-full rounded-xl border-2 border-gray-200 bg-gray-50 p-3 text-sm"
+                />
+                {formData.metadata?.role_proof_url && <p className="text-xs font-semibold text-green-700">Uploaded: {formData.metadata.role_proof_url}</p>}
+              </div>
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Preferred Industries</p>
             <div className="flex flex-wrap gap-2">
@@ -1040,8 +1276,15 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
 
           <div>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Languages</p>
+            <input
+              className="inp mb-3"
+              value={formData.metadata?.language_query || ''}
+              onChange={(e) => updateField('metadata', { ...(formData.metadata || {}), language_query: e.target.value })}
+              placeholder="Search language..."
+              aria-label="Search language"
+            />
             <div className="flex flex-wrap gap-2">
-              {LANGUAGE_OPTS.map((item) => (
+              {visibleLanguages.map((item) => (
                 <button key={item} type="button" onClick={() => toggleArrayField('languages', item)} className={`chip ${((formData.languages || []).includes(item)) ? 'selected' : ''}`}>
                   {(formData.languages || []).includes(item) ? '✓' : '+'} {item}
                 </button>
@@ -1063,7 +1306,7 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
       )}
 
       {/* Startup Idea Section */}
-      {isStudent && (
+      {SHOW_LEGACY_STUDENT_FIELDS && isStudent && (
         <EditSection title="Startup Idea" icon={<Lightbulb className="w-4 h-4" />} hint="Share your idea to attract co-founders & mentors.">
           <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
             <label className="flex items-center gap-3 cursor-pointer">
@@ -1108,7 +1351,7 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
 
       {/* Skills */}
       <EditSection title="Skills" icon={<Briefcase className="w-4 h-4" />} hint="AI uses your skills for matching. Add at least 3.">
-        <div className="flex flex-wrap gap-2 mb-4">{SKILL_CHIPS.map(skill => (<button key={skill} type="button" onClick={() => toggleSkill(skill)} className={`chip ${((formData.skills || []).includes(skill)) ? 'selected' : ''}`} aria-pressed={(formData.skills || []).includes(skill)}>{(formData.skills || []).includes(skill) ? '✓' : '+'} {skill}</button>))}</div>
+        <div className="flex flex-wrap gap-2 mb-4">{suggestedSkills.map(skill => (<button key={skill} type="button" onClick={() => toggleSkill(skill)} className={`chip ${((formData.skills || []).includes(skill)) ? 'selected' : ''}`} aria-pressed={(formData.skills || []).includes(skill)}>{(formData.skills || []).includes(skill) ? '✓' : '+'} {skill}</button>))}</div>
         <div className="flex gap-2"><input className="inp flex-1" value={skillInput} onChange={(e) => setSkillInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomSkill())} placeholder="Add custom skill…" aria-label="Add custom skill" /><button type="button" onClick={addCustomSkill} className="px-4 py-2.5 g-brand text-black rounded-xl text-sm font-bold hover:opacity-90 transition-opacity" aria-label="Add custom skill">Add</button></div>
       </EditSection>
 
@@ -1120,13 +1363,45 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
       )}
 
       {/* Interests */}
-      <EditSection title="Interests" icon={<Tag className="w-4 h-4" />} hint="Industries you care about.">
+      {!formData.has_startup_idea && <EditSection title="Interests" icon={<Tag className="w-4 h-4" />} hint="Industries where you want to work, learn, or join a startup.">
         <div className="flex flex-wrap gap-2 mb-4">{INTEREST_CHIPS.map(interest => (<button key={interest} type="button" onClick={() => toggleInterest(interest)} className={`chip ${((formData.interests || []).includes(interest)) ? 'selected' : ''}`} style={(formData.interests || []).includes(interest) ? { borderColor: '#98DE38' } : {}} aria-pressed={(formData.interests || []).includes(interest)}>{(formData.interests || []).includes(interest) ? '✓' : '+'} {interest}</button>))}</div>
         <div className="flex gap-2"><input className="inp flex-1" value={interestInput} onChange={(e) => setInterestInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomInterest())} placeholder="Add custom interest…" aria-label="Add custom interest" /><button type="button" onClick={addCustomInterest} className="px-4 py-2.5 g-brand text-black rounded-xl text-sm font-bold hover:opacity-90 transition-opacity" aria-label="Add custom interest">Add</button></div>
-      </EditSection>
+      </EditSection>}
 
-      {/* Student-specific */}
       {isStudent && (
+        <>
+          <EditSection title="Looking For" icon={<Tag className="w-4 h-4" />} hint={formData.has_startup_idea ? 'Startup builders can look for co-founders, mentors, or investors.' : 'Exploring students can look for internships or startup roles.'}>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {lookingForOptions.map((opt) => {
+                const selected = (formData.looking_for || []).includes(opt.val);
+                return (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => toggleArrayField('looking_for', opt.val)}
+                    className={`flex flex-col items-center gap-2 py-4 px-2 rounded-2xl border-2 text-center transition-all ${selected ? 'border-[#98DE38] bg-[#98DE38]/10' : 'border-gray-200 bg-white hover:border-[#98DE38]/50'}`}
+                    aria-pressed={selected}
+                  >
+                    <span className="text-sm font-black text-[#1B2D7F]">{opt.icon}</span>
+                    <span className="text-xs font-bold ss">{opt.val}</span>
+                    <span className="text-[10px] text-gray-400">{opt.desc}</span>
+                    {selected && <span className="text-xs font-bold text-[#1B2D7F]">Selected</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </EditSection>
+
+          {(formData.looking_for || []).includes('Mentor') && (
+            <EditSection title="Short Bio for Mentors" icon={<Lightbulb className="w-4 h-4" />} hint="Appears on mentor match cards. Keep it concise.">
+              <FormTextarea label="Mentor Bio" value={formData.short_bio_for_mentors} onChange={(v) => updateField('short_bio_for_mentors', v)} placeholder="Brief intro for mentors: your background, what you're building, and what help you need..." rows={3} max={300} />
+            </EditSection>
+          )}
+        </>
+      )}
+
+      {/* Student-specific legacy block disabled after profile audit cleanup */}
+      {SHOW_LEGACY_STUDENT_FIELDS && isStudent && (
         <>
           <EditSection title="Looking For" icon={<Tag className="w-4 h-4" />} hint="What are you here to find?">
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{LOOKING_FOR_OPTS.map(opt => { const selected = (formData.looking_for || []).includes(opt.val); return (<button key={opt.val} type="button" onClick={() => toggleArrayField('looking_for', opt.val)} className={`flex flex-col items-center gap-2 py-4 px-2 rounded-2xl border-2 text-center transition-all ${selected ? 'border-[#98DE38] bg-[#98DE38]/10' : 'border-gray-200 bg-white hover:border-[#98DE38]/50'}`} aria-pressed={selected}><span className="text-2xl">{opt.icon}</span><span className="text-xs font-bold ss">{opt.val}</span><span className="text-[10px] text-gray-400">{opt.desc}</span>{selected && <span className="text-xs font-bold" style={{ color: '#98DE38' }}>✓ Selected</span>}</button>); })}</div>
@@ -1146,7 +1421,7 @@ function EditMode({ formData, setFormData, isStudent, toggleSkill, toggleInteres
 
       {/* Links */}
       <EditSection title="Links" icon={<LinkIcon className="w-4 h-4" />} hint="Boosts verification & discoverability.">
-        <div className="grid md:grid-cols-2 gap-4">{[{ field: 'linkedin_url', Icon: Linkedin, label: 'LinkedIn URL', points: 3, placeholder: 'https://linkedin.com/in/you' }, { field: 'github_url', Icon: Github, label: 'GitHub URL', points: 2, placeholder: 'https://github.com/you' }, { field: 'twitter_url', Icon: Twitter, label: 'Twitter URL', points: 1, placeholder: 'https://twitter.com/you' }, { field: 'portfolio_url', Icon: LinkIcon, label: 'Portfolio URL', points: 2, placeholder: 'https://yourportfolio.com' }].map(item => (<div key={item.field}><label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5"><item.Icon className="w-3.5 h-3.5" style={{ color: '#1B2D7F' }} /> {item.label}<span className="ml-auto text-white font-bold px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: '#98DE38' }}>+{item.points}</span></label><input type="url" placeholder={item.placeholder} value={formData[item.field] || ''} onChange={(e) => updateField(item.field, e.target.value)} className="inp" aria-label={`${item.label} input`} /></div>))}</div>
+        <div className="grid md:grid-cols-2 gap-4">{[{ field: 'linkedin_url', Icon: Linkedin, label: 'LinkedIn URL', points: 3, placeholder: 'https://linkedin.com/in/you' }, { field: 'github_url', Icon: Github, label: 'GitHub URL', points: 2, placeholder: 'https://github.com/you' }, { field: 'twitter_url', Icon: Twitter, label: 'Twitter URL', points: 1, placeholder: 'https://twitter.com/you' }, { field: 'portfolio_url', Icon: LinkIcon, label: 'Portfolio URL', points: 2, placeholder: 'https://yourportfolio.com' }].map(item => (<div key={item.field}><label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5"><item.Icon className="w-3.5 h-3.5" style={{ color: '#1B2D7F' }} /> {item.label}<span className="ml-auto text-white font-bold px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: '#98DE38' }}>+{item.points}</span></label><input type="url" placeholder={item.placeholder} value={formData[item.field] || ''} onChange={(e) => updateField(item.field, e.target.value)} className="inp" aria-label={`${item.label} input`} /><p className={`text-xs mt-1 font-semibold ${getLinkStatus(formData[item.field]) === 'Format verified' ? 'text-green-700' : formData[item.field] ? 'text-red-600' : 'text-gray-400'}`}>{getLinkStatus(formData[item.field])}</p></div>))}</div>
         <div className="mt-4">
           <FormInput label="Resume URL" value={formData.resume_url || ''} onChange={(v) => updateField('resume_url', v)} placeholder="https://drive.google.com/..." icon={<LinkIcon className="w-4 h-4" />} />
         </div>

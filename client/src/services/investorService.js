@@ -4,6 +4,7 @@
 
 import { supabase } from '../lib/supabaseClient';
 import { backendApi } from '../lib/backendApi';
+import { attachMatchIntelligence } from './intelligentMatching';
 
 // ── Re-export shared infrastructure ──────────────────────────────────────
 export {
@@ -63,7 +64,7 @@ export function calcInvestorCompletion(p, ip) {
   if ((p.bio        || '').trim().length > 30) s += 6;
   if  (p.avatar_url)                           s += 5;
   if  (p.location)                             s += 4;
-  if  (p.linkedin_url)                         s += 3;
+  if  (p.linkedin_url || ip.metadata?.investor_profile_url || ip.metadata?.investor_video_url) s += 3;
   // Investment criteria (45)
   if  (ip.investor_type)                       s += 8;
   if  (ip.firm_name || ip.fund_name)           s += 7;
@@ -77,8 +78,8 @@ export function calcInvestorCompletion(p, ip) {
   if  (ip.notable_investments)                 s += 6;
   // Preferences (10)
   if  (ip.typical_involvement)                 s += 4;
-  if  (ip.preferred_contact_method)            s += 3;
   if  (ip.response_time)                       s += 3;
+  if  (ip.metadata?.portfolio_evidence_url || ip.metadata?.portfolio_evidence_file_url) s += 3;
   return Math.min(s, 100);
 }
 
@@ -150,6 +151,10 @@ export async function saveInvestorDetails(userId, data) {
     const n = Number(v);
     return v === '' || v === null || v === undefined || !Number.isFinite(n) ? null : n;
   };
+  const safeJson = (v) => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+    return v;
+  };
   const preferredStages = safeArr(data.preferred_stages?.length ? data.preferred_stages : data.investment_stage);
   const preferredIndustries = safeArr(data.preferred_industries?.length ? data.preferred_industries : data.industries_of_interest);
   const minCheck = safeNum(data.check_range_min ?? data.ticket_size_min);
@@ -173,7 +178,7 @@ export async function saveInvestorDetails(userId, data) {
     investment_thesis:     data.investment_thesis || data.what_i_look_for || null,
     typical_involvement:   data.typical_involvement   || null,
     accepting_pitches:     data.accepting_pitches     !== false,
-    preferred_contact_method: data.preferred_contact_method || null,
+    preferred_contact_method: null,
     fund_name:             data.fund_name || data.firm_name || null,
     preferred_stages:      preferredStages,
     preferred_industries:  preferredIndustries,
@@ -186,13 +191,14 @@ export async function saveInvestorDetails(userId, data) {
     is_verified:           Boolean(data.is_verified),
     response_time:         data.response_time || null,
     website_url:           data.website_url || null,
-    booking_url:           data.booking_url || null,
+    booking_url:           null,
     investment_frequency:  data.investment_frequency || null,
     lead_or_follow:        data.lead_or_follow || null,
     minimum_traction_required: data.minimum_traction_required || null,
     preferred_business_models: safeArr(data.preferred_business_models),
     portfolio_url:         data.portfolio_url || null,
     due_diligence_requirements: data.due_diligence_requirements || null,
+    metadata:              safeJson(data.metadata),
     profile_completion:    safeInt(data.profile_completion, 0),
     onboarding_completed:  Boolean(data.onboarding_completed),
     is_public:             data.is_public !== false,
@@ -422,7 +428,7 @@ export function rankStartupsForInvestor(startups, investorProfile) {
   const industries = (ip.preferred_industries || ip.industries_of_interest || []).map(s => s.toLowerCase());
   const stages     = (ip.preferred_stages || ip.investment_stage || []).map(s => s.toLowerCase());
 
-  return startups.map(f => {
+  const scored = startups.map(f => {
     let score   = 0;
     const reasons = [];
     const fInd  = (f.industry    || '').toLowerCase();
@@ -450,5 +456,7 @@ export function rankStartupsForInvestor(startups, investorProfile) {
       _score:       Math.min(score, 100),
       _matchReason: reasons[0] || 'Matches your portfolio focus',
     };
-  }).sort((a, b) => b._score - a._score);
+  });
+
+  return attachMatchIntelligence(scored, ip, 'investor-to-startup');
 }

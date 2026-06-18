@@ -2,6 +2,7 @@
 // ─── All Supabase calls for the early-stage founder role ────────────────────
 
 import { supabase } from '../lib/supabaseClient';
+import { attachMatchIntelligence } from './intelligentMatching';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -45,6 +46,42 @@ const safeArray = (value) => {
 const safeJson = (value, fallback = {}) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fallback;
   return value;
+};
+
+const REQUEST_CACHE_TTL = 30 * 1000;
+const PROFILE_CACHE_TTL = 60 * 1000;
+const requestCache = new Map();
+
+const cacheKey = (name, payload = {}) => `${name}:${JSON.stringify(payload)}`;
+
+const cachedRequest = async (key, loader, ttl = REQUEST_CACHE_TTL) => {
+  const now = Date.now();
+  const cached = requestCache.get(key);
+
+  if (cached && cached.expiresAt > now) {
+    return cached.promise || cached.data;
+  }
+
+  const promise = loader()
+    .then((data) => {
+      requestCache.set(key, {
+        data,
+        expiresAt: Date.now() + ttl,
+      });
+
+      return data;
+    })
+    .catch((err) => {
+      requestCache.delete(key);
+      throw err;
+    });
+
+  requestCache.set(key, {
+    promise,
+    expiresAt: now + ttl,
+  });
+
+  return promise;
 };
 
 const parseNumber = (value) => {
@@ -171,27 +208,29 @@ const scoreFounderInvestor = (founderProfile = {}, investor = {}) => {
 export async function fetchFounderProfile(userId) {
   if (!userId) throw new Error('userId is required');
 
-  const [profRes, fpRes] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle(),
+  return cachedRequest(cacheKey('founder-profile', { userId }), async () => {
+    const [profRes, fpRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle(),
 
-    supabase
-      .from('founder_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle(),
-  ]);
+      supabase
+        .from('founder_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle(),
+    ]);
 
-  if (profRes.error) throw profRes.error;
-  if (fpRes.error) throw fpRes.error;
+    if (profRes.error) throw profRes.error;
+    if (fpRes.error) throw fpRes.error;
 
-  return {
-    profile: profRes.data || {},
-    founderProfile: fpRes.data || {},
-  };
+    return {
+      profile: profRes.data || {},
+      founderProfile: fpRes.data || {},
+    };
+  }, PROFILE_CACHE_TTL);
 }
 
 export async function saveFounderBaseProfile(userId, data = {}) {
@@ -295,13 +334,12 @@ export async function saveFounderStartupProfile(userId, data = {}) {
     hiring_roles: safeArray(data.hiring_roles),
     tech_stack: safeArray(data.tech_stack),
     key_risks: safeArray(data.key_risks),
+    metadata: safeJson(data.metadata, {}),
 
     // Team/cofounder info
     equity_available: cleanText(data.equity_available),
     cofounder_requirements: cleanText(data.cofounder_requirements),
 
-    profile_completion: parseNumber(data.profile_completion) || 0,
-    onboarding_completed: Boolean(data.onboarding_completed),
     is_public: data.is_public !== false,
     is_active: data.is_active !== false,
     updated_at: new Date().toISOString(),
@@ -311,7 +349,29 @@ export async function saveFounderStartupProfile(userId, data = {}) {
     .from('founder_profiles')
     .upsert(payload, { onConflict: 'user_id' });
 
-  if (error) throw error;
+  if (error) {
+    const message = error.message || '';
+
+    if (
+      message.includes("Could not find the 'metadata' column") ||
+      message.includes("Could not find the 'is_public' column") ||
+      message.includes("Could not find the 'is_active' column")
+    ) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.metadata;
+      delete fallbackPayload.is_public;
+      delete fallbackPayload.is_active;
+
+      const retry = await supabase
+        .from('founder_profiles')
+        .upsert(fallbackPayload, { onConflict: 'user_id' });
+
+      if (retry.error) throw retry.error;
+      return fallbackPayload;
+    }
+
+    throw error;
+  }
 
   return payload;
 }
@@ -564,6 +624,19 @@ export async function fetchTeamCandidates({
   founderProfile = {},
   limit = 24,
 } = {}) {
+  const key = cacheKey('team-candidates', {
+    skills: safeArray(skills),
+    commitment,
+    industry,
+    role,
+    excludeUserId,
+    limit,
+    founderIndustry: founderProfile.industry || '',
+    founderStage: founderProfile.startup_stage || '',
+    founderUpdatedAt: founderProfile.updated_at || '',
+  });
+
+  return cachedRequest(key, async () => {
   let studentsQuery = supabase
     .from('student_profiles')
     .select(`
@@ -574,6 +647,8 @@ export async function fetchTeamCandidates({
       help_needed,
       interests,
       commitment_level,
+      preferred_role,
+      availability_status,
       hours_per_week,
       has_startup_idea,
       startup_idea_description,
@@ -645,6 +720,8 @@ export async function fetchTeamCandidates({
       bio: student.profiles?.bio || student.career_goals || student.startup_idea_description,
       location: student.profiles?.location,
       commitment: student.commitment_level,
+      preferred_role: student.preferred_role,
+      availability: student.availability_status,
       has_idea: student.has_startup_idea,
       skills: safeArray(student.skills_with_levels)
         .map((item) => item?.skill || item)
@@ -658,6 +735,7 @@ export async function fetchTeamCandidates({
       bio: founder.profiles?.bio || founder.idea_title || founder.company_name,
       location: founder.profiles?.location,
       commitment: founder.commitment_level,
+      availability: founder.commitment_level,
       interests: [founder.industry].filter(Boolean),
       has_idea: true,
       skills: safeArray(founder.founder_skills),
@@ -665,7 +743,29 @@ export async function fetchTeamCandidates({
   ];
 
   if (role) {
-    result = result.filter((candidate) => safeArray(candidate.looking_for).includes(role));
+    const normalizedRole = String(role).toLowerCase();
+    result = result.filter((candidate) => {
+      if (role === 'Co-Founder') return safeArray(candidate.looking_for).includes('Co-Founder');
+
+      const roleSignals = [
+        candidate.preferred_role,
+        ...safeArray(candidate.skills),
+        candidate.bio,
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      const aliases = {
+        'technical co-founder': ['technical', 'developer', 'engineering'],
+        'business co-founder': ['business', 'strategy', 'sales', 'operations'],
+        'frontend developer': ['frontend', 'react', 'ui'],
+        'backend developer': ['backend', 'api', 'database'],
+        'mobile developer': ['mobile', 'android', 'ios', 'flutter', 'react native'],
+        'ai / ml engineer': ['ai', 'machine learning', 'ml', 'data science'],
+        'ui / ux designer': ['ui', 'ux', 'design'],
+        'growth marketer': ['growth', 'marketing', 'seo'],
+      };
+      const terms = [normalizedRole, ...(aliases[normalizedRole] || [])];
+      return terms.some((term) => roleSignals.includes(term));
+    });
   }
 
   if (skills.length > 0) {
@@ -695,13 +795,17 @@ export async function fetchTeamCandidates({
     });
   }
 
-  return result
+  return attachMatchIntelligence(
+    result
     .map((candidate) => ({
       ...candidate,
       ...scoreFounderTeamCandidate(founderProfile, candidate),
-    }))
-    .sort((a, b) => b.matchScore - a.matchScore)
+    })),
+    founderProfile,
+    'team'
+  )
     .slice(0, limit);
+  }, 45 * 1000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -713,6 +817,13 @@ export async function fetchMentorsForFounder({
   expertise = [],
   limit = 20,
 } = {}) {
+  const key = cacheKey('founder-mentors', {
+    industry,
+    expertise: safeArray(expertise),
+    limit,
+  });
+
+  return cachedRequest(key, async () => {
   let query = supabase
     .from('mentor_profiles')
     .select(`
@@ -764,6 +875,7 @@ export async function fetchMentorsForFounder({
   }
 
   return result;
+  }, 45 * 1000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -776,6 +888,16 @@ export async function fetchInvestors({
   founderProfile = {},
   limit = 20,
 } = {}) {
+  const key = cacheKey('founder-investors', {
+    stage,
+    industry,
+    limit,
+    founderIndustry: founderProfile.industry || '',
+    founderStage: founderProfile.startup_stage || founderProfile.funding_stage || '',
+    founderUpdatedAt: founderProfile.updated_at || '',
+  });
+
+  return cachedRequest(key, async () => {
   let query = supabase
     .from('investor_profiles')
     .select(`
@@ -819,12 +941,15 @@ export async function fetchInvestors({
   const { data, error } = await query;
 
   if (!error) {
-    return (data || [])
+    return attachMatchIntelligence(
+      (data || [])
       .map((investor) => ({
         ...investor,
         ...scoreFounderInvestor(founderProfile, investor),
-      }))
-      .sort((a, b) => b.matchScore - a.matchScore);
+      })),
+      founderProfile,
+      'founder-to-investor'
+    );
   }
 
   console.warn('Investor profile query unavailable, using profile fallback:', error.message);
@@ -848,6 +973,7 @@ export async function fetchInvestors({
     profiles: profile,
     ...scoreFounderInvestor(founderProfile, {}),
   }));
+  }, 45 * 1000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -908,11 +1034,16 @@ export async function getOrCreateConversation(userId, otherUserId) {
 }
 
 export async function getMyConnections() {
-  const res = await fetch(`${BASE}/api/connections/mine`, {
-    headers: await getAuthHeaders(),
-  });
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user?.id || 'current';
 
-  return unwrapApiData(res, 'Failed to fetch connections');
+  return cachedRequest(cacheKey('founder-my-connections', { userId }), async () => {
+    const res = await fetch(`${BASE}/api/connections/mine`, {
+      headers: await getAuthHeaders(),
+    });
+
+    return unwrapApiData(res, 'Failed to fetch connections');
+  }, 45 * 1000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

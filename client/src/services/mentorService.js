@@ -4,6 +4,7 @@
 
 import { supabase } from '../lib/supabaseClient';
 import { backendApi } from '../lib/backendApi';
+import { attachMatchIntelligence } from './intelligentMatching';
 
 // ── Re-export shared functions ────────────────────────────────────────────
 export {
@@ -63,7 +64,7 @@ export function calcMentorCompletion(p, mp) {
   if ((p.bio        || '').trim().length > 30)  s += 7;
   if  (p.avatar_url)                            s += 5;
   if  (p.location)                              s += 4;
-  if  (p.linkedin_url || p.github_url)          s += 6;
+  if  (p.linkedin_url || mp.metadata?.mentor_portfolio_url || mp.metadata?.mentor_video_url) s += 6;
   // Expertise (40)
   if ((mp.expertise_areas || []).length >= 2)   s += 12;
   if  (mp.years_experience > 0)                 s += 6;
@@ -78,9 +79,10 @@ export function calcMentorCompletion(p, mp) {
   // Availability (10)
   if  (mp.mentorship_capacity > 0)              s += 5;
   if ((mp.available_for || []).length > 0)      s += 5;
-  if  (mp.booking_url)                          s += 3;
   if  (mp.timezone)                             s += 2;
   if ((mp.industries_supported || []).length > 0) s += 3;
+  if (mp.metadata?.work_evidence_url || mp.metadata?.work_evidence_file_url) s += 3;
+  if (mp.metadata?.mentor_portfolio_url || mp.metadata?.mentor_video_url) s += 3;
   return Math.min(s, 100);
 }
 
@@ -146,6 +148,10 @@ export async function saveMentorDetails(userId, data) {
     if (typeof v === 'string' && v.trim()) return [v.trim()];  // single string → wrap in array
     return [];
   };
+  const safeJson = (v) => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+    return v;
+  };
 
   const { error } = await supabase.from('mentor_profiles').upsert({
     user_id:             userId,
@@ -163,7 +169,7 @@ export async function saveMentorDetails(userId, data) {
     current_mentees:     safeInt(data.current_mentees, 0),
     hourly_rate:         safeNum(data.hourly_rate),
     is_pro_bono:         Boolean(data.is_pro_bono),
-    booking_url:         data.booking_url || null,
+    booking_url:         null,
     preferred_mentees:   safeArr(data.preferred_mentees),
     industries_supported: safeArr(data.industries_supported),
     languages:           safeArr(data.languages),
@@ -171,6 +177,7 @@ export async function saveMentorDetails(userId, data) {
     timezone:            data.timezone || null,
     mentorship_mode:     data.mentorship_mode || null,
     success_stories:     data.success_stories || null,
+    metadata:            safeJson(data.metadata),
     is_public:           data.is_public !== false,
     is_active:           data.is_active !== false,
     profile_completion:  safeInt(data.profile_completion, 0),
@@ -445,7 +452,7 @@ export function rankFoundersForMentor(founders, mentorProfile) {
   const expertise  = (mentorProfile.expertise_areas || []).map(s => s.toLowerCase());
   const canHelp    = (mentorProfile.can_help_with   || []).map(s => s.toLowerCase());
 
-  return founders.map(f => {
+  const scored = founders.map(f => {
     let score  = 0;
     const need = (f.help_needed || []).map(s => s.toLowerCase());
     const ind  = (f.industry    || '').toLowerCase();
@@ -471,7 +478,9 @@ export function rankFoundersForMentor(founders, mentorProfile) {
       _score:       Math.min(score, 100),
       _matchReason: reasons[0] || 'Matches your profile',
     };
-  }).sort((a, b) => b._score - a._score);
+  });
+
+  return attachMatchIntelligence(scored, mentorProfile, 'mentor-to-founder');
 }
 
 /**
@@ -480,7 +489,7 @@ export function rankFoundersForMentor(founders, mentorProfile) {
 export function rankStudentsForMentor(students, mentorProfile) {
   const canHelp = (mentorProfile.can_help_with || []).map(s => s.toLowerCase());
 
-  return students.map(s => {
+  const scored = students.map(s => {
     let score = 0;
     const need = (s.help_needed || []).map(h => h.toLowerCase());
     const hits = need.filter(h => canHelp.some(c => c.includes(h) || h.includes(c)));
@@ -495,5 +504,7 @@ export function rankStudentsForMentor(students, mentorProfile) {
         ? `Needs help with ${hits[0]}`
         : 'Has a startup idea',
     };
-  }).sort((a, b) => b._score - a._score);
+  });
+
+  return attachMatchIntelligence(scored, mentorProfile, 'mentor-to-founder');
 }

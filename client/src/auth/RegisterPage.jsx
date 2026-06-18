@@ -1,18 +1,19 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle, Briefcase } from 'lucide-react';
 // import ScalScopeLogo from '../assets/Anus Tech logo.png';
 
 export default function RegisterPage() {
+  const location = useLocation();
   const [form, setForm] = useState({
-    email: '',
+    email: location.state?.email || sessionStorage.getItem('oauth_register_email') || '',
     password: '',
     confirmPassword: '',
     full_name: '',
     user_type: ''
   });
-  const [msg, setMsg] = useState('');
+  const [msg, setMsg] = useState(location.state?.error || '');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e) {

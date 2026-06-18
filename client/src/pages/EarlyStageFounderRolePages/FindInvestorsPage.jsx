@@ -3,7 +3,7 @@
 // Shows: firm_name, investment_stage, ticket_size, industries
 // CTA: Send Pitch → connection_request (type: 'investor_contact')
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import {
@@ -13,6 +13,13 @@ import {
   getOrCreateConversation,
   formatCheckSize,
 } from '../../services/founderService';
+import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import {
+  DISCOVERY_INDUSTRIES,
+  DISCOVERY_LOCATIONS,
+  STARTUP_STAGE_OPTIONS,
+  mergeFilterOptions,
+} from '../../constants/discoveryFilters';
 import {
   Search, DollarSign, MessageSquare, Send, CheckCircle,
   MapPin, Loader, AlertTriangle, RefreshCw,
@@ -49,9 +56,6 @@ const CSS = `
   .tooltip-box{position:absolute;bottom:calc(100% + 8px);left:50%;z-index:20;width:260px;padding:10px 12px;border-radius:10px;background:#1B2D7F;color:#fff;font-size:12px;opacity:0;visibility:hidden;transform:translateX(-50%) translateY(4px);transition:all .15s ease;box-shadow:0 8px 24px rgba(0,0,0,.2)}
 `;
 
-const STAGE_OPTS = ['Pre-seed', 'Seed', 'Series A', 'Series B', 'Series B+'];
-const INDUSTRY_OPTS = ['EdTech', 'HealthTech', 'FinTech', 'SaaS', 'AgriTech', 'CleanTech', 'LegalTech', 'HRTech', 'E-commerce', 'AI / ML', 'Social Impact'];
-const LOCATION_OPTS = ['Pakistan', 'Dubai', 'Singapore', 'USA', 'UK', 'Remote'];
 
 function initials(name) {
   if (!name) return '?';
@@ -65,7 +69,7 @@ function gradFor(id) {
 }
 
 // ── Investor Card ─────────────────────────────────────────────────────────
-function InvestorCard({ investor, onPitch, onMessage, pitchState }) {
+function InvestorCard({ investor, founderProfile, onPitch, onMessage, pitchState }) {
   const p = investor.profiles || {};
   const stages = investor.preferred_stages || investor.investment_stage || [];
   const inds = investor.preferred_industries || investor.industries_of_interest || [];
@@ -124,6 +128,13 @@ function InvestorCard({ investor, onPitch, onMessage, pitchState }) {
             </span>
           ))}
         </div>
+
+        <IntelligentMatchPanel
+          currentProfile={founderProfile}
+          candidate={investor}
+          context="founder-to-investor"
+          compact
+        />
 
         {/* Stages */}
         {stages.length > 0 && (
@@ -232,16 +243,25 @@ export default function FindInvestorsPage() {
   const [pitchText, setPitchText] = useState('');
   const [sending, setSending] = useState(false);
   const [founderProfile, setFounderProfile] = useState({});
+  const founderProfileRef = useRef(null);
+  const activeLoadRef = useRef('');
 
   const load = useCallback(async (stage = stageF, industry = industryF) => {
     if (!user?.id) return;
+    const requestKey = `${user.id}:${stage || 'all'}:${industry || 'all'}`;
+    if (activeLoadRef.current === requestKey) return;
+
+    activeLoadRef.current = requestKey;
     setLoading(true); setError('');
     try {
-      const founderData = founderProfile.user_id
-        ? founderProfile
+      const founderData = founderProfileRef.current
+        ? founderProfileRef.current
         : (await fetchFounderProfile(user?.id)).founderProfile || {};
 
-      if (!founderProfile.user_id) setFounderProfile(founderData);
+      if (!founderProfileRef.current) {
+        founderProfileRef.current = founderData;
+        setFounderProfile(founderData);
+      }
 
       const data = await fetchInvestors({
         stage,
@@ -251,8 +271,11 @@ export default function FindInvestorsPage() {
       });
       setInvestors(data);
     } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  }, [stageF, industryF, user?.id, founderProfile]);
+    finally {
+      setLoading(false);
+      activeLoadRef.current = '';
+    }
+  }, [stageF, industryF, user?.id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -287,16 +310,21 @@ export default function FindInvestorsPage() {
   };
 
   const stageOptions = useMemo(() => {
-    const result = new Set(STAGE_OPTS);
+    const result = new Set(STARTUP_STAGE_OPTIONS);
     investors.forEach((investor) => (investor.preferred_stages || investor.investment_stage || []).forEach((stage) => result.add(stage)));
     return ['', ...result];
   }, [investors]);
 
   const industryOptions = useMemo(() => {
-    const result = new Set(INDUSTRY_OPTS);
+    const result = new Set(DISCOVERY_INDUSTRIES);
     investors.forEach((investor) => (investor.preferred_industries || investor.industries_of_interest || []).forEach((industry) => result.add(industry)));
     return ['', ...result];
   }, [investors]);
+
+  const locationOptions = useMemo(() => mergeFilterOptions(
+    DISCOVERY_LOCATIONS,
+    investors.flatMap((investor) => [investor.profiles?.location, investor.geography_focus, investor.geographic_focus])
+  ), [investors]);
 
   const shown = investors.filter(inv => {
     const p = inv.profiles || {};
@@ -371,7 +399,7 @@ export default function FindInvestorsPage() {
               <div><label className="text-xs font-bold text-slate-500 mb-1 block">Match band</label><select value={matchBand} onChange={e => setMatchBand(e.target.value)} className="inp"><option value="all">All matches</option><option value="60plus">60%+</option><option value="below60">Below 60%</option></select></div>
               <div><label className="text-xs font-bold text-slate-500 mb-1 block">Stage</label><select value={stageF} onChange={e => { setStageF(e.target.value); load(e.target.value, industryF); }} className="inp">{stageOptions.map(stage => <option key={stage || 'all'} value={stage}>{stage || 'All stages'}</option>)}</select></div>
               <div><label className="text-xs font-bold text-slate-500 mb-1 block">Industry</label><select value={industryF} onChange={e => { setIndustryF(e.target.value); load(stageF, e.target.value); }} className="inp">{industryOptions.map(industry => <option key={industry || 'all'} value={industry}>{industry || 'All'}</option>)}</select></div>
-              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Location</label><select value={locationF} onChange={e => setLocationF(e.target.value)} className="inp"><option value="">All</option>{LOCATION_OPTS.map(location => <option key={location} value={location}>{location}</option>)}</select></div>
+              <div><label className="text-xs font-bold text-slate-500 mb-1 block">Location</label><select value={locationF} onChange={e => setLocationF(e.target.value)} className="inp"><option value="">All locations</option>{locationOptions.map(location => <option key={location} value={location}>{location}</option>)}</select></div>
               <div className="flex items-end gap-2"><button onClick={resetFilters} className="w-full py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 flex items-center justify-center gap-2"><SlidersHorizontal className="w-4" />Reset</button><button onClick={() => load(stageF, industryF)} className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:text-emerald-600"><RefreshCw className="w-4" /></button></div>
             </div>
           </section>
@@ -445,6 +473,7 @@ export default function FindInvestorsPage() {
                       <div key={inv.id || i} className="slide-in" style={{ animationDelay: `${Math.min(i, 8) * 0.05}s` }}>
                         <InvestorCard
                           investor={inv}
+                          founderProfile={founderProfile}
                           onPitch={() => handlePitch(inv)}
                           onMessage={() => handleMessage(inv)}
                           pitchState={pitchStates[uid]} />

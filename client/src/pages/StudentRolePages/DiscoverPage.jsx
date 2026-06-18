@@ -472,6 +472,37 @@ function computeDiscoverMatch(currentProfile, candidate, type) {
   };
 }
 
+function computeInvestorDiscoverMatch(currentProfile, investor) {
+  let score = 20;
+  const reasons = [];
+  const industries = investor.preferred_industries || investor.industries_of_interest || [];
+  const stages = investor.preferred_stages || investor.investment_stage || [];
+  const currentIndustry = normalizeLower(currentProfile.idea_domain || currentProfile.industry);
+  const currentStage = normalizeLower(currentProfile.idea_stage || currentProfile.startup_stage);
+
+  if (currentIndustry && industries.some((item) => normalizeLower(item).includes(currentIndustry) || currentIndustry.includes(normalizeLower(item)))) {
+    score += 35;
+    reasons.push('Invests in your industry');
+  }
+  if (currentStage && stages.some((item) => normalizeLower(item) === currentStage)) {
+    score += 25;
+    reasons.push('Targets your startup stage');
+  }
+  if (investor.accepting_pitches) {
+    score += 10;
+    reasons.push('Currently accepting pitches');
+  }
+  if (investor.is_verified) {
+    score += 10;
+    reasons.push('Verified investor profile');
+  }
+
+  return {
+    score: Math.min(100, score),
+    reasons: reasons.length ? reasons.slice(0, 3) : ['Investment profile available for exploration'],
+  };
+}
+
 const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'md' }) => {
   const [url, setUrl] = useState(null);
   const [loading, setLoading] = useState(Boolean(path));
@@ -763,7 +794,7 @@ export default function DiscoverPage() {
     });
 
     try {
-      const [profileRes, studentRes, founderRes, studentsRes, foundersRes, connectionsRes, prefsRes] = await Promise.allSettled([
+      const [profileRes, studentRes, founderRes, studentsRes, foundersRes, mentorsRes, investorsRes, connectionsRes, prefsRes] = await Promise.allSettled([
         supabase
           .from('profiles')
           .select('id, full_name, avatar_url, location, bio, user_type')
@@ -878,6 +909,32 @@ export default function DiscoverPage() {
           .neq('user_id', user.id)
           .limit(100),
 
+        supabase
+          .from('mentor_profiles')
+          .select(`
+            *,
+            profiles!mentor_profiles_user_id_fkey(
+              id, full_name, avatar_url, location, bio, user_type
+            )
+          `)
+          .eq('is_public', true)
+          .eq('is_active', true)
+          .neq('user_id', user.id)
+          .limit(100),
+
+        supabase
+          .from('investor_profiles')
+          .select(`
+            *,
+            profiles!investor_profiles_user_id_fkey(
+              id, full_name, avatar_url, location, bio, user_type
+            )
+          `)
+          .eq('is_public', true)
+          .eq('is_active', true)
+          .neq('user_id', user.id)
+          .limit(100),
+
         backendApi.getMyConnections(),
 
         supabase
@@ -893,6 +950,7 @@ export default function DiscoverPage() {
         ...(studentRes.status === 'fulfilled' ? studentRes.value.data || {} : {}),
         ...(currentFounder.user_id ? {
           idea_domain: currentFounder.industry,
+          idea_stage: currentFounder.startup_stage,
           commitment_level: currentFounder.commitment_level,
           help_needed: currentFounder.help_needed || [],
           looking_for: currentFounder.looking_for || [],
@@ -904,6 +962,8 @@ export default function DiscoverPage() {
 
       const rawStudents = studentsRes.status === 'fulfilled' ? studentsRes.value.data || [] : [];
       const rawFounders = foundersRes.status === 'fulfilled' ? foundersRes.value.data || [] : [];
+      const rawMentors = mentorsRes.status === 'fulfilled' ? mentorsRes.value.data || [] : [];
+      const rawInvestors = investorsRes.status === 'fulfilled' ? investorsRes.value.data || [] : [];
 
       const connections =
         connectionsRes.status === 'fulfilled'
@@ -963,27 +1023,6 @@ export default function DiscoverPage() {
           });
         }
 
-        if (hasLookingFor(student, 'Mentor')) {
-          const match = computeDiscoverMatch(profile, student, 'mentor');
-
-          people.push({
-            _type: 'mentor',
-            id: `mentor-${student.user_id}`,
-            user_id: student.user_id,
-            name: p.full_name,
-            avatar: p.avatar_url,
-            location: p.location,
-            bio: p.bio || student.short_bio_for_mentors || student.startup_idea_description,
-            role: 'Mentor',
-            org: student.university,
-            university: student.university,
-            skills: skills.slice(0, 5),
-            commitment: student.commitment_level,
-            has_idea: student.has_startup_idea,
-            matchScore: match.score,
-            reasons: match.reasons,
-          });
-        }
       });
 
       rawFounders.forEach((founder) => {
@@ -1034,6 +1073,54 @@ export default function DiscoverPage() {
             reasons: match.reasons,
           });
         }
+      });
+
+      rawMentors.forEach((mentor) => {
+        const p = normalizeProfile(mentor);
+        const expertise = mentor.expertise_areas || [];
+        const match = computeDiscoverMatch(profile, {
+          ...mentor,
+          skills_with_levels: expertise.map((skill) => ({ skill })),
+          interests: mentor.industries_supported || [],
+          commitment_level: mentor.availability_hours || mentor.mentorship_mode,
+        }, 'mentor');
+
+        people.push({
+          _type: 'mentor',
+          id: `professional-mentor-${mentor.user_id}`,
+          user_id: mentor.user_id,
+          name: p.full_name,
+          avatar: p.avatar_url,
+          location: p.location,
+          bio: p.bio || mentor.mentorship_style || mentor.success_stories,
+          role: 'Mentor',
+          org: [mentor.current_role, mentor.current_company].filter(Boolean).join(' at '),
+          skills: expertise.slice(0, 5),
+          commitment: mentor.availability_hours || mentor.mentorship_mode,
+          matchScore: match.score,
+          reasons: match.reasons,
+        });
+      });
+
+      rawInvestors.forEach((investor) => {
+        const p = normalizeProfile(investor);
+        const industries = investor.preferred_industries || investor.industries_of_interest || [];
+        const match = computeInvestorDiscoverMatch(profile, investor);
+
+        people.push({
+          _type: 'investor',
+          id: `investor-${investor.user_id}`,
+          user_id: investor.user_id,
+          name: p.full_name,
+          avatar: p.avatar_url,
+          location: p.location || investor.geography_focus || investor.geographic_focus,
+          bio: p.bio || investor.investment_thesis || investor.what_i_look_for,
+          role: 'Investor',
+          org: investor.fund_name || investor.firm_name || investor.investor_type,
+          skills: industries.slice(0, 5),
+          matchScore: match.score,
+          reasons: match.reasons,
+        });
       });
 
       let opportunities = [];
@@ -1108,7 +1195,8 @@ export default function DiscoverPage() {
         role === 'All' ||
         (role === 'Mentor' && person._type === 'mentor') ||
         (role === 'Co-Founder' && person._type === 'cofounder') ||
-        (role === 'Founder' && person._type === 'founder');
+        (role === 'Founder' && person._type === 'founder') ||
+        (role === 'Investor' && person._type === 'investor');
 
       return matchQuery && matchRole;
     });
@@ -1175,7 +1263,11 @@ export default function DiscoverPage() {
     }));
 
     try {
-      const type = person._type === 'mentor' ? 'mentor_request' : 'cofounder_request';
+      const type = person._type === 'mentor'
+        ? 'mentor_request'
+        : person._type === 'investor'
+          ? 'investor_contact'
+          : 'cofounder_request';
 
       const response = await backendApi.sendConnect(
         targetUserId,
@@ -1387,7 +1479,7 @@ export default function DiscoverPage() {
                     </div>
 
                     <div className="flex gap-2">
-                      {['All', 'Mentor', 'Co-Founder', 'Founder'].map((item) => (
+                      {['All', 'Mentor', 'Co-Founder', 'Founder', 'Investor'].map((item) => (
                         <button
                           key={item}
                           type="button"
