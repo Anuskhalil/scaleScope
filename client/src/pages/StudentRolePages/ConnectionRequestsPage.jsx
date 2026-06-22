@@ -206,7 +206,14 @@ export default function ConnectionRequestsPage() {
                                                         <p className="text-xs text-gray-500 mt-1 flex items-center gap-2"><MapPin className="w-3" />{sender.location || 'Remote'} · {timeAgo(req.created_at)}</p>
                                                         {sender.bio && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{sender.bio}</p>}
                                                         {req.message && <div className="mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl"><p className="text-xs font-bold text-indigo-600 mb-1">Message</p><p className="text-sm text-gray-700">"{req.message}"</p></div>}
-                                                        <div className="flex gap-2 mt-4">
+                                                        <div className="flex flex-wrap gap-2 mt-4">
+                                                            <Link
+                                                                to={`/user-profile/${sender.id || req.sender_id}`}
+                                                                className="flex-1 py-2 border-2 border-[#1B2D7F]/20 bg-white text-[#1B2D7F] rounded-xl text-xs font-bold text-center hover:bg-[#1B2D7F]/5 transition"
+                                                            >
+                                                                View Profile
+                                                            </Link>
+
                                                             <button
                                                                 onClick={() => handleAction(req.id, 'accepted', 'respond')}
                                                                 disabled={action === req.id}

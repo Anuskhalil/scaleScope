@@ -514,6 +514,7 @@ export async function fetchFounderDashboardData(userId) {
       .from('connection_requests')
       .select(`
         id,
+        sender_id,
         type,
         message,
         status,

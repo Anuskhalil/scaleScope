@@ -77,8 +77,19 @@ const timeAgo = (iso) => {
 const getScore = (item) => Number(item?._score || item?.matchScore || item?.score || 0);
 
 function Avatar({ name, src, size = 'md' }) {
+  const [failed, setFailed] = useState(false);
   const sizeClass = { sm: 'w-8 h-8', md: 'w-10 h-10', lg: 'w-12 h-12', xl: 'w-14 h-14' }[size];
-  if (src) return <img src={src} alt="" className={`${sizeClass} object-cover rounded-xl`} loading="lazy" />;
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className={`${sizeClass} object-cover rounded-xl`}
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
   return <div className={`${sizeClass} g-sec flex items-center justify-center text-white font-bold rounded-xl`} aria-hidden="true">{initials(name)}</div>;
 }
 
@@ -249,7 +260,14 @@ export default function InvestorDashboard() {
                           <p className="text-xs text-gray-500">{request.type?.replace('_', ' ')} · {timeAgo(request.created_at)}</p>
                           {request.message && <p className="text-xs text-gray-500 line-clamp-1 mt-1">{request.message}</p>}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            to={`/user-profile/${request.sender?.id || request.sender_id}`}
+                            className="px-3 py-1.5 border border-[#1B2D7F]/20 bg-white text-[#1B2D7F] text-xs font-bold rounded-lg hover:bg-[#1B2D7F]/5"
+                          >
+                            View Profile
+                          </Link>
+
                           <button type="button" onClick={() => handleRespond(request.id, 'accepted')} disabled={!!responding[request.id]} className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 disabled:opacity-60">{responding[request.id] === 'accepted' ? 'Saving...' : 'Interested'}</button>
                           <button type="button" onClick={() => handleRespond(request.id, 'declined')} disabled={!!responding[request.id]} className="px-3 py-1.5 border border-gray-200 text-xs font-bold rounded-lg hover:border-red-200 hover:text-red-600 disabled:opacity-60">Decline</button>
                         </div>

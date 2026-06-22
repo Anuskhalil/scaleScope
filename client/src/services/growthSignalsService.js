@@ -7,6 +7,9 @@ const safeArray = (value) => (Array.isArray(value) ? value.filter(Boolean) : [])
 const clean = (value) => String(value || '').trim();
 const hasText = (value, min = 1) => clean(value).length >= min;
 const hasNumber = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
+const safeObject = (value) => (
+  value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+);
 
 const pct = (earned, total) => {
   if (!total) return 0;
@@ -27,6 +30,11 @@ function scoreChecks(checks) {
 }
 
 export function getRoleProfile({ role, studentProfile, founderProfile, mentorProfile, investorProfile }) {
+  studentProfile = safeObject(studentProfile);
+  founderProfile = safeObject(founderProfile);
+  mentorProfile = safeObject(mentorProfile);
+  investorProfile = safeObject(investorProfile);
+
   if (role === 'student') return studentProfile || {};
   if (role === 'early-stage-founder') return founderProfile || {};
   if (role === 'mentor') return mentorProfile || {};
@@ -42,6 +50,12 @@ export function calculateTrustScore({
   investorProfile = {},
   role,
 } = {}) {
+  profile = safeObject(profile);
+  studentProfile = safeObject(studentProfile);
+  founderProfile = safeObject(founderProfile);
+  mentorProfile = safeObject(mentorProfile);
+  investorProfile = safeObject(investorProfile);
+
   const currentRole = role || profile.user_type || 'student';
   const checks = [
     { id: 'name', label: 'Full name', done: hasText(profile.full_name, 2), points: 8 },
@@ -112,6 +126,9 @@ export function calculateTrustScore({
 }
 
 export function calculateStartupReadiness({ studentProfile = {}, founderProfile = {}, role } = {}) {
+  studentProfile = safeObject(studentProfile);
+  founderProfile = safeObject(founderProfile);
+
   const isFounder = role === 'early-stage-founder' || hasText(founderProfile.company_name) || hasText(founderProfile.problem_statement);
   const source = isFounder ? founderProfile : studentProfile;
 
@@ -153,6 +170,12 @@ export function buildRoadmap({
   trust,
   readiness,
 } = {}) {
+  profile = safeObject(profile);
+  founderProfile = safeObject(founderProfile);
+  mentorProfile = safeObject(mentorProfile);
+  trust = safeObject(trust);
+  readiness = safeObject(readiness);
+
   const currentRole = role || profile.user_type || 'student';
   const tasks = [];
   const add = (task) => tasks.push({ status: task.done ? 'done' : 'active', priority: task.priority || 'medium', ...task });

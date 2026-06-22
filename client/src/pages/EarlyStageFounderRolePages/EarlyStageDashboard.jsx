@@ -1404,7 +1404,14 @@ export default function FounderDashboard() {
                           </p>
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            to={`/user-profile/${request.sender?.id || request.sender_id}`}
+                            className="px-3 py-1.5 border border-[#1B2D7F]/20 bg-white text-[#1B2D7F] text-xs font-bold rounded-lg hover:bg-[#1B2D7F]/5"
+                          >
+                            View Profile
+                          </Link>
+
                           <button
                             type="button"
                             onClick={() => handleAccept(request.id)}

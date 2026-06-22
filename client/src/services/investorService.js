@@ -243,7 +243,7 @@ export async function fetchInvestorDashboard(userId) {
     // Incoming pitches / connection requests
     supabase.from('connection_requests')
       .select(`
-        id, type, status, message, created_at,
+        id, sender_id, type, status, message, created_at,
         sender: profiles!connection_requests_sender_id_fkey (
           id, full_name, avatar_url, user_type, location
         )
