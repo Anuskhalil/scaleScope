@@ -5,6 +5,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { backendApi } from '../lib/backendApi';
 import { attachMatchIntelligence } from './intelligentMatching';
+import { uploadRoleAvatar } from '../utils/avatarStorage';
 
 // ── Re-export shared functions ────────────────────────────────────────────
 export {
@@ -188,24 +189,26 @@ export async function saveMentorDetails(userId, data) {
 }
 
 /**
- * Upload avatar, update profiles.avatar_url, return public URL.
+ * Upload avatar, update profiles.avatar_url with a stable storage path,
+ * and return both path + signed display URL.
  */
 export async function uploadMentorAvatar(userId, file) {
-  const path = `avatars/${userId}.${file.name.split('.').pop()}`;
-  const { error: ue } = await supabase.storage
-    .from('avatars').upload(path, file, { upsert: true });
-  if (ue) throw ue;
-  const { data: { publicUrl } } = supabase.storage
-    .from('avatars').getPublicUrl(path);
+  const { path, signedUrl } = await uploadRoleAvatar({
+    roleFolder: 'mentors',
+    userId,
+    file,
+  });
+
   const { error } = await supabase
     .from('profiles')
     .update({
-      avatar_url: publicUrl,
+      avatar_url: path,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);
   if (error) throw error;
-  return publicUrl;
+
+  return { path, signedUrl };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -293,7 +296,7 @@ export async function fetchMentorDashboard(userId) {
       .from('student_profiles')
       .select(`
         id, user_id, has_startup_idea, startup_idea_description,
-        help_needed, commitment_level, interests,
+        help_needed, commitment_level, preferred_industries,
         profiles ( id, full_name, avatar_url, location, bio )
       `)
       .eq('has_startup_idea', true)
@@ -420,7 +423,7 @@ export async function fetchStudentsWithIdeas({
     .from('student_profiles')
     .select(`
       id, user_id, has_startup_idea, startup_idea_description,
-      help_needed, commitment_level, interests, career_goals,
+      help_needed, commitment_level, preferred_industries, career_goals,
       profiles ( id, full_name, bio, avatar_url, location )
     `)
     .eq('has_startup_idea', true)

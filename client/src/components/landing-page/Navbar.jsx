@@ -7,6 +7,7 @@ const navItems = [
   { label: 'Features', href: '#features' },
   { label: 'How It Works', href: '#how-it-works' },
   { label: 'For Users', href: '#user-types' },
+  { label: 'Pricing', to: '/pricing' },
   { label: 'Stories', href: '#testimonials' },
 ];
 
@@ -55,13 +56,23 @@ export default function Navbar() {
 
           <div className="hidden md:flex items-center gap-7">
             {navItems.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="text-sm font-semibold text-slate-600 hover:text-[#1B2D7F] transition-colors"
-              >
-                {item.label}
-              </a>
+              item.to ? (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className="text-sm font-semibold text-slate-600 hover:text-[#1B2D7F] transition-colors"
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="text-sm font-semibold text-slate-600 hover:text-[#1B2D7F] transition-colors"
+                >
+                  {item.label}
+                </a>
+              )
             ))}
           </div>
 
@@ -102,14 +113,25 @@ export default function Navbar() {
         <div className="md:hidden bg-white border-t border-slate-100 shadow-xl">
           <div className="px-4 py-5 space-y-2">
             {navItems.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                onClick={closeMobileMenu}
-                className="block px-3 py-3 rounded-xl text-slate-700 font-bold hover:bg-slate-50"
-              >
-                {item.label}
-              </a>
+              item.to ? (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={closeMobileMenu}
+                  className="block px-3 py-3 rounded-xl text-slate-700 font-bold hover:bg-slate-50"
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={closeMobileMenu}
+                  className="block px-3 py-3 rounded-xl text-slate-700 font-bold hover:bg-slate-50"
+                >
+                  {item.label}
+                </a>
+              )
             ))}
 
             <div className="pt-3 border-t border-slate-100 space-y-3">

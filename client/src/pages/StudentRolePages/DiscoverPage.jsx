@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   Search,
   Globe,
@@ -146,35 +147,21 @@ const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
 async function getCachedUrl(path) {
-  if (!path || path.startsWith('http')) return path || null;
-
-  const cleanPath = path.replace(/^avatars\//, '').replace(/^\/+/, '');
-  const key = `av:${cleanPath}`;
+  if (!path) return null;
+  const key = `av:${path}`;
   const cached = AVATAR_CACHE.get(key);
 
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return cached.url;
   }
 
-  try {
-    const { data, error } = await supabase.storage
-      .from('avatars')
-      .createSignedUrl(cleanPath, 3600);
-
-    if (error) {
-      console.warn('Avatar signed URL error:', error.message);
-      return null;
-    }
-
-    if (data?.signedUrl) {
-      AVATAR_CACHE.set(key, {
-        url: data.signedUrl,
-        ts: Date.now(),
-      });
-      return data.signedUrl;
-    }
-  } catch (err) {
-    console.warn('Avatar load failed:', err);
+  const signedUrl = await getSignedAvatarUrl(path);
+  if (signedUrl) {
+    AVATAR_CACHE.set(key, {
+      url: signedUrl,
+      ts: Date.now(),
+    });
+    return signedUrl;
   }
 
   return null;
@@ -383,14 +370,22 @@ function computeDiscoverMatch(currentProfile, candidate, type) {
       .map(normalizeLower)
   );
 
-  const currentInterests = new Set(
-    (currentProfile.interests || [])
+  const currentIndustries = new Set(
+    [
+      currentProfile.idea_domain,
+      ...(currentProfile.preferred_industries || []),
+    ]
       .filter(Boolean)
       .map(normalizeLower)
   );
 
-  const candidateInterests = new Set(
-    (candidate.interests || [])
+  const candidateIndustries = new Set(
+    [
+      candidate.idea_domain,
+      candidate.industry,
+      ...(candidate.preferred_industries || []),
+      ...(candidate.industries_supported || []),
+    ]
       .filter(Boolean)
       .map(normalizeLower)
   );
@@ -434,10 +429,10 @@ function computeDiscoverMatch(currentProfile, candidate, type) {
     score += 15;
     reasons.push(`Same domain: ${candidate.idea_domain}`);
   } else {
-    const sharedInterests = [...currentInterests].filter((interest) => candidateInterests.has(interest));
-    if (sharedInterests.length > 0) {
-      score += Math.min(10, sharedInterests.length * 5);
-      reasons.push(`Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`);
+    const sharedIndustries = [...currentIndustries].filter((industry) => candidateIndustries.has(industry));
+    if (sharedIndustries.length > 0) {
+      score += Math.min(10, sharedIndustries.length * 5);
+      reasons.push(`Shared industries: ${sharedIndustries.slice(0, 2).join(', ')}`);
     }
   }
 
@@ -811,7 +806,7 @@ export default function DiscoverPage() {
             major,
             current_year,
             skills_with_levels,
-            interests,
+            preferred_industries,
             help_needed,
             looking_for,
             commitment_level,
@@ -855,7 +850,7 @@ export default function DiscoverPage() {
             major,
             current_year,
             skills_with_levels,
-            interests,
+            preferred_industries,
             help_needed,
             looking_for,
             commitment_level,

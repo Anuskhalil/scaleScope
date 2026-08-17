@@ -1,6 +1,6 @@
 // 1. Create a reusable hook: src/hooks/useAvatarUrl.js
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { getSignedAvatarUrl } from '../utils/avatarStorage';
 
 export function useAvatarUrl(avatarPath, expiresIn = 3600) {
   const [signedUrl, setSignedUrl] = useState(null);
@@ -8,8 +8,10 @@ export function useAvatarUrl(avatarPath, expiresIn = 3600) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!avatarPath || avatarPath.startsWith('http')) {
-      setSignedUrl(avatarPath);
+    if (!avatarPath) {
+      setSignedUrl(null);
+      setLoading(false);
+      setError(null);
       return;
     }
 
@@ -17,13 +19,8 @@ export function useAvatarUrl(avatarPath, expiresIn = 3600) {
     const fetchUrl = async () => {
       setLoading(true);
       try {
-        const cleanPath = avatarPath.replace(/^avatars\//, '');
-        const { data, error } = await supabase.storage
-          .from('avatars')
-          .createSignedUrl(cleanPath, expiresIn);
-        
-        if (error) throw error;
-        if (!cancelled) setSignedUrl(data?.signedUrl || null);
+        const url = await getSignedAvatarUrl(avatarPath, expiresIn);
+        if (!cancelled) setSignedUrl(url || null);
       } catch (err) {
         if (!cancelled) {
           console.error('Avatar URL error:', err);

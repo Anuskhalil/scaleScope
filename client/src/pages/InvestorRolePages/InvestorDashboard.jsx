@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import GrowthSignalPanel from '../../components/GrowthSignalPanel';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   fetchInvestorDashboard,
   calcInvestorCompletion,
@@ -77,12 +78,45 @@ const timeAgo = (iso) => {
 const getScore = (item) => Number(item?._score || item?.matchScore || item?.score || 0);
 
 function Avatar({ name, src, size = 'md' }) {
+  const [url, setUrl] = useState(null);
+  const [loading, setLoading] = useState(Boolean(src));
   const [failed, setFailed] = useState(false);
   const sizeClass = { sm: 'w-8 h-8', md: 'w-10 h-10', lg: 'w-12 h-12', xl: 'w-14 h-14' }[size];
-  if (src && !failed) {
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!src) {
+      setUrl(null);
+      setLoading(false);
+      setFailed(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoading(true);
+    setFailed(false);
+    getSignedAvatarUrl(src).then((signedUrl) => {
+      if (!cancelled) {
+        setUrl(signedUrl);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  if (loading) {
+    return <div className={`${sizeClass} shimmer`} aria-hidden="true" />;
+  }
+
+  if (url && !failed) {
     return (
       <img
-        src={src}
+        src={url}
         alt=""
         className={`${sizeClass} object-cover rounded-xl`}
         loading="lazy"

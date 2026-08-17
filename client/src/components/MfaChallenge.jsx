@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader, AlertCircle, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../auth/AuthContext';
+import { markAuthActivity } from '../auth/authActivity';
 
 export default function MfaChallenge() {
     const navigate = useNavigate();
@@ -81,6 +82,7 @@ export default function MfaChallenge() {
             if (verifyError) throw verifyError;
 
             await refreshMfaLevel?.();
+            markAuthActivity();
 
             navigate(redirectTo || '/dashboard', { replace: true });
         } catch (err) {

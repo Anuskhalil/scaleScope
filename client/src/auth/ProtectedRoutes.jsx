@@ -11,6 +11,7 @@ export default function ProtectedRoute() {
     user,
     emailVerified,
     needsMfa,
+    profileMissing,
   } = useAuth();
 
   const location = useLocation();
@@ -35,6 +36,20 @@ export default function ProtectedRoute() {
 
   if (!emailVerified) {
     return <Navigate to="/verify-email" replace />;
+  }
+
+  if (profileMissing) {
+    return (
+      <Navigate
+        to="/register"
+        replace
+        state={{
+          email: user?.email || '',
+          error:
+            'Your ScaleScope role profile was not found. Please create/select your role again, or contact support if this email already exists.',
+        }}
+      />
+    );
   }
 
   if (needsMfa && location.pathname !== '/mfa') {

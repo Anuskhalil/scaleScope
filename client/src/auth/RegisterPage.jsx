@@ -1,11 +1,35 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle, Briefcase } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from './AuthContext';
+import { markAuthActivity } from './authActivity';
 // import ScalScopeLogo from '../assets/Anus Tech logo.png';
+
+function getDashboardPath(role) {
+  switch (role) {
+    case 'student':
+      return '/student/dashboard';
+
+    case 'early-stage-founder':
+      return '/founder/dashboard';
+
+    case 'mentor':
+      return '/mentor/dashboard';
+
+    case 'investor':
+      return '/investor/dashboard';
+
+    default:
+      return '/dashboard';
+  }
+}
 
 export default function RegisterPage() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { refreshAuth } = useAuth();
   const [form, setForm] = useState({
     email: location.state?.email || sessionStorage.getItem('oauth_register_email') || '',
     password: '',
@@ -15,6 +39,26 @@ export default function RegisterPage() {
   });
   const [msg, setMsg] = useState(location.state?.error || '');
   const [loading, setLoading] = useState(false);
+
+  async function ensureProfile(userId, email) {
+    const now = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert(
+        {
+          id: userId,
+          full_name: form.full_name.trim(),
+          email,
+          user_type: form.user_type,
+          updated_at: now,
+          last_active: now,
+        },
+        { onConflict: 'id' }
+      );
+
+    if (error) throw error;
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -45,32 +89,53 @@ export default function RegisterPage() {
       return;
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: form.email.trim().toLowerCase(),
-      password: form.password,
-      options: {
-        data: {
-          full_name: form.full_name.trim(),
-          user_type: form.user_type
+    const email = form.email.trim().toLowerCase();
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: form.password,
+        options: {
+          data: {
+            full_name: form.full_name.trim(),
+            user_type: form.user_type,
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+      });
 
-    if (error) {
-      setMsg(error.message);
+      if (error) throw error;
+
+      if (data.user?.identities?.length === 0) {
+        setMsg('Email already registered. Please sign in instead.');
+        setLoading(false);
+        return;
+      }
+
+      if (!data.session || !data.user?.id) {
+        setMsg(
+          'Account created. Please confirm your email first, then you will be taken to your dashboard.'
+        );
+        setLoading(false);
+        return;
+      }
+
+      await ensureProfile(data.user.id, email);
+      markAuthActivity();
+      await refreshAuth?.();
+
+      toast.success('Account created successfully!', {
+        style: {
+          background: '#98DE38',
+          color: '#000',
+        },
+      });
+
+      navigate(getDashboardPath(form.user_type), { replace: true });
+    } catch (error) {
+      setMsg(error.message || 'Could not create account.');
       setLoading(false);
-      return;
     }
-
-    if (data.user?.identities?.length === 0) {
-      setMsg('Email already registered.');
-      setLoading(false);
-      return;
-    }
-
-    setMsg('Success! Check your email to confirm your account.');
-    setLoading(false);
   }
 
   const userTypes = [
@@ -78,7 +143,6 @@ export default function RegisterPage() {
     { value: 'early-stage-founder', label: 'Early-Stage Founder', description: 'Building a startup' },
     { value: 'mentor', label: 'Mentor', description: 'Sharing expertise' },
     { value: 'investor', label: 'Investor', description: 'Finding opportunities' },
-    { value: 'other', label: 'Other', description: 'Exploring the platform' }
   ];
 
   return (

@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import { useRealtime } from '../../hooks/useRealtime';
 import { fetchIncomingRequests, fetchSentRequests } from '../../services/studentService';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import { Inbox, Send, UserCheck, UserX, Clock, CheckCircle, XCircle, ArrowRight, MapPin, Users, UserPlus, Briefcase, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -28,16 +29,14 @@ const CSS = `
 const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 async function getCachedUrl(path) {
-    if (!path || path.startsWith('http')) return path;
+    if (!path) return null;
     const key = `av:${path}`;
     const cached = AVATAR_CACHE.get(key);
     if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.url;
-    try {
-        const { data, error } = await supabase.storage.from('avatars').createSignedUrl(path.replace(/^avatars\//, ''), 3600);
-        if (error) return null;
-        if (data?.signedUrl) { AVATAR_CACHE.set(key, { url: data.signedUrl, ts: Date.now() }); return data.signedUrl; }
-    } catch {
-        return null;
+    const signedUrl = await getSignedAvatarUrl(path);
+    if (signedUrl) {
+        AVATAR_CACHE.set(key, { url: signedUrl, ts: Date.now() });
+        return signedUrl;
     }
     return null;
 }

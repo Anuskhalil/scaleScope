@@ -26,6 +26,24 @@ const readJson = async (res) => {
 };
 
 export const backendApi = {
+    checkAccount: async (email) => {
+        const res = await fetch(`${BASE}/api/auth/check-account`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email }),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Could not verify account');
+        }
+
+        return data.data || data;
+    },
+
     // AI CoFounder Suggestions
     getCofounders: async (limit = 8) => {
         const res = await fetch(`${BASE}/api/cofounders?limit=${limit}`, {
@@ -272,6 +290,22 @@ export const backendApi = {
         return data;
     },
 
+    inviteMeetingParticipants: async (meetingId, userIds = []) => {
+        const res = await fetch(`${BASE}/api/meetings/${meetingId}/invite`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({ userIds }),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to invite participants');
+        }
+
+        return data;
+    },
+
     endMeeting: async (meetingId) => {
         const res = await fetch(`${BASE}/api/meetings/${meetingId}/end`, {
             method: 'POST',
@@ -321,6 +355,78 @@ export const backendApi = {
 
         if (!res.ok) {
             throw new Error(data.error || 'Failed to generate growth plan');
+        }
+
+        return data.data || data;
+    },
+
+    getBillingPlans: async (role) => {
+        const suffix = role ? `?role=${encodeURIComponent(role)}` : '';
+        const res = await fetch(`${BASE}/api/billing/plans${suffix}`);
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to fetch pricing plans');
+        }
+
+        return data.data || data;
+    },
+
+    getMyBilling: async () => {
+        const res = await fetch(`${BASE}/api/billing/me`, {
+            headers: await getAuthHeaders(),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to fetch billing status');
+        }
+
+        return data.data || data;
+    },
+
+    getBillingUsage: async (featureKey) => {
+        const res = await fetch(`${BASE}/api/billing/usage/${encodeURIComponent(featureKey)}`, {
+            headers: await getAuthHeaders(),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to fetch usage');
+        }
+
+        return data.data || data;
+    },
+
+    createBillingCheckout: async (planCode) => {
+        const res = await fetch(`${BASE}/api/billing/checkout`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({ planCode }),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to start checkout');
+        }
+
+        return data.data || data;
+    },
+
+    openBillingPortal: async () => {
+        const res = await fetch(`${BASE}/api/billing/portal`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+        });
+
+        const data = await readJson(res);
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Failed to open billing portal');
         }
 
         return data.data || data;

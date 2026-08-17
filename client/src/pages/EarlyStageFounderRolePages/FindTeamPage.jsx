@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   fetchTeamCandidates,
   fetchFounderProfile,
@@ -60,32 +61,18 @@ const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
 async function getCachedUrl(path) {
-  if (!path || path.startsWith('http')) return path || null;
-
-  const cleanPath = path.replace(/^avatars\//, '').replace(/^\/+/, '');
-  const key = `team-av:${cleanPath}`;
+  if (!path) return null;
+  const key = `team-av:${path}`;
   const cached = AVATAR_CACHE.get(key);
 
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return cached.url;
   }
 
-  try {
-    const { data, error } = await supabase.storage
-      .from('avatars')
-      .createSignedUrl(cleanPath, 3600);
-
-    if (error) {
-      console.warn('Team avatar signed URL error:', error.message);
-      return null;
-    }
-
-    if (data?.signedUrl) {
-      AVATAR_CACHE.set(key, { url: data.signedUrl, ts: Date.now() });
-      return data.signedUrl;
-    }
-  } catch (err) {
-    console.warn('Team avatar load failed:', err);
+  const signedUrl = await getSignedAvatarUrl(path);
+  if (signedUrl) {
+    AVATAR_CACHE.set(key, { url: signedUrl, ts: Date.now() });
+    return signedUrl;
   }
 
   return null;

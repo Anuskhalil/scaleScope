@@ -36,6 +36,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
 import { attachMatchIntelligence } from '../../services/intelligentMatching';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   DISCOVERY_LOCATIONS,
   DISCOVERY_SKILLS,
@@ -158,8 +159,7 @@ const FIND_MENTORS_PAGE_CACHE = new Map();
 const FIND_MENTORS_PAGE_TTL = 45 * 1000;
 
 async function getCachedUrl(path) {
-  if (!path || path.startsWith('http')) return path;
-
+  if (!path) return null;
   const key = `av:${path}`;
   const cached = AVATAR_CACHE.get(key);
 
@@ -167,28 +167,14 @@ async function getCachedUrl(path) {
     return cached.url;
   }
 
-  try {
-    const cleanPath = path.replace(/^avatars\//, '').replace(/^\/+/, '');
+  const signedUrl = await getSignedAvatarUrl(path);
+  if (signedUrl) {
+    AVATAR_CACHE.set(key, {
+      url: signedUrl,
+      ts: Date.now(),
+    });
 
-    const { data, error } = await supabase.storage
-      .from('avatars')
-      .createSignedUrl(cleanPath, 3600);
-
-    if (error) {
-      console.warn('Avatar signed URL error:', error.message);
-      return null;
-    }
-
-    if (data?.signedUrl) {
-      AVATAR_CACHE.set(key, {
-        url: data.signedUrl,
-        ts: Date.now(),
-      });
-
-      return data.signedUrl;
-    }
-  } catch (err) {
-    console.warn('Avatar load failed:', err);
+    return signedUrl;
   }
 
   return null;
@@ -319,16 +305,23 @@ function computeMentorMatchScore(currentUserProfile, candidate) {
       .filter(Boolean)
   );
 
-  const currentInterests = new Set(
-    (currentUserProfile.interests || [])
-      .map(normalizeText)
+  const currentIndustries = new Set(
+    [
+      currentUserProfile.idea_domain,
+      ...(currentUserProfile.preferred_industries || []),
+    ]
       .filter(Boolean)
+      .map(normalizeText)
   );
 
-  const candidateInterests = new Set(
-    (candidate.interests || [])
-      .map(normalizeText)
+  const candidateIndustries = new Set(
+    [
+      candidate.idea_domain,
+      ...(candidate.industries_supported || []),
+      ...(candidate.preferred_industries || []),
+    ]
       .filter(Boolean)
+      .map(normalizeText)
   );
 
   const needMatches = [...currentHelpNeeded].filter((need) => {
@@ -354,13 +347,13 @@ function computeMentorMatchScore(currentUserProfile, candidate) {
     reasons.push(`Understands your skill area: ${skillOverlap.slice(0, 2).join(', ')}`);
   }
 
-  const sharedInterests = [...currentInterests].filter((interest) =>
-    candidateInterests.has(interest)
+  const sharedIndustries = [...currentIndustries].filter((industry) =>
+    candidateIndustries.has(industry)
   );
 
-  if (sharedInterests.length > 0) {
-    score += Math.min(15, sharedInterests.length * 5);
-    reasons.push(`Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`);
+  if (sharedIndustries.length > 0) {
+    score += Math.min(15, sharedIndustries.length * 5);
+    reasons.push(`Shared industries: ${sharedIndustries.slice(0, 2).join(', ')}`);
   }
 
   if (
@@ -779,7 +772,7 @@ export default function FindMentorsPage() {
             major,
             current_year,
             skills_with_levels,
-            interests,
+            preferred_industries,
             help_needed,
             looking_for,
             commitment_level,
@@ -1159,7 +1152,7 @@ export default function FindMentorsPage() {
 
                 <p className="text-gray-500 text-sm max-w-xl mt-2">
                   Discover students and builders who selected mentor guidance in their profile.
-                  Match quality is based on your help-needed areas, interests, skills, and startup context.
+                  Match quality is based on your help-needed areas, preferred industries, skills, and startup context.
                 </p>
               </div>
 
@@ -1382,7 +1375,7 @@ export default function FindMentorsPage() {
             </h3>
 
             <p className="text-sm text-gray-600">
-              Add help-needed areas, skills, interests, and startup idea context to get better mentor matches.
+              Add help-needed areas, skills, preferred industries, and startup idea context to get better mentor matches.
             </p>
 
             <Link

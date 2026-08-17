@@ -12,6 +12,7 @@ import {
   saveInvestorDetails,
   uploadInvestorAvatar,
 } from '../services/investorService';
+import { getAvatarStoragePath, getSignedAvatarUrl } from '../utils/avatarStorage';
 import {
   User,
   DollarSign,
@@ -310,6 +311,7 @@ export default function InvestorProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [avatarPath, setAvatarPath] = useState('');
   const [formData, setFormData] = useState(makeEmpty(user));
 
   const STORAGE_KEY = `investor_profile_draft_${user?.id || 'anon'}`;
@@ -369,10 +371,16 @@ export default function InvestorProfilePage() {
       const draft = loadDraft();
       const { profile, investorProfile } = await fetchInvestorProfile(user.id);
       const normalized = normalizeProfile(user, profile, investorProfile);
+      const stableAvatarPath = getAvatarStoragePath(profile?.avatar_url || normalized.avatar_url);
+      const displayAvatarUrl = await getSignedAvatarUrl(stableAvatarPath || normalized.avatar_url);
       const dbUpdatedAt = new Date(normalized.updated_at || 0).getTime();
       const useDraft = draft && draft._savedAt >= dbUpdatedAt;
-      const source = useDraft ? { ...normalized, ...draft } : normalized;
+      const source = {
+        ...(useDraft ? { ...normalized, ...draft } : normalized),
+        avatar_url: displayAvatarUrl || normalized.avatar_url,
+      };
 
+      setAvatarPath(stableAvatarPath);
       snapRef.current = source;
       setFormData(source);
       setIsEditMode(Boolean(useDraft && draft?._hasUnsavedChanges));
@@ -446,6 +454,7 @@ export default function InvestorProfilePage() {
       const profileCompletion = calcInvestorCompletion(formData, formData);
       const payload = {
         ...formData,
+        avatar_url: avatarPath || getAvatarStoragePath(formData.avatar_url),
         profile_id: formData.profile_id || user.id,
         fund_name: formData.fund_name || formData.firm_name,
         preferred_stages: formData.preferred_stages?.length ? formData.preferred_stages : formData.investment_stage,
@@ -503,8 +512,9 @@ export default function InvestorProfilePage() {
 
     setUploading(true);
     try {
-      const url = await uploadInvestorAvatar(user.id, file);
-      updateField('avatar_url', url);
+      const { path, signedUrl } = await uploadInvestorAvatar(user.id, file);
+      setAvatarPath(path);
+      updateField('avatar_url', signedUrl || path);
       toast.success('Avatar updated!');
     } catch (err) {
       console.error('Investor avatar upload error:', err);

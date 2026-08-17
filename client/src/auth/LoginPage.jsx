@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { backendApi } from '../lib/backendApi';
+import { markAuthActivity } from './authActivity';
 import {
   Mail,
   Lock,
@@ -26,6 +29,20 @@ const GithubIcon = () => (
   </svg>
 );
 
+const OAUTH_INTENT_KEY = 'scalescope_oauth_login_intent';
+
+function saveOAuthIntent(provider, email) {
+  const payload = {
+    provider,
+    email,
+    createdAt: Date.now(),
+  };
+
+  localStorage.setItem(OAUTH_INTENT_KEY, JSON.stringify(payload));
+  sessionStorage.setItem('oauth_registered_login', '1');
+  sessionStorage.setItem('oauth_registered_email', email);
+}
+
 export default function LoginPage() {
   const [form, setForm] = useState({
     email: '',
@@ -47,6 +64,61 @@ export default function LoginPage() {
     }
   }, [location.state]);
 
+  const loginEmail = form.email.trim().toLowerCase();
+
+  function showCreateAccountPrompt() {
+    const message = 'No account found with this email. Please create your account first.';
+
+    setError(message);
+    toast.error(message);
+  }
+
+  function isInvalidCredentialsError(message = '') {
+    const normalized = message.toLowerCase();
+
+    return (
+      normalized.includes('invalid login credentials') ||
+      normalized.includes('invalid credentials')
+    );
+  }
+
+  async function findRegisteredProfileByEmail(email) {
+    const account = await backendApi.checkAccount(email);
+
+    return account?.exists
+      ? {
+          user_type: account.userType,
+        }
+      : null;
+  }
+
+  async function requireRegisteredProfile(userId, email) {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, user_type')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+
+    if (!profile?.user_type) {
+      await supabase.auth.signOut();
+
+      navigate('/register', {
+        replace: true,
+        state: {
+          email,
+          error:
+            'No role profile was found for this account. Please create your account first, or contact support if this email already exists.',
+        },
+      });
+
+      return null;
+    }
+
+    return profile;
+  }
+
   async function updateLoginTracking(userId) {
     try {
       await supabase.rpc('increment_login_tracking', {
@@ -57,7 +129,11 @@ export default function LoginPage() {
     }
   }
 
-  async function goNextAfterFirstFactor(userId) {
+  async function goNextAfterFirstFactor(userId, email) {
+    const registeredProfile = await requireRegisteredProfile(userId, email);
+
+    if (!registeredProfile) return;
+
     const { data: aalData, error: aalError } =
       await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
@@ -66,6 +142,7 @@ export default function LoginPage() {
     }
 
     if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
+      markAuthActivity();
       navigate('/mfa', {
         replace: true,
         state: {
@@ -76,6 +153,7 @@ export default function LoginPage() {
     }
 
     await updateLoginTracking(userId);
+    markAuthActivity();
     navigate(redirectAfterLogin, { replace: true });
   }
 
@@ -86,16 +164,47 @@ export default function LoginPage() {
     setError('');
 
     try {
+      const registeredProfile = loginEmail
+        ? await findRegisteredProfileByEmail(loginEmail)
+        : null;
+
+      if (!registeredProfile?.user_type) {
+        await supabase.auth.signOut();
+        showCreateAccountPrompt();
+        return;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: form.email.trim().toLowerCase(),
+        email: loginEmail,
         password: form.password,
       });
 
       if (error) throw error;
 
-      await goNextAfterFirstFactor(data.user.id);
+      await goNextAfterFirstFactor(data.user.id, loginEmail);
     } catch (err) {
-      setError(err.message || 'Could not sign in');
+      if (isInvalidCredentialsError(err.message)) {
+        try {
+          const profile = loginEmail
+            ? await findRegisteredProfileByEmail(loginEmail)
+            : null;
+
+          setError(
+            profile?.user_type
+              ? 'Incorrect password. Use Forgot Password if you need to reset it.'
+              : 'No account found with this email. Please create your account first.'
+          );
+
+          if (!profile?.user_type) {
+            toast.error('No account found with this email. Please create your account first.');
+          }
+        } catch (profileErr) {
+          console.warn('Login profile precheck failed:', profileErr?.message || profileErr);
+          setError('Could not verify this account. Please try again.');
+        }
+      } else {
+        setError(err.message || 'Could not sign in');
+      }
     } finally {
       setLoading(false);
     }
@@ -106,7 +215,7 @@ export default function LoginPage() {
       setError('');
       setOauthLoading(provider);
 
-      const email = form.email.trim().toLowerCase();
+      const email = loginEmail;
 
       if (!email) {
         setError('Enter your registered email first. New users must register and select a role before Google or GitHub login.');
@@ -114,13 +223,7 @@ export default function LoginPage() {
         return;
       }
 
-      const { data: registeredProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, user_type')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (profileError) throw profileError;
+      const registeredProfile = await findRegisteredProfileByEmail(email);
 
       if (!registeredProfile?.user_type) {
         sessionStorage.setItem('oauth_register_email', email);
@@ -135,13 +238,13 @@ export default function LoginPage() {
         return;
       }
 
-      sessionStorage.setItem('oauth_registered_login', '1');
-      sessionStorage.setItem('oauth_registered_email', email);
+      saveOAuthIntent(provider, email);
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: false,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -152,6 +255,7 @@ export default function LoginPage() {
 
       if (error) throw error;
     } catch (err) {
+      localStorage.removeItem(OAUTH_INTENT_KEY);
       setError(err.message || 'OAuth sign-in failed');
       setOauthLoading('');
     }

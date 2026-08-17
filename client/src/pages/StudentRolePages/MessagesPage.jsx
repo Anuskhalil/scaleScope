@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { getSocket, initSocket } from '../../lib/socketClient';
 import { backendApi } from '../../lib/backendApi';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   Search,
   Send,
@@ -104,8 +105,7 @@ const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
 async function getCachedUrl(path) {
-  if (!path || path.startsWith('http')) return path;
-
+  if (!path) return null;
   const key = `av:${path}`;
   const cached = AVATAR_CACHE.get(key);
 
@@ -113,21 +113,14 @@ async function getCachedUrl(path) {
     return cached.url;
   }
 
-  try {
-    const { data } = await supabase.storage
-      .from('avatars')
-      .createSignedUrl(path.replace('avatars/', ''), 3600);
+  const signedUrl = await getSignedAvatarUrl(path);
+  if (signedUrl) {
+    AVATAR_CACHE.set(key, {
+      url: signedUrl,
+      ts: Date.now(),
+    });
 
-    if (data?.signedUrl) {
-      AVATAR_CACHE.set(key, {
-        url: data.signedUrl,
-        ts: Date.now(),
-      });
-
-      return data.signedUrl;
-    }
-  } catch (err) {
-    console.warn('Avatar signed URL failed:', err);
+    return signedUrl;
   }
 
   return null;

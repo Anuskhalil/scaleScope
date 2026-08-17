@@ -20,6 +20,8 @@ import RegisterPage from './auth/RegisterPage';
 import LoginPage from './auth/LoginPage';
 import ForgotPasswordPage from './auth/ForgotPasswordPage';
 import AuthCallbackPage from './auth/AuthCallbackPage';
+import PricingPage from './pages/PricingPage';
+import BillingPage from './pages/BillingPage';
 
 // ── Profile Pages ──
 import ProfilePage from './pages/StudentRolePages/ProfilePage';
@@ -106,13 +108,8 @@ function VerifyEmailPage() {
   );
 }
 
-function getUserRole(user, profile) {
-  return (
-    profile?.user_type ||
-    user?.user_metadata?.user_type ||
-    user?.app_metadata?.user_type ||
-    null
-  );
+function getUserRole(_user, profile) {
+  return profile?.user_type || null;
 }
 
 function getRoleBasePath(role) {
@@ -145,8 +142,12 @@ function getRoleProfilePath(role) {
 }
 
 function DashboardRouter() {
-  const { user, profile } = useAuth();
+  const { user, profile, session, loading, profileMissing } = useAuth();
   const role = getUserRole(user, profile);
+
+  if (loading || (session && user && !profile && !profileMissing)) {
+    return <LoadingScreen />;
+  }
 
   if (role === 'student') return <StudentDashboard />;
   if (role === 'early-stage-founder') return <FounderDashboard />;
@@ -157,8 +158,12 @@ function DashboardRouter() {
 }
 
 function ProfileRouter() {
-  const { user, profile } = useAuth();
+  const { user, profile, session, loading, profileMissing } = useAuth();
   const role = getUserRole(user, profile);
+
+  if (loading || (session && user && !profile && !profileMissing)) {
+    return <LoadingScreen />;
+  }
 
   if (role === 'early-stage-founder') return <FounderProfilePage />;
   if (role === 'mentor') return <MentorProfilePage />;
@@ -169,23 +174,35 @@ function ProfileRouter() {
 }
 
 function DashboardRedirect() {
-  const { user, profile } = useAuth();
+  const { user, profile, session, loading, profileMissing } = useAuth();
   const role = getUserRole(user, profile);
+
+  if (loading || (session && user && !profile && !profileMissing)) {
+    return <LoadingScreen />;
+  }
 
   return <Navigate to={getRoleDashboardPath(role)} replace />;
 }
 
 function ProfileRedirect() {
-  const { user, profile } = useAuth();
+  const { user, profile, session, loading, profileMissing } = useAuth();
   const role = getUserRole(user, profile);
+
+  if (loading || (session && user && !profile && !profileMissing)) {
+    return <LoadingScreen />;
+  }
 
   return <Navigate to={getRoleProfilePath(role)} replace />;
 }
 
 function RolePathRedirect({ page }) {
-  const { user, profile } = useAuth();
+  const { user, profile, session, loading, profileMissing } = useAuth();
   const location = useLocation();
   const role = getUserRole(user, profile);
+
+  if (loading || (session && user && !profile && !profileMissing)) {
+    return <LoadingScreen />;
+  }
 
   return (
     <Navigate
@@ -196,8 +213,12 @@ function RolePathRedirect({ page }) {
 }
 
 function RoleMentorRedirect() {
-  const { user, profile } = useAuth();
+  const { user, profile, session, loading, profileMissing } = useAuth();
   const role = getUserRole(user, profile);
+
+  if (loading || (session && user && !profile && !profileMissing)) {
+    return <LoadingScreen />;
+  }
 
   if (role === 'student') {
     return <Navigate to="/student/find-mentors" replace />;
@@ -208,6 +229,22 @@ function RoleMentorRedirect() {
   }
 
   return <Navigate to={getRoleDashboardPath(role)} replace />;
+}
+
+function MissingProfileRedirect() {
+  const { user } = useAuth();
+
+  return (
+    <Navigate
+      to="/register"
+      replace
+      state={{
+        email: user?.email || '',
+        error:
+          'Your ScaleScope role profile was not found. Please create/select your role again, or contact support if this email already exists.',
+      }}
+    />
+  );
 }
 
 function ProtectedPage({
@@ -221,6 +258,7 @@ function ProtectedPage({
     loading,
     emailVerified,
     needsMfa,
+    profileMissing,
   } = useAuth();
 
   const location = useLocation();
@@ -241,6 +279,10 @@ function ProtectedPage({
     return <Navigate to="/verify-email" replace />;
   }
 
+  if (profileMissing) {
+    return <MissingProfileRedirect />;
+  }
+
   if (needsMfa && !allowMfaChallenge && !allowMfaSetup) {
     return (
       <Navigate
@@ -255,9 +297,11 @@ function ProtectedPage({
 }
 
 function RolePage({ children, allowedRoles }) {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, session, profileMissing } = useAuth();
 
-  if (loading) return <LoadingScreen />;
+  if (loading || (session && user && !profile && !profileMissing)) {
+    return <LoadingScreen />;
+  }
 
   const role = getUserRole(user, profile);
 
@@ -281,14 +325,16 @@ function PublicOnlyPage({ children }) {
     emailVerified,
     needsMfa,
   } = useAuth();
+  const location = useLocation();
+  const isAuthEntryPage = location.pathname === '/login' || location.pathname === '/register';
 
   if (loading) return children;
 
-  if (session && user && emailVerified && needsMfa) {
+  if (session && user && emailVerified && needsMfa && !isAuthEntryPage) {
     return <Navigate to="/mfa" replace />;
   }
 
-  if (session && user && emailVerified && !needsMfa) {
+  if (session && user && emailVerified && !needsMfa && !isAuthEntryPage) {
     const role = getUserRole(user, profile);
 
     if (role) {
@@ -316,6 +362,7 @@ const PUBLIC_PATHS_WITH_OWN_NAVBAR = [
 const AUTH_PATHS_WITH_LANDING_CHROME = [
   '/login',
   '/register',
+  '/pricing',
 ];
 
 function AppLayout({ children }) {
@@ -337,7 +384,8 @@ function AppLayout({ children }) {
   const showRoleNavbar =
     Boolean(session && user && emailVerified && !needsMfa) &&
     !isAuthPage &&
-    !isPublicLandingPage;
+    !isPublicLandingPage &&
+    !showLandingChrome;
 
   return (
     <>
@@ -371,6 +419,7 @@ export default function App() {
         <Routes>
           {/* Public landing only */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
 
           {/* Auth */}
           <Route
@@ -430,6 +479,15 @@ export default function App() {
               <RolePage allowedRoles={['student', 'early-stage-founder', 'mentor', 'investor']}>
                 <MeetingRoomPage />
               </RolePage>
+            }
+          />
+
+          <Route
+            path="/billing"
+            element={
+              <ProtectedPage>
+                <BillingPage />
+              </ProtectedPage>
             }
           />
 

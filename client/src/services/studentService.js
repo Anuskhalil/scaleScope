@@ -44,11 +44,17 @@ const calculateCoFounderScore = (currentUser, candidate) => {
   const totalPossible = Math.max(userSkills.length, candidateSkills.length, 1);
   score += Math.round((complementary / totalPossible) * 35);
 
-  // Interest overlap
-  const userInterests = (currentUser.interests || []).map(i => i?.toLowerCase());
-  const candidateInterests = (candidate.interests || []).map(i => i?.toLowerCase());
-  const commonInterests = candidateInterests.filter(i => userInterests.includes(i)).length;
-  score += Math.round((commonInterests / Math.max(userInterests.length, 1)) * 20);
+  // Industry alignment
+  const userIndustries = [
+    currentUser.idea_domain,
+    ...(currentUser.preferred_industries || []),
+  ].filter(Boolean).map(i => i.toLowerCase());
+  const candidateIndustries = [
+    candidate.idea_domain,
+    ...(candidate.preferred_industries || []),
+  ].filter(Boolean).map(i => i.toLowerCase());
+  const commonIndustries = candidateIndustries.filter(i => userIndustries.includes(i)).length;
+  score += Math.round((commonIndustries / Math.max(userIndustries.length, 1)) * 20);
 
   // Domain match bonus
   if (currentUser.idea_domain && candidate.idea_domain &&
@@ -97,7 +103,7 @@ export async function fetchStudentProfile(userId) {
         career_goals, looking_for, has_startup_idea, startup_idea_description,
         idea_title, idea_domain, idea_stage, target_audience, unique_value_prop,
         skills_with_levels, help_needed, commitment_level, short_bio_for_mentors, 
-        has_cofounder, interests, profile_completion, updated_at
+        has_cofounder, preferred_industries, profile_completion, updated_at
       `).eq('user_id', userId).maybeSingle()
     ]);
 
@@ -198,7 +204,7 @@ export async function fetchCoFounders({
         .from('student_profiles')
         .select(`
         skills_with_levels,
-        interests,
+        preferred_industries,
         idea_domain,
         commitment_level,
         help_needed
@@ -229,7 +235,7 @@ export async function fetchCoFounders({
     target_audience,
     unique_value_prop,
     looking_for,
-    interests,
+    preferred_industries,
     profile_completion,
     updated_at,
     profiles!student_profiles_user_id_fkey(

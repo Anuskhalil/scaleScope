@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, Zap, ArrowLeft, ArrowRight, AlertCircle, CheckCircle2, Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
+import { backendApi } from '../lib/backendApi';
 
 // Password strength checker
 function getPasswordStrength(password) {
@@ -30,6 +31,17 @@ function getStrengthTextColor(score) {
   return 'text-emerald-600';
 }
 
+function hasPasswordRecoveryIntent() {
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const searchParams = new URLSearchParams(window.location.search);
+
+  return (
+    hashParams.get('type') === 'recovery' ||
+    searchParams.get('type') === 'recovery' ||
+    Boolean(hashParams.get('access_token') || searchParams.get('access_token'))
+  );
+}
+
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
 
@@ -42,44 +54,62 @@ export default function ForgotPasswordPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [mfaRequired, setMfaRequired] = useState(false);
 
-  // On mount, check if Supabase redirected here with an access_token
-  // (happens after user clicks the password reset link from email)
+  // Only password recovery links should open the reset form.
   useEffect(() => {
+    let mounted = true;
+
     async function checkForResetToken() {
       try {
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
+        if (!hasPasswordRecoveryIntent()) return;
 
-        // Also check query params in case Supabase is configured that way
-        const searchParams = new URLSearchParams(window.location.search);
-        const queryToken = searchParams.get('access_token');
+        const { data, error } = await supabase.auth.getSession();
 
-        const token = accessToken || queryToken;
-
-        if (token) {
-          // Verify the session is valid
-          const { data, error } = await supabase.auth.getSession();
-          if (!error && data.session) {
-            setPageState('reset');
-          } else {
-            // Try to recover the session from the hash
-            const { data: recoverData, error: recoverError } = await supabase.auth.recoverSession(token);
-            if (!recoverError && recoverData.session) {
-              setPageState('reset');
-            } else {
-              setError('This reset link is invalid or has expired. Please request a new one.');
-              setPageState('request');
-            }
-          }
+        if (error || !data.session) {
+          setError('This reset link is invalid or has expired. Please request a new one.');
+          setPageState('request');
+          return;
         }
+
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+        if (!mounted) return;
+
+        setMfaRequired(aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2');
+        setPageState('reset');
       } catch (err) {
         console.error('Error checking reset token:', err);
       }
     }
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (!mounted) return;
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setPageState('reset');
+      }
+    });
+
     checkForResetToken();
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
   }, []);
+
+  async function findRegisteredProfileByEmail(value) {
+    const account = await backendApi.checkAccount(value.trim().toLowerCase());
+
+    return account?.exists
+      ? {
+          user_type: account.userType,
+        }
+      : null;
+  }
 
   // Handle sending the password reset email
   async function handleSendResetLink(e) {
@@ -91,6 +121,23 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     setError('');
+
+    let profile = null;
+
+    try {
+      profile = await findRegisteredProfileByEmail(email);
+    } catch (err) {
+      console.warn('Password reset profile check failed:', err?.message || err);
+      setError('Could not verify this account. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    if (!profile?.user_type) {
+      setError('No account found with this email. Please create your account first.');
+      setLoading(false);
+      return;
+    }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/forgot-password`,
@@ -134,6 +181,22 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
 
+    const { data: aalData, error: aalError } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+    if (!aalError && aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
+      setMfaRequired(true);
+      setLoading(false);
+      setError('Two-factor verification is required before updating your password.');
+      navigate('/mfa', {
+        replace: false,
+        state: {
+          from: '/forgot-password',
+        },
+      });
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     });
@@ -141,11 +204,28 @@ export default function ForgotPasswordPage() {
     if (error) {
       if (error.message.includes('Same as old password')) {
         setError('New password must be different from your current password.');
+      } else if (
+        error.message.includes('AAL2') ||
+        error.message.includes('MFA') ||
+        error.message.includes('Authenticator Assurance Level')
+      ) {
+        setMfaRequired(true);
+        setError('Two-factor verification is required before updating your password. Please verify MFA and try again.');
       } else {
         setError(error.message);
       }
     } else {
+      await supabase.auth.signOut();
       setPageState('success');
+      setTimeout(() => {
+        navigate('/login', {
+          replace: true,
+          state: {
+            email,
+            error: 'Password updated. Please sign in with your new password.',
+          },
+        });
+      }, 1200);
     }
     setLoading(false);
   }
@@ -322,6 +402,24 @@ export default function ForgotPasswordPage() {
               <button
                 onClick={async () => {
                   setLoading(true);
+                  setError('');
+                  let profile = null;
+
+                  try {
+                    profile = await findRegisteredProfileByEmail(email);
+                  } catch (err) {
+                    console.warn('Password reset profile check failed:', err?.message || err);
+                    setError('Could not verify this account. Please try again.');
+                    setLoading(false);
+                    return;
+                  }
+
+                  if (!profile?.user_type) {
+                    setError('No account found with this email. Please create your account first.');
+                    setLoading(false);
+                    return;
+                  }
+
                   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
                     redirectTo: `${window.location.origin}/forgot-password`,
                   });
@@ -394,6 +492,27 @@ export default function ForgotPasswordPage() {
             <p className="text-slate-500 text-center text-sm mb-8 leading-relaxed">
               Create a strong password that you haven't used before. Make it memorable but hard to guess.
             </p>
+
+            {mfaRequired && (
+              <div className="mb-5 rounded-xl border border-[#98DE38]/30 bg-[#98DE38]/10 p-4">
+                <div className="flex gap-3">
+                  <ShieldCheck className="w-5 h-5 text-[#1B2D7F] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">Two-factor verification required</p>
+                    <p className="text-xs text-slate-600 mt-1">
+                      This account has MFA enabled. Verify Google Authenticator first, then set your new password.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/mfa', { state: { from: '/forgot-password' } })}
+                      className="mt-3 px-4 py-2 bg-[#1B2D7F] text-white rounded-xl text-xs font-bold"
+                    >
+                      Verify MFA
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleResetPassword} className="space-y-5">
               {/* New Password */}

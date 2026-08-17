@@ -7,6 +7,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
+import { backendApi } from '../../lib/backendApi';
+import { initSocket } from '../../lib/socketClient';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
+import toast from 'react-hot-toast';
 import ScalScopeLogo from '../../assets/Anus Tech logo.png';
 
 export default function RoleNavbar() {
@@ -16,13 +20,13 @@ export default function RoleNavbar() {
   const [scrolled, setScrolled] = useState(false);
   const [profileData, setProfileData] = useState(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [billing, setBilling] = useState(null);
   // ✅ NEW: Separate state for the resolved avatar URL
   const [avatarUrl, setAvatarUrl] = useState(null);
 
   const userRole =
     profileData?.user_type ||
     profile?.user_type ||
-    user?.user_metadata?.user_type ||
     null;
 
   const fetchProfile = useCallback(async () => {
@@ -48,19 +52,7 @@ export default function RoleNavbar() {
           avatar_url: data.avatar_url,
         });
 
-        const avatarPath = data.avatar_url;
-
-        if (avatarPath && !avatarPath.startsWith('http')) {
-          const cleanPath = avatarPath.replace(/^avatars\//, '');
-
-          const { data: urlData } = await supabase.storage
-            .from('avatars')
-            .createSignedUrl(cleanPath, 3600);
-
-          setAvatarUrl(urlData?.signedUrl || cleanPath);
-        } else {
-          setAvatarUrl(avatarPath);
-        }
+        setAvatarUrl(await getSignedAvatarUrl(data.avatar_url));
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -76,6 +68,81 @@ export default function RoleNavbar() {
   useEffect(() => {
     if (user) fetchProfile();
   }, [user, fetchProfile]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBilling() {
+      if (!user?.id) {
+        setBilling(null);
+        return;
+      }
+
+      try {
+        const data = await backendApi.getMyBilling();
+        if (!cancelled) setBilling(data);
+      } catch (error) {
+        if (!cancelled) setBilling(null);
+        console.warn('Billing status unavailable:', error.message);
+      }
+    }
+
+    loadBilling();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    let socket;
+    let mounted = true;
+
+    const handleMeetingInvite = (payload = {}) => {
+      const meetingTitle = payload.title || 'ScaleScope Meeting';
+
+      toast.custom((t) => (
+        <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-200 max-w-sm">
+          <p className="text-sm font-black text-slate-900">Meeting started</p>
+          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{meetingTitle}</p>
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={() => {
+                toast.dismiss(t.id);
+                navigate(payload.joinPath || `/meetings/${payload.meetingId}`);
+              }}
+              className="flex-1 py-2 rounded-xl bg-[#98DE38] text-black text-xs font-black"
+            >
+              Join Meeting
+            </button>
+            <button
+              type="button"
+              onClick={() => toast.dismiss(t.id)}
+              className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600"
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      ), { duration: 30000 });
+    };
+
+    async function setupMeetingSocket() {
+      socket = await initSocket(user.id);
+      if (!mounted || !socket) return;
+      socket.on('meeting:invited', handleMeetingInvite);
+    }
+
+    setupMeetingSocket();
+
+    return () => {
+      mounted = false;
+      socket?.off('meeting:invited', handleMeetingInvite);
+    };
+  }, [navigate, user?.id]);
 
   const getRoleBasePath = (role) => {
     switch (role) {
@@ -97,6 +164,16 @@ export default function RoleNavbar() {
   };
 
   const roleBase = getRoleBasePath(userRole);
+  const plan = billing?.plan || {};
+  const subscription = billing?.subscription || {};
+  const hasProPlan =
+    plan.code &&
+    plan.code !== 'free' &&
+    !['cancelled', 'expired', 'free'].includes(String(subscription.status || '').toLowerCase());
+  const ecosystemAccess =
+    plan.metadata?.ecosystem_access ||
+    ['mentor', 'investor'].includes(userRole);
+  const planLabel = ecosystemAccess ? 'Access' : hasProPlan ? 'Pro' : 'Free';
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -218,6 +295,11 @@ export default function RoleNavbar() {
                   <div className="text-xs text-slate-500 flex items-center gap-1">
                     {getRoleIcon()}
                     {userRole?.replace('-', ' ')}
+                    <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      hasProPlan || ecosystemAccess ? 'bg-[#98DE38]/25 text-[#1B2D7F]' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      {planLabel}
+                    </span>
                   </div>
                 </div>
               </button>
@@ -234,6 +316,16 @@ export default function RoleNavbar() {
                         {profileData?.full_name || user?.email}
                       </p>
                       <p className="text-xs text-slate-500 mt-1">{user?.email}</p>
+                      <div className="mt-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-100">
+                        <span className="text-[11px] font-black text-[#1B2D7F] uppercase">
+                          {plan.name || 'Free'}
+                        </span>
+                        <span className={`text-[10px] font-black uppercase ${
+                          hasProPlan || ecosystemAccess ? 'text-green-700' : 'text-slate-400'
+                        }`}>
+                          {ecosystemAccess ? 'free' : subscription.status || 'free'}
+                        </span>
+                      </div>
                     </div>
 
                     <Link
@@ -252,6 +344,15 @@ export default function RoleNavbar() {
                     >
                       <Settings className="w-4 h-4" />
                       <span className="text-sm font-medium">Settings</span>
+                    </Link>
+
+                    <Link
+                      to="/billing"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 transition-all"
+                    >
+                      <Briefcase className="w-4 h-4" />
+                      <span className="text-sm font-medium">Billing</span>
                     </Link>
 
                     <div className="border-t border-slate-100 mt-2 pt-2">
@@ -294,6 +395,11 @@ export default function RoleNavbar() {
                 <p className="text-xs text-slate-500 flex items-center gap-1">
                   {getRoleIcon()}
                   {userRole?.replace('-', ' ')}
+                  <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                    hasProPlan || ecosystemAccess ? 'bg-[#98DE38]/25 text-[#1B2D7F]' : 'bg-white text-slate-500'
+                  }`}>
+                    {planLabel}
+                  </span>
                 </p>
               </div>
             </div>
@@ -327,6 +433,15 @@ export default function RoleNavbar() {
               >
                 <Settings className="w-4 h-4" />
                 <span className="font-medium">Settings</span>
+              </Link>
+
+              <Link
+                to="/billing"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
+              >
+                <Briefcase className="w-4 h-4" />
+                <span className="font-medium">Billing</span>
               </Link>
 
               <button

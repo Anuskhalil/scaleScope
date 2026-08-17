@@ -646,7 +646,7 @@ export async function fetchTeamCandidates({
       skills_with_levels,
       looking_for,
       help_needed,
-      interests,
+      preferred_industries,
       commitment_level,
       preferred_role,
       availability_status,

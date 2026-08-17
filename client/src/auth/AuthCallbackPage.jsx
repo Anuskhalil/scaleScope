@@ -1,8 +1,38 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { markAuthActivity } from './authActivity';
 
 const OAUTH_PROVIDERS = new Set(['google', 'github']);
+const OAUTH_INTENT_KEY = 'scalescope_oauth_login_intent';
+const OAUTH_INTENT_TTL_MS = 10 * 60 * 1000;
+
+function readOAuthIntent() {
+  try {
+    const raw = localStorage.getItem(OAUTH_INTENT_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed?.email || Date.now() - Number(parsed.createdAt || 0) > OAUTH_INTENT_TTL_MS) {
+      localStorage.removeItem(OAUTH_INTENT_KEY);
+      return null;
+    }
+
+    return {
+      provider: parsed.provider || '',
+      email: String(parsed.email).toLowerCase(),
+    };
+  } catch {
+    localStorage.removeItem(OAUTH_INTENT_KEY);
+    return null;
+  }
+}
+
+function clearOAuthIntent() {
+  localStorage.removeItem(OAUTH_INTENT_KEY);
+  sessionStorage.removeItem('oauth_registered_login');
+  sessionStorage.removeItem('oauth_registered_email');
+}
 
 function getPrimaryProvider(user) {
   return (
@@ -41,11 +71,15 @@ export default function AuthCallbackPage() {
         const user = data.session.user;
         const provider = getPrimaryProvider(user);
         const metadataRole = getMetadataRole(user);
-        const oauthWasPrechecked = sessionStorage.getItem('oauth_registered_login') === '1';
-        const oauthRegisteredEmail = sessionStorage.getItem('oauth_registered_email') || '';
+        const oauthIntent = readOAuthIntent();
+        const legacyOAuthWasPrechecked = sessionStorage.getItem('oauth_registered_login') === '1';
+        const legacyOAuthEmail = sessionStorage.getItem('oauth_registered_email') || '';
+        const oauthWasPrechecked = Boolean(oauthIntent?.email) || legacyOAuthWasPrechecked;
+        const oauthRegisteredEmail = oauthIntent?.email || legacyOAuthEmail;
 
         if (OAUTH_PROVIDERS.has(provider) && !oauthWasPrechecked) {
           await supabase.auth.signOut();
+          clearOAuthIntent();
 
           navigate('/register', {
             replace: true,
@@ -65,6 +99,7 @@ export default function AuthCallbackPage() {
           user.email?.toLowerCase() !== oauthRegisteredEmail.toLowerCase()
         ) {
           await supabase.auth.signOut();
+          clearOAuthIntent();
 
           navigate('/login', {
             replace: true,
@@ -76,7 +111,7 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        const { data: profile, error: profileError } = await supabase
+        let { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('id, full_name, email, user_type')
           .eq('id', user.id)
@@ -84,14 +119,64 @@ export default function AuthCallbackPage() {
 
         if (profileError) throw profileError;
 
-        if (OAUTH_PROVIDERS.has(provider) && !metadataRole) {
+        if (!profile && OAUTH_PROVIDERS.has(provider) && user.email) {
+          const { data: emailProfile, error: emailProfileError } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, user_type')
+            .eq('email', user.email.toLowerCase())
+            .maybeSingle();
+
+          if (emailProfileError) throw emailProfileError;
+
+          if (emailProfile?.id && emailProfile.id !== user.id) {
+            await supabase.auth.signOut();
+            clearOAuthIntent();
+
+            navigate('/login', {
+              replace: true,
+              state: {
+                error:
+                  'This Google/GitHub account is registered with the same email but is not linked to your ScaleScope login yet. Sign in with email/password once, then link Google/GitHub from account settings.',
+              },
+            });
+
+            return;
+          }
+
+          profile = emailProfile || null;
+        }
+
+        if ((!profile || !profile.user_type) && metadataRole && provider === 'email') {
+          const fallbackProfile = {
+            id: user.id,
+            full_name: user.user_metadata?.full_name || profile?.full_name || '',
+            email: user.email,
+            user_type: metadataRole,
+            updated_at: new Date().toISOString(),
+          };
+
+          const { error: createProfileError } = await supabase
+            .from('profiles')
+            .upsert(fallbackProfile, { onConflict: 'id' });
+
+          if (createProfileError) throw createProfileError;
+
+          profile = fallbackProfile;
+        }
+
+        if (
+          OAUTH_PROVIDERS.has(provider) &&
+          profile?.email &&
+          user.email &&
+          profile.email.toLowerCase() !== user.email.toLowerCase()
+        ) {
           await supabase.auth.signOut();
+          clearOAuthIntent();
 
           navigate('/login', {
             replace: true,
             state: {
-              error:
-                'Please register with email and select your role first. Google sign-in is only for registered users.',
+              error: 'The OAuth account does not match your registered ScaleScope email.',
             },
           });
 
@@ -100,6 +185,7 @@ export default function AuthCallbackPage() {
 
         if (!profile?.user_type && OAUTH_PROVIDERS.has(provider)) {
           await supabase.auth.signOut();
+          clearOAuthIntent();
 
           navigate('/login', {
             replace: true,
@@ -112,31 +198,16 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        if ((!profile || !profile.user_type) && metadataRole && provider === 'email') {
-          const { error: createProfileError } = await supabase
-            .from('profiles')
-            .upsert(
-              {
-                id: user.id,
-                full_name: profile?.full_name || user.user_metadata?.full_name || '',
-                email: user.email,
-                user_type: metadataRole,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: 'id' }
-            );
-
-          if (createProfileError) throw createProfileError;
-        }
-
-        if (!profile?.user_type && !metadataRole) {
+        if (!profile?.user_type) {
           await supabase.auth.signOut();
+          clearOAuthIntent();
 
-          navigate('/login', {
+          navigate('/register', {
             replace: true,
             state: {
+              email: user.email || '',
               error:
-                'Your account role is missing. Please register again or contact support.',
+                'Your ScaleScope role profile was not found. Please create/select your role again, or contact support if this email already exists.',
             },
           });
 
@@ -151,12 +222,13 @@ export default function AuthCallbackPage() {
         }
 
         if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
+          markAuthActivity();
           navigate('/mfa', { replace: true });
           return;
         }
 
-        sessionStorage.removeItem('oauth_registered_login');
-        sessionStorage.removeItem('oauth_registered_email');
+        clearOAuthIntent();
+        markAuthActivity();
         navigate('/dashboard', { replace: true });
       } catch (err) {
         if (mounted) {

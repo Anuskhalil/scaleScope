@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import { useRealtime } from '../../hooks/useRealtime';
 import GrowthSignalPanel from '../../components/GrowthSignalPanel';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   Rocket,
   Users,
@@ -153,8 +154,7 @@ const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
 async function getCachedUrl(path) {
-  if (!path || String(path).startsWith('http')) return path;
-
+  if (!path) return null;
   const key = `av:${path}`;
   const cached = AVATAR_CACHE.get(key);
 
@@ -162,23 +162,14 @@ async function getCachedUrl(path) {
     return cached.url;
   }
 
-  try {
-    const cleanPath = String(path).replace(/^avatars\//, '');
+  const signedUrl = await getSignedAvatarUrl(path);
+  if (signedUrl) {
+    AVATAR_CACHE.set(key, {
+      url: signedUrl,
+      ts: Date.now(),
+    });
 
-    const { data } = await supabase.storage
-      .from('avatars')
-      .createSignedUrl(cleanPath, 3600);
-
-    if (data?.signedUrl) {
-      AVATAR_CACHE.set(key, {
-        url: data.signedUrl,
-        ts: Date.now(),
-      });
-
-      return data.signedUrl;
-    }
-  } catch (err) {
-    console.warn('Avatar signed URL failed:', err);
+    return signedUrl;
   }
 
   return null;

@@ -1,13 +1,44 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { clearAuthActivity, isAuthIdleExpired, markAuthActivity } from './authActivity';
 
 const AuthCtx = createContext(null);
+const SUPABASE_SESSION_KEY = 'scalescope-auth-session';
+
+const hasPersistedSession = () => {
+  try {
+    return Boolean(localStorage.getItem(SUPABASE_SESSION_KEY));
+  } catch {
+    return false;
+  }
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const ensureFreshSession = async (currentSession) => {
+  if (!currentSession) return null;
+
+  const expiresAtMs = Number(currentSession.expires_at || 0) * 1000;
+  const shouldRefresh = expiresAtMs && expiresAtMs - Date.now() < 5 * 60 * 1000;
+
+  if (!shouldRefresh) return currentSession;
+
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error) {
+    console.warn('Session refresh skipped, keeping existing session:', error.message);
+    return currentSession;
+  }
+
+  return data.session || currentSession;
+};
 
 export function AuthProvider({ children }) {
+  const initCompleteRef = useRef(false);
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [profileMissing, setProfileMissing] = useState(false);
   const [mfaLevel, setMfaLevel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
@@ -15,6 +46,7 @@ export function AuthProvider({ children }) {
   const loadProfile = useCallback(async (userId) => {
     if (!userId) {
       setProfile(null);
+      setProfileMissing(false);
       return null;
     }
 
@@ -27,10 +59,12 @@ export function AuthProvider({ children }) {
     if (error) {
       console.error('Profile load error:', error);
       setProfile(null);
+      setProfileMissing(false);
       return null;
     }
 
     setProfile(data || null);
+    setProfileMissing(!data);
     return data || null;
   }, []);
 
@@ -62,8 +96,23 @@ export function AuthProvider({ children }) {
 
       if (error) throw error;
 
-      const currentSession = data.session || null;
+      const currentSession = await ensureFreshSession(data.session || null);
       const currentUser = currentSession?.user || null;
+
+      if (currentSession && isAuthIdleExpired()) {
+        await supabase.auth.signOut();
+        clearAuthActivity();
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setProfileMissing(false);
+        setMfaLevel(null);
+        return;
+      }
+
+      if (currentSession) {
+        markAuthActivity();
+      }
 
       setSession(currentSession);
       setUser(currentUser);
@@ -75,6 +124,7 @@ export function AuthProvider({ children }) {
         ]);
       } else {
         setProfile(null);
+        setProfileMissing(false);
         setMfaLevel(null);
       }
     } catch (err) {
@@ -82,6 +132,7 @@ export function AuthProvider({ children }) {
       setSession(null);
       setUser(null);
       setProfile(null);
+      setProfileMissing(false);
       setMfaLevel(null);
       setAuthError(err.message || 'Authentication failed');
     } finally {
@@ -91,17 +142,44 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    initCompleteRef.current = false;
 
     async function initAuth() {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        let { data, error } = await supabase.auth.getSession();
 
         if (error) throw error;
 
+        if (!data?.session && hasPersistedSession()) {
+          await wait(300);
+          const retry = await supabase.auth.getSession();
+          data = retry.data;
+          error = retry.error;
+          if (error) throw error;
+        }
+
         if (!mounted) return;
 
-        const nextSession = data?.session || null;
+        const nextSession = await ensureFreshSession(data?.session || null);
         const nextUser = nextSession?.user || null;
+
+        if (nextSession && isAuthIdleExpired()) {
+          await supabase.auth.signOut();
+          clearAuthActivity();
+
+          if (!mounted) return;
+
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setProfileMissing(false);
+          setMfaLevel(null);
+          return;
+        }
+
+        if (nextSession) {
+          markAuthActivity();
+        }
 
         setSession(nextSession);
         setUser(nextUser);
@@ -110,6 +188,7 @@ export function AuthProvider({ children }) {
           await Promise.all([loadProfile(nextUser.id), refreshMfaLevel()]);
         } else {
           setProfile(null);
+          setProfileMissing(false);
           setMfaLevel(null);
         }
       } catch (err) {
@@ -119,8 +198,11 @@ export function AuthProvider({ children }) {
 
         setSession(null);
         setUser(null);
+        setProfile(null);
+        setProfileMissing(false);
       } finally {
         if (mounted) {
+          initCompleteRef.current = true;
           setLoading(false);
         }
       }
@@ -130,10 +212,24 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!mounted) return;
 
+      if (!initCompleteRef.current && event === 'INITIAL_SESSION') {
+        return;
+      }
+
+      if (!nextSession && event !== 'SIGNED_OUT' && hasPersistedSession()) {
+        return;
+      }
+
       const nextUser = nextSession?.user || null;
+
+      if (event === 'SIGNED_OUT') {
+        clearAuthActivity();
+      } else if (nextSession) {
+        markAuthActivity();
+      }
 
       setSession(nextSession || null);
       setUser(nextUser);
@@ -147,6 +243,7 @@ export function AuthProvider({ children }) {
         }, 0);
       } else {
         setProfile(null);
+        setProfileMissing(false);
         setMfaLevel(null);
       }
     });
@@ -156,6 +253,26 @@ export function AuthProvider({ children }) {
       subscription?.unsubscribe();
     };
   }, [loadProfile, refreshMfaLevel]);
+
+  useEffect(() => {
+    if (!session) return undefined;
+
+    const markActive = () => markAuthActivity();
+    const events = ['click', 'keydown', 'mousemove', 'touchstart', 'visibilitychange'];
+
+    events.forEach((eventName) => {
+      window.addEventListener(eventName, markActive, { passive: true });
+    });
+
+    const interval = window.setInterval(markActive, 60 * 1000);
+
+    return () => {
+      events.forEach((eventName) => {
+        window.removeEventListener(eventName, markActive);
+      });
+      window.clearInterval(interval);
+    };
+  }, [session]);
 
   const emailVerified = Boolean(
     user?.email_confirmed_at ||
@@ -176,6 +293,7 @@ export function AuthProvider({ children }) {
     session,
     user,
     profile,
+    profileMissing,
     loading,
     authError,
     emailVerified,
@@ -185,7 +303,7 @@ export function AuthProvider({ children }) {
     refreshAuth: hydrateAuth,
     refreshMfaLevel,
     signOut: () => supabase.auth.signOut(),
-  }), [session, user, profile, loading, authError, emailVerified, mfaLevel, needsMfa, isAuthenticated, hydrateAuth, refreshMfaLevel]);
+  }), [session, user, profile, profileMissing, loading, authError, emailVerified, mfaLevel, needsMfa, isAuthenticated, hydrateAuth, refreshMfaLevel]);
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

@@ -30,6 +30,7 @@ import { backendApi } from '../../lib/backendApi';
 import GrowthSignalPanel from '../../components/GrowthSignalPanel';
 import MatchOutcomeFeedback from '../../components/MatchOutcomeFeedback';
 import { useAuth } from '../../auth/AuthContext';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 
 const CSS = `
   :root {
@@ -52,29 +53,6 @@ const CSS = `
   .lift:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(27,45,127,.12); }
   button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 `;
-
-const AVATAR_CACHE = new Map();
-const CACHE_TTL = 30 * 60 * 1000;
-
-async function getCachedAvatarUrl(path) {
-  if (!path) return '';
-  if (path.startsWith('http')) return path;
-
-  const cleanPath = path.replace(/^avatars\//, '').replace(/^\/+/, '');
-  const key = `avatar:${cleanPath}`;
-  const cached = AVATAR_CACHE.get(key);
-
-  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.url;
-
-  const { data, error } = await supabase.storage
-    .from('avatars')
-    .createSignedUrl(cleanPath, 60 * 60);
-
-  if (error || !data?.signedUrl) return '';
-
-  AVATAR_CACHE.set(key, { url: data.signedUrl, ts: Date.now() });
-  return data.signedUrl;
-}
 
 const safeArray = (value) => (Array.isArray(value) ? value : []);
 const hasText = (value) => String(value || '').trim().length > 0;
@@ -236,7 +214,6 @@ function StudentDetails({ student }) {
         />
         <div className="space-y-4 mt-4">
           <ChipGroup title="Skills" values={safeArray(student.skills_with_levels)} />
-          <ChipGroup title="Interests" values={safeArray(student.interests)} tone="green" />
           <ChipGroup title="Preferred Industries" values={safeArray(student.preferred_industries)} />
           <ChipGroup title="Help Needed" values={safeArray(student.help_needed)} tone="green" />
           <ChipGroup title="Languages" values={safeArray(student.languages)} />
@@ -466,7 +443,7 @@ export default function StudentViewProfile() {
           mentor: mentorRes.status === 'fulfilled' ? mentorRes.value.data : null,
           investor: investorRes.status === 'fulfilled' ? investorRes.value.data : null,
         });
-        setAvatarUrl(await getCachedAvatarUrl(profile.avatar_url));
+        setAvatarUrl(await getSignedAvatarUrl(profile.avatar_url));
         setConnectionStatus(connections.some((conn) => conn.otherUser?.id === userId) ? 'accepted' : null);
         setState({ loading: false, error: null });
       } catch (err) {

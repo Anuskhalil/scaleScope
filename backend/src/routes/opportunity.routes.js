@@ -216,7 +216,7 @@ async function getProfileContext(userId) {
     supabase.from('profiles').select('id, location, user_type').eq('id', userId).maybeSingle(),
     supabase
       .from('student_profiles')
-      .select('interests, skills_with_levels, help_needed, idea_domain, university')
+      .select('preferred_industries, skills_with_levels, help_needed, idea_domain, university')
       .eq('user_id', userId)
       .maybeSingle(),
     supabase
@@ -235,7 +235,7 @@ async function getProfileContext(userId) {
     domains: [
       student.idea_domain,
       founder.industry,
-      ...(student.interests || []),
+      ...(student.preferred_industries || []),
       ...(student.help_needed || []),
       ...(founder.help_needed || []),
       ...(founder.skills_needed || []),

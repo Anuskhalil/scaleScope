@@ -5,6 +5,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { backendApi } from '../lib/backendApi';
 import { attachMatchIntelligence } from './intelligentMatching';
+import { uploadRoleAvatar } from '../utils/avatarStorage';
 
 // ── Re-export shared infrastructure ──────────────────────────────────────
 export {
@@ -212,20 +213,22 @@ export async function saveInvestorDetails(userId, data) {
  * Upload avatar and update profiles.avatar_url.
  */
 export async function uploadInvestorAvatar(userId, file) {
-  const path = `avatars/${userId}.${file.name.split('.').pop()}`;
-  const { error: ue } = await supabase.storage
-    .from('avatars').upload(path, file, { upsert: true });
-  if (ue) throw ue;
-  const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+  const { path, signedUrl } = await uploadRoleAvatar({
+    roleFolder: 'investors',
+    userId,
+    file,
+  });
+
   const { error } = await supabase
     .from('profiles')
     .update({
-      avatar_url: publicUrl,
+      avatar_url: path,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);
   if (error) throw error;
-  return publicUrl;
+
+  return { path, signedUrl };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

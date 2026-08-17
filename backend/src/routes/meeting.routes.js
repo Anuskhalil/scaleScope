@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const auth = require('../middlewares/auth.middleware');
 const supabase = require('../config/supabase');
+const { getIO } = require('../config/socket');
 
 const router = express.Router();
 
@@ -119,6 +120,38 @@ async function getMeeting(meetingId) {
   return data;
 }
 
+async function getConnectedUserIds(userId) {
+  const { data, error } = await supabase
+    .from('connections')
+    .select('user_1, user_2')
+    .or(`user_1.eq.${userId},user_2.eq.${userId}`);
+
+  if (error) throw error;
+
+  return new Set((data || []).map((connection) => {
+    return connection.user_1 === userId ? connection.user_2 : connection.user_1;
+  }));
+}
+
+function emitMeetingInvite({ meeting, senderId, participantIds }) {
+  const io = getIO();
+  if (!io) return;
+
+  participantIds
+    .filter((userId) => userId && userId !== senderId)
+    .forEach((userId) => {
+      io.to(`user:${userId}`).emit('meeting:invited', {
+        meetingId: meeting.id,
+        conversationId: meeting.conversation_id,
+        title: meeting.title,
+        hostId: senderId,
+        status: meeting.status,
+        joinPath: `/meetings/${meeting.id}`,
+        createdAt: meeting.created_at || new Date().toISOString(),
+      });
+    });
+}
+
 router.post('/', async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -170,12 +203,82 @@ router.post('/', async (req, res) => {
 
     if (participantsError) throw participantsError;
 
+    emitMeetingInvite({
+      meeting,
+      senderId: currentUserId,
+      participantIds: participants.map((participant) => participant.user_id),
+    });
+
     res.status(201).json({
       success: true,
       data: meeting,
     });
   } catch (err) {
     console.error('Create meeting failed:', err);
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+router.post('/:meetingId/invite', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { meetingId } = req.params;
+    const userIds = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
+
+    if (!isUuid(meetingId)) {
+      return res.status(400).json({ error: 'Invalid meetingId' });
+    }
+
+    const uniqueUserIds = [...new Set(userIds.map(String))].filter((id) => {
+      return isUuid(id) && id !== userId;
+    });
+
+    if (uniqueUserIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one valid connected user' });
+    }
+
+    await assertMeetingParticipant(meetingId, userId);
+    const meeting = await getMeeting(meetingId);
+
+    if (['ended', 'cancelled'].includes(meeting.status)) {
+      return res.status(409).json({ error: 'This meeting is no longer active' });
+    }
+
+    const connectedUserIds = await getConnectedUserIds(userId);
+    const allowedUserIds = uniqueUserIds.filter((id) => connectedUserIds.has(id));
+
+    if (allowedUserIds.length === 0) {
+      return res.status(403).json({ error: 'You can only invite connected users' });
+    }
+
+    const rows = allowedUserIds.map((id) => ({
+      meeting_id: meetingId,
+      user_id: id,
+      role: 'participant',
+    }));
+
+    const { error } = await supabase
+      .from('meeting_participants')
+      .upsert(rows, {
+        onConflict: 'meeting_id,user_id',
+      });
+
+    if (error) throw error;
+
+    emitMeetingInvite({
+      meeting,
+      senderId: userId,
+      participantIds: allowedUserIds,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        invitedUserIds: allowedUserIds,
+      },
+    });
+  } catch (err) {
+    console.error('Invite meeting participants failed:', err);
     res.status(err.status || 400).json({ error: err.message });
   }
 });

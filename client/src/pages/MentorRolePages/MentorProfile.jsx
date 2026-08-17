@@ -42,6 +42,7 @@ import {
   saveMentorDetails,
   uploadMentorAvatar,
 } from '../../services/mentorService';
+import { getAvatarStoragePath, getSignedAvatarUrl } from '../../utils/avatarStorage';
 
 const STYLES = `
   :root { --primary: #98DE38; --primary-dark: #7EC42E; --secondary: #1B2D7F; --secondary-light: #2A3F8F; --white: #fff; --gray-50: #F9FAFB; --gray-100: #F3F4F6; --gray-200: #E5E7EB; }
@@ -394,6 +395,7 @@ export default function MentorProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [avatarPath, setAvatarPath] = useState('');
   const [formData, setFormData] = useState(makeEmpty(user));
   const [companyInput, setCompanyInput] = useState('');
   const [foundedInput, setFoundedInput] = useState('');
@@ -490,9 +492,16 @@ export default function MentorProfilePage() {
             ...draft,
           }
         : normalizeProfile(user, profile, mentorProfile);
+      const stableAvatarPath = getAvatarStoragePath(profile?.avatar_url || normalized.avatar_url);
+      const displayAvatarUrl = await getSignedAvatarUrl(stableAvatarPath || normalized.avatar_url);
+      const normalizedWithAvatar = {
+        ...normalized,
+        avatar_url: displayAvatarUrl || normalized.avatar_url,
+      };
 
-      snapRef.current = normalized;
-      setFormData(normalized);
+      setAvatarPath(stableAvatarPath);
+      snapRef.current = normalizedWithAvatar;
+      setFormData(normalizedWithAvatar);
 
       const shouldStayInEditMode = useDraft && draft?._hasUnsavedChanges;
       setIsEditMode(Boolean(shouldStayInEditMode));
@@ -601,6 +610,7 @@ export default function MentorProfilePage() {
       const completion = calcCompletionWithBreakdown(formData).percentage;
       const payload = {
         ...formData,
+        avatar_url: avatarPath || getAvatarStoragePath(formData.avatar_url),
         booking_url: '',
         github_url: '',
         twitter_url: '',
@@ -648,8 +658,9 @@ export default function MentorProfilePage() {
     setUploading(true);
 
     try {
-      const url = await uploadMentorAvatar(user.id, file);
-      updateField('avatar_url', url);
+      const { path, signedUrl } = await uploadMentorAvatar(user.id, file);
+      setAvatarPath(path);
+      updateField('avatar_url', signedUrl || path);
       toast.success('Avatar updated!');
     } catch (err) {
       console.error('Avatar upload error:', err);

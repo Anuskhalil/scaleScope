@@ -1,6 +1,7 @@
 const express = require('express');
 const auth = require('../middlewares/auth.middleware');
 const { sendRequest, respondRequest } = require('../services/connection.service');
+const { checkUsageLimit, incrementUsage } = require('../services/billing.service');
 const supabase = require('../config/supabase');
 const { getIO } = require('../config/socket');
 
@@ -16,6 +17,20 @@ router.post('/request', async (req, res) => {
 
         if (!isUuid(receiverId)) {
             return res.status(400).json({ error: 'Invalid receiverId' });
+        }
+
+        const usage = await checkUsageLimit(req.user.id, 'connection_requests');
+
+        if (!usage.allowed) {
+            return res.status(402).json({
+                success: false,
+                error: `Monthly connection request limit reached for your ${usage.billing.plan?.name || 'current'} plan.`,
+                code: 'USAGE_LIMIT_REACHED',
+                feature: usage.featureKey,
+                used: usage.used,
+                limit: usage.limit,
+                upgradePath: '/pricing',
+            });
         }
 
         const result = await sendRequest(
@@ -34,6 +49,8 @@ router.post('/request', async (req, res) => {
                 alreadyConnected: Boolean(result.alreadyConnected),
             });
         }
+
+        await incrementUsage(req.user.id, 'connection_requests');
 
         getIO()?.to(`user:${receiverId}`).emit('conn:request', {
             id: result.id,

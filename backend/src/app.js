@@ -14,6 +14,8 @@ const conversationRoutes = require('./routes/conversation.routes');
 const opportunityRoutes = require('./routes/opportunity.routes');
 const meetingRoutes = require('./routes/meeting.routes');
 const growthRoutes = require('./routes/growth.routes');
+const billingRoutes = require('./routes/billing.routes');
+const authRoutes = require('./routes/auth.routes');
 
 const app = express();
 const server = http.createServer(app);
@@ -26,6 +28,10 @@ function createApiRateLimiter({
   const hits = new Map();
 
   return (req, res, next) => {
+    if (req.originalUrl?.startsWith('/api/billing/webhook')) {
+      return next();
+    }
+
     const now = Date.now();
     const key = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     const bucket = (hits.get(key) || []).filter((ts) => now - ts < windowMs);
@@ -72,7 +78,14 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Body parser
-app.use(express.json({ limit: jsonLimit }));
+app.use(express.json({
+  limit: jsonLimit,
+  verify: (req, _res, buf) => {
+    if (req.originalUrl?.startsWith('/api/billing/webhook')) {
+      req.rawBody = Buffer.from(buf);
+    }
+  },
+}));
 
 // Logger
 app.use(
@@ -100,6 +113,8 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/opportunities', opportunityRoutes);
 app.use('/api/meetings', meetingRoutes);
 app.use('/api/growth', growthRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/auth', authRoutes);
 
 // Not found handler
 app.use((req, res) => {

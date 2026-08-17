@@ -1,12 +1,14 @@
 import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
+import { useAuth } from '../../auth/AuthContext';
 
 export default function UserMenu({ user }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef();
   const navigate = useNavigate();
-  const role = user?.user_metadata?.user_type;
+  const { profile } = useAuth();
+  const role = profile?.user_type;
 
   // Role-Specific Action Links
   const roleLinks = {

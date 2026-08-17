@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import { useRealtime } from '../../hooks/useRealtime';
 import CofounderCard from '../../components/CoFounderCard';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import GrowthSignalPanel from '../../components/GrowthSignalPanel';
 import {
   fetchConversations,
@@ -145,8 +146,7 @@ const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
 async function getCachedUrl(path) {
-  if (!path || path.startsWith('http')) return path;
-
+  if (!path) return null;
   const key = `av:${path}`;
   const cached = AVATAR_CACHE.get(key);
 
@@ -154,22 +154,14 @@ async function getCachedUrl(path) {
     return cached.url;
   }
 
-  try {
-    const cleanPath = path.replace('avatars/', '');
-    const { data } = await supabase.storage
-      .from('avatars')
-      .createSignedUrl(cleanPath, 3600);
+  const signedUrl = await getSignedAvatarUrl(path);
+  if (signedUrl) {
+    AVATAR_CACHE.set(key, {
+      url: signedUrl,
+      ts: Date.now(),
+    });
 
-    if (data?.signedUrl) {
-      AVATAR_CACHE.set(key, {
-        url: data.signedUrl,
-        ts: Date.now(),
-      });
-
-      return data.signedUrl;
-    }
-  } catch (err) {
-    console.warn('Avatar signed URL failed:', err);
+    return signedUrl;
   }
 
   return null;
@@ -778,16 +770,23 @@ function computeMentorMatchScore(currentProfile, candidate) {
       .filter(Boolean)
   );
 
-  const currentInterests = new Set(
-    (currentProfile.interests || [])
-      .map(clean)
+  const currentIndustries = new Set(
+    [
+      currentProfile.idea_domain,
+      ...(currentProfile.preferred_industries || []),
+    ]
       .filter(Boolean)
+      .map(clean)
   );
 
-  const candidateInterests = new Set(
-    (candidate.interests || [])
-      .map(clean)
+  const candidateIndustries = new Set(
+    [
+      candidate.idea_domain,
+      ...(candidate.preferred_industries || []),
+      ...(candidate.industries_supported || []),
+    ]
       .filter(Boolean)
+      .map(clean)
   );
 
   const helpSkillMatches = [...candidateSkills].filter((skill) =>
@@ -823,13 +822,13 @@ function computeMentorMatchScore(currentProfile, candidate) {
     reasons.push(`Same startup domain: ${candidate.idea_domain}`);
   }
 
-  const sharedInterests = [...currentInterests].filter((interest) =>
-    candidateInterests.has(interest)
+  const sharedIndustries = [...currentIndustries].filter((industry) =>
+    candidateIndustries.has(industry)
   );
 
-  if (sharedInterests.length > 0) {
-    score += Math.min(10, sharedInterests.length * 5);
-    reasons.push(`Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`);
+  if (sharedIndustries.length > 0) {
+    score += Math.min(10, sharedIndustries.length * 5);
+    reasons.push(`Shared industries: ${sharedIndustries.slice(0, 2).join(', ')}`);
   }
 
   if (

@@ -31,6 +31,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import { fetchCoFounders } from '../../services/studentService';
 import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   COMMITMENT_OPTIONS,
   DISCOVERY_SKILLS,
@@ -141,31 +142,16 @@ const AVATAR_CACHE = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
 async function getCachedUrl(path) {
-  if (!path || path.startsWith('http')) return path;
-
+  if (!path) return null;
   const key = `av:${path}`;
   const cached = AVATAR_CACHE.get(key);
 
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.url;
 
-  try {
-    const cleanPath = path.replace(/^avatars\//, '').replace(/^\/+/, '');
-
-    const { data, error } = await supabase.storage
-      .from('avatars')
-      .createSignedUrl(cleanPath, 3600);
-
-    if (error) {
-      console.warn('Avatar signed URL error:', error.message);
-      return null;
-    }
-
-    if (data?.signedUrl) {
-      AVATAR_CACHE.set(key, { url: data.signedUrl, ts: Date.now() });
-      return data.signedUrl;
-    }
-  } catch (err) {
-    console.warn('Avatar load failed:', err);
+  const signedUrl = await getSignedAvatarUrl(path);
+  if (signedUrl) {
+    AVATAR_CACHE.set(key, { url: signedUrl, ts: Date.now() });
+    return signedUrl;
   }
 
   return null;
@@ -309,16 +295,22 @@ function computeCoFounderMatch(currentUserProfile, candidate) {
       .filter(Boolean)
   );
 
-  const currentInterests = new Set(
-    (currentUserProfile.interests || [])
-      .map(normalizeText)
+  const currentIndustries = new Set(
+    [
+      currentUserProfile.idea_domain,
+      ...(currentUserProfile.preferred_industries || []),
+    ]
       .filter(Boolean)
+      .map(normalizeText)
   );
 
-  const candidateInterests = new Set(
-    (candidate.interests || [])
-      .map(normalizeText)
+  const candidateIndustries = new Set(
+    [
+      candidate.idea_domain,
+      ...(candidate.preferred_industries || []),
+    ]
       .filter(Boolean)
+      .map(normalizeText)
   );
 
   const needSkillMatches = [...candidateSkills].filter((skill) => {
@@ -362,13 +354,13 @@ function computeCoFounderMatch(currentUserProfile, candidate) {
     score += 15;
     reasons.push(`Same startup domain: ${candidate.idea_domain}`);
   } else {
-    const sharedInterests = [...currentInterests].filter((interest) =>
-      candidateInterests.has(interest)
+    const sharedIndustries = [...currentIndustries].filter((industry) =>
+      candidateIndustries.has(industry)
     );
 
-    if (sharedInterests.length > 0) {
-      score += Math.min(10, sharedInterests.length * 5);
-      reasons.push(`Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`);
+    if (sharedIndustries.length > 0) {
+      score += Math.min(10, sharedIndustries.length * 5);
+      reasons.push(`Shared industries: ${sharedIndustries.slice(0, 2).join(', ')}`);
     }
   }
 
@@ -746,7 +738,7 @@ export default function FindCoFoundersPage() {
               major,
               current_year,
               skills_with_levels,
-              interests,
+              preferred_industries,
               help_needed,
               looking_for,
               commitment_level,
@@ -795,7 +787,7 @@ export default function FindCoFoundersPage() {
             major,
             current_year,
             skills_with_levels,
-            interests,
+            preferred_industries,
             help_needed,
             looking_for,
             commitment_level,
@@ -1193,7 +1185,7 @@ export default function FindCoFoundersPage() {
             </h3>
 
             <p className="text-sm text-gray-600">
-              Add skills, help-needed fields, commitment level, startup idea details, and interests to improve AI matching quality.
+              Add skills, help-needed fields, commitment level, startup idea details, and preferred industries to improve AI matching quality.
             </p>
 
             <Link to="/profile" className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 mt-3 hover:underline">

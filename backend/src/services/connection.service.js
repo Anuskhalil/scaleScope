@@ -5,6 +5,7 @@ const VALID_REQUEST_TYPES = [
   'mentor_offer',
   'cofounder_request',
   'investor_contact',
+  'investor_interest',
   'team_invite',
 ];
 

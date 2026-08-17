@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import GrowthSignalPanel from '../../components/GrowthSignalPanel';
+import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   fetchMentorDashboard,
   calcMentorCompletion,
@@ -163,7 +164,36 @@ const timeAgo = (iso) => {
 };
 
 const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'md' }) => {
+  const [url, setUrl] = useState(null);
+  const [loading, setLoading] = useState(Boolean(path));
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!path) {
+      setUrl(null);
+      setLoading(false);
+      setFailed(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoading(true);
+    setFailed(false);
+
+    getSignedAvatarUrl(path).then((signedUrl) => {
+      if (!cancelled) {
+        setUrl(signedUrl);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
 
   const sizeClass = {
     sm: 'w-8 h-8',
@@ -172,10 +202,14 @@ const Avatar = memo(({ name, path, grad = 'from-gray-400 to-gray-500', size = 'm
     xl: 'w-14 h-14',
   }[size];
 
-  if (path && !failed) {
+  if (loading) {
+    return <div className={`${sizeClass} rounded-xl shimmer`} aria-hidden="true" />;
+  }
+
+  if (url && !failed) {
     return (
       <img
-        src={path}
+        src={url}
         alt=""
         className={`${sizeClass} object-cover rounded-xl`}
         loading="lazy"

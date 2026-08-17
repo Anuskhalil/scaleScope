@@ -10,6 +10,7 @@ import {
   MicOff,
   MonitorUp,
   PhoneOff,
+  UserPlus,
   Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -195,6 +196,9 @@ export default function MeetingRoomPage() {
   });
   const [meeting, setMeeting] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [selectedInvitees, setSelectedInvitees] = useState([]);
+  const [inviting, setInviting] = useState(false);
   const [videoTracks, setVideoTracks] = useState([]);
   const [audioTracks, setAudioTracks] = useState([]);
   const messagesPath = profile?.user_type === 'early-stage-founder'
@@ -213,9 +217,13 @@ export default function MeetingRoomPage() {
 
     const load = async () => {
       try {
-        const response = await backendApi.getMeeting(meetingId);
+        const [response, connectionResponse] = await Promise.all([
+          backendApi.getMeeting(meetingId),
+          backendApi.getMyConnections().catch(() => ({ data: [] })),
+        ]);
         if (!mounted) return;
         setMeeting(response.data?.meeting || null);
+        setConnections(connectionResponse.data || []);
       } catch (err) {
         if (!mounted) return;
         setState((prev) => ({
@@ -238,6 +246,29 @@ export default function MeetingRoomPage() {
       mounted = false;
     };
   }, [meetingId]);
+
+  const toggleInvitee = useCallback((userId) => {
+    setSelectedInvitees((prev) => {
+      return prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId];
+    });
+  }, []);
+
+  const inviteSelectedUsers = useCallback(async () => {
+    if (!meetingId || selectedInvitees.length === 0 || inviting) return;
+
+    try {
+      setInviting(true);
+      await backendApi.inviteMeetingParticipants(meetingId, selectedInvitees);
+      toast.success('Meeting invite sent');
+      setSelectedInvitees([]);
+    } catch (err) {
+      toast.error(err.message || 'Could not invite users');
+    } finally {
+      setInviting(false);
+    }
+  }, [inviting, meetingId, selectedInvitees]);
 
   const joinMeeting = useCallback(async () => {
     if (!meetingId || state.joining || state.connected) return;
@@ -505,6 +536,61 @@ export default function MeetingRoomPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="mt-5 pt-5 border-t border-white/10">
+                <h3 className="font-black text-sm flex items-center gap-2">
+                  <UserPlus className="w-4 text-[#98DE38]" />
+                  Invite connected users
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Add mentors, investors, founders, or students already connected with you.
+                </p>
+
+                <div className="space-y-2 mt-3 max-h-56 overflow-y-auto pr-1">
+                  {connections.length > 0 ? (
+                    connections.map((connection) => {
+                      const person = connection.otherUser || {};
+                      const selected = selectedInvitees.includes(person.id);
+
+                      return (
+                        <button
+                          key={connection.id || person.id}
+                          type="button"
+                          onClick={() => person.id && toggleInvitee(person.id)}
+                          className={`w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left transition ${
+                            selected ? 'bg-[#98DE38] text-black' : 'bg-white/5 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black ${
+                            selected ? 'bg-black text-white' : 'bg-[#98DE38] text-black'
+                          }`}>
+                            {initials(person.full_name)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold truncate">{person.full_name || 'User'}</p>
+                            <p className={`text-xs truncate ${selected ? 'text-black/70' : 'text-slate-400'}`}>
+                              {person.user_type?.replace(/-/g, ' ') || 'Connection'}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="text-xs text-slate-400 bg-white/5 rounded-xl p-3">
+                      No accepted connections available to invite.
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={inviteSelectedUsers}
+                  disabled={selectedInvitees.length === 0 || inviting}
+                  className="mt-3 w-full py-2.5 rounded-xl bg-[#98DE38] text-black text-sm font-black disabled:opacity-50"
+                >
+                  {inviting ? 'Sending...' : `Send Invite${selectedInvitees.length ? ` (${selectedInvitees.length})` : ''}`}
+                </button>
               </div>
             </aside>
           </section>
