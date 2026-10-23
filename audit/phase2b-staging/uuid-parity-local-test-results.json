@@ -1,0 +1,237 @@
+{
+  "status": "PASS",
+  "sql_sha256": "bef4b60e30d251a63df52fadda33f104439c1662013d18aa33b9a0a90c93b9e0",
+  "checks": [
+    "35 corrected bindings",
+    "existing UUID values unchanged",
+    "already-corrected baseline refused",
+    "unexpected default refused with no partial correction"
+  ],
+  "limits": [
+    "Vanilla PostgreSQL 17.6 with synthetic tables; not hosted Supabase",
+    "No production or staging database connection"
+  ],
+  "logs": [
+    {
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-d",
+        "--name",
+        "scalescope-uuid-test-7730e317f4",
+        "--network",
+        "none",
+        "-e",
+        "POSTGRES_HOST_AUTH_METHOD=trust",
+        "postgres:17.6"
+      ],
+      "exit_code": 0,
+      "stdout": "25569eda5dfb6ab66842948069fb7b6bfa70f69cb5813b2795445077c048794d\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "exit_code": 0,
+      "stdout": "CREATE SCHEMA\nCREATE EXTENSION\nCREATE EXTENSION\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\nINSERT 0 1\nCREATE TABLE\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "exit_code": 0,
+      "stdout": "ai_growth_plans|026556cd-4f16-4581-8708-d741f6e89ed5\naudit_log|ea324976-4d24-4e75-be17-180bef617f5c\nconnected_identity_accounts|5c17f2bb-e52c-4e02-84a5-364ee699d404\nconnection_requests|1b4c628b-1ddc-4979-9e01-60a2ded8861e\nconnections|56354aae-de2a-4fea-acdf-3f168e9a488c\nconversation_members|8976f63c-41d2-4b5c-9ffe-fec69ffbbf87\nconversation_participants|341c202c-2d12-4a9c-a8b9-2954307aa600\nconversations|8d5dab74-428d-4737-9da7-86ee507a6f5d\nevidence_reviews|978be8da-b2b6-4340-a2d3-17a860b4973c\nfounder_profiles|052d3ec1-b014-4348-9f5c-180c1d86fc79\ninteraction_history|c7e72ff3-a2b7-4ea3-97fe-e9dad55307ed\ninvestor_profiles|a479f4d0-cad1-4d15-8a2d-e9c70048683c\nmatch_feedback|9a694528-09e0-46ed-8b15-cb7ae0095560\nmatching_events|4d575cb0-34cf-4fbf-ac02-4b32f8fd6483\nmatch_outcomes|d0c6b053-2cc9-4d54-91e4-8231f4894de0\nmeeting_participants|eb65f5af-809d-407d-9fad-f5147dd75d92\nmeetings|50fc1e51-18dc-4d72-84e8-09e22e2116ae\nmentor_profiles|32324a8d-734f-4a8e-a4d3-c6fab1c9c13c\nmentorship_milestones|71132856-4569-45e3-92f9-b2e2543fc4cb\nmessages|d13b377a-8d1f-429c-a267-3f08a1135711\nopportunities|ffffddbc-c52e-4c87-9952-7aceb58031b4\nprofile_evidence_files|6794e732-240e-4009-9784-aa007aa1ff36\nprofile_review_history|ae2b9497-d2ff-4b88-8ba3-f80e004a349b\nprofile_verification_checks|5b6de20f-f50a-4bbb-82c3-6dc70324ec30\nprofile_verifications|9a438455-aba4-42ea-b5ff-3b1f306d5a13\nroadmap_tasks|abeac0a7-b210-4043-8108-cf888179891b\nskill_taxonomy|5490beff-e8c5-47eb-9787-83504564dc2d\nstartup_readiness_scores|916e60f1-3e6b-4cff-abd5-baf9a6811fae\nstudent_activities|d7fdb717-7a0f-4fab-b240-3a9c4a335e69\nstudent_profiles|51a1664e-7f04-4c73-b596-a938357418bf\nsubscription_plans|c99f311c-bc0d-4233-97c6-c1ac0e19937a\ntrust_evidence|29cd673d-9315-420a-a237-d82e478340a1\ntrust_scores|186a2407-c719-436d-b789-1d4db0b0a1ac\nusage_counters|fe5482f7-d1a1-40fe-b4ef-dd13a382b4ac\nuser_subscriptions|3ce43b73-ed79-4b95-acf0-9ea45574161d\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "exit_code": 0,
+      "stdout": "BEGIN\nSET\nSET\nSET\nDO\nCOMMIT\n             column1              \n----------------------------------\n STAGING_UUID_DEFAULTS_ALIGNED_35\n(1 row)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "exit_code": 0,
+      "stdout": "ai_growth_plans|026556cd-4f16-4581-8708-d741f6e89ed5\naudit_log|ea324976-4d24-4e75-be17-180bef617f5c\nconnected_identity_accounts|5c17f2bb-e52c-4e02-84a5-364ee699d404\nconnection_requests|1b4c628b-1ddc-4979-9e01-60a2ded8861e\nconnections|56354aae-de2a-4fea-acdf-3f168e9a488c\nconversation_members|8976f63c-41d2-4b5c-9ffe-fec69ffbbf87\nconversation_participants|341c202c-2d12-4a9c-a8b9-2954307aa600\nconversations|8d5dab74-428d-4737-9da7-86ee507a6f5d\nevidence_reviews|978be8da-b2b6-4340-a2d3-17a860b4973c\nfounder_profiles|052d3ec1-b014-4348-9f5c-180c1d86fc79\ninteraction_history|c7e72ff3-a2b7-4ea3-97fe-e9dad55307ed\ninvestor_profiles|a479f4d0-cad1-4d15-8a2d-e9c70048683c\nmatch_feedback|9a694528-09e0-46ed-8b15-cb7ae0095560\nmatching_events|4d575cb0-34cf-4fbf-ac02-4b32f8fd6483\nmatch_outcomes|d0c6b053-2cc9-4d54-91e4-8231f4894de0\nmeeting_participants|eb65f5af-809d-407d-9fad-f5147dd75d92\nmeetings|50fc1e51-18dc-4d72-84e8-09e22e2116ae\nmentor_profiles|32324a8d-734f-4a8e-a4d3-c6fab1c9c13c\nmentorship_milestones|71132856-4569-45e3-92f9-b2e2543fc4cb\nmessages|d13b377a-8d1f-429c-a267-3f08a1135711\nopportunities|ffffddbc-c52e-4c87-9952-7aceb58031b4\nprofile_evidence_files|6794e732-240e-4009-9784-aa007aa1ff36\nprofile_review_history|ae2b9497-d2ff-4b88-8ba3-f80e004a349b\nprofile_verification_checks|5b6de20f-f50a-4bbb-82c3-6dc70324ec30\nprofile_verifications|9a438455-aba4-42ea-b5ff-3b1f306d5a13\nroadmap_tasks|abeac0a7-b210-4043-8108-cf888179891b\nskill_taxonomy|5490beff-e8c5-47eb-9787-83504564dc2d\nstartup_readiness_scores|916e60f1-3e6b-4cff-abd5-baf9a6811fae\nstudent_activities|d7fdb717-7a0f-4fab-b240-3a9c4a335e69\nstudent_profiles|51a1664e-7f04-4c73-b596-a938357418bf\nsubscription_plans|c99f311c-bc0d-4233-97c6-c1ac0e19937a\ntrust_evidence|29cd673d-9315-420a-a237-d82e478340a1\ntrust_scores|186a2407-c719-436d-b789-1d4db0b0a1ac\nusage_counters|fe5482f7-d1a1-40fe-b4ef-dd13a382b4ac\nuser_subscriptions|3ce43b73-ed79-4b95-acf0-9ea45574161d\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "exit_code": 0,
+      "stdout": "SET\n35\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "exit_code": 3,
+      "stdout": "BEGIN\nSET\nSET\nSET\n",
+      "stderr": "ERROR:  STOP: unexpected default on ai_growth_plans.id: gen_random_uuid(). Wrong target or already corrected.\nCONTEXT:  PL/pgSQL function inline_code_block line 59 at RAISE\n"
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "exit_code": 0,
+      "stdout": "ai_growth_plans|026556cd-4f16-4581-8708-d741f6e89ed5\naudit_log|ea324976-4d24-4e75-be17-180bef617f5c\nconnected_identity_accounts|5c17f2bb-e52c-4e02-84a5-364ee699d404\nconnection_requests|1b4c628b-1ddc-4979-9e01-60a2ded8861e\nconnections|56354aae-de2a-4fea-acdf-3f168e9a488c\nconversation_members|8976f63c-41d2-4b5c-9ffe-fec69ffbbf87\nconversation_participants|341c202c-2d12-4a9c-a8b9-2954307aa600\nconversations|8d5dab74-428d-4737-9da7-86ee507a6f5d\nevidence_reviews|978be8da-b2b6-4340-a2d3-17a860b4973c\nfounder_profiles|052d3ec1-b014-4348-9f5c-180c1d86fc79\ninteraction_history|c7e72ff3-a2b7-4ea3-97fe-e9dad55307ed\ninvestor_profiles|a479f4d0-cad1-4d15-8a2d-e9c70048683c\nmatch_feedback|9a694528-09e0-46ed-8b15-cb7ae0095560\nmatching_events|4d575cb0-34cf-4fbf-ac02-4b32f8fd6483\nmatch_outcomes|d0c6b053-2cc9-4d54-91e4-8231f4894de0\nmeeting_participants|eb65f5af-809d-407d-9fad-f5147dd75d92\nmeetings|50fc1e51-18dc-4d72-84e8-09e22e2116ae\nmentor_profiles|32324a8d-734f-4a8e-a4d3-c6fab1c9c13c\nmentorship_milestones|71132856-4569-45e3-92f9-b2e2543fc4cb\nmessages|d13b377a-8d1f-429c-a267-3f08a1135711\nopportunities|ffffddbc-c52e-4c87-9952-7aceb58031b4\nprofile_evidence_files|6794e732-240e-4009-9784-aa007aa1ff36\nprofile_review_history|ae2b9497-d2ff-4b88-8ba3-f80e004a349b\nprofile_verification_checks|5b6de20f-f50a-4bbb-82c3-6dc70324ec30\nprofile_verifications|9a438455-aba4-42ea-b5ff-3b1f306d5a13\nroadmap_tasks|abeac0a7-b210-4043-8108-cf888179891b\nskill_taxonomy|5490beff-e8c5-47eb-9787-83504564dc2d\nstartup_readiness_scores|916e60f1-3e6b-4cff-abd5-baf9a6811fae\nstudent_activities|d7fdb717-7a0f-4fab-b240-3a9c4a335e69\nstudent_profiles|51a1664e-7f04-4c73-b596-a938357418bf\nsubscription_plans|c99f311c-bc0d-4233-97c6-c1ac0e19937a\ntrust_evidence|29cd673d-9315-420a-a237-d82e478340a1\ntrust_scores|186a2407-c719-436d-b789-1d4db0b0a1ac\nusage_counters|fe5482f7-d1a1-40fe-b4ef-dd13a382b4ac\nuser_subscriptions|3ce43b73-ed79-4b95-acf0-9ea45574161d\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "exit_code": 0,
+      "stdout": "ALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\nALTER TABLE\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "exit_code": 3,
+      "stdout": "BEGIN\nSET\nSET\nSET\n",
+      "stderr": "ERROR:  STOP: unexpected default on user_subscriptions.id: <missing>. Wrong target or already corrected.\nCONTEXT:  PL/pgSQL function inline_code_block line 59 at RAISE\n"
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "exit_code": 0,
+      "stdout": "SET\n0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-uuid-test-7730e317f4",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "exit_code": 0,
+      "stdout": "ai_growth_plans|026556cd-4f16-4581-8708-d741f6e89ed5\naudit_log|ea324976-4d24-4e75-be17-180bef617f5c\nconnected_identity_accounts|5c17f2bb-e52c-4e02-84a5-364ee699d404\nconnection_requests|1b4c628b-1ddc-4979-9e01-60a2ded8861e\nconnections|56354aae-de2a-4fea-acdf-3f168e9a488c\nconversation_members|8976f63c-41d2-4b5c-9ffe-fec69ffbbf87\nconversation_participants|341c202c-2d12-4a9c-a8b9-2954307aa600\nconversations|8d5dab74-428d-4737-9da7-86ee507a6f5d\nevidence_reviews|978be8da-b2b6-4340-a2d3-17a860b4973c\nfounder_profiles|052d3ec1-b014-4348-9f5c-180c1d86fc79\ninteraction_history|c7e72ff3-a2b7-4ea3-97fe-e9dad55307ed\ninvestor_profiles|a479f4d0-cad1-4d15-8a2d-e9c70048683c\nmatch_feedback|9a694528-09e0-46ed-8b15-cb7ae0095560\nmatching_events|4d575cb0-34cf-4fbf-ac02-4b32f8fd6483\nmatch_outcomes|d0c6b053-2cc9-4d54-91e4-8231f4894de0\nmeeting_participants|eb65f5af-809d-407d-9fad-f5147dd75d92\nmeetings|50fc1e51-18dc-4d72-84e8-09e22e2116ae\nmentor_profiles|32324a8d-734f-4a8e-a4d3-c6fab1c9c13c\nmentorship_milestones|71132856-4569-45e3-92f9-b2e2543fc4cb\nmessages|d13b377a-8d1f-429c-a267-3f08a1135711\nopportunities|ffffddbc-c52e-4c87-9952-7aceb58031b4\nprofile_evidence_files|6794e732-240e-4009-9784-aa007aa1ff36\nprofile_review_history|ae2b9497-d2ff-4b88-8ba3-f80e004a349b\nprofile_verification_checks|5b6de20f-f50a-4bbb-82c3-6dc70324ec30\nprofile_verifications|9a438455-aba4-42ea-b5ff-3b1f306d5a13\nroadmap_tasks|abeac0a7-b210-4043-8108-cf888179891b\nskill_taxonomy|5490beff-e8c5-47eb-9787-83504564dc2d\nstartup_readiness_scores|916e60f1-3e6b-4cff-abd5-baf9a6811fae\nstudent_activities|d7fdb717-7a0f-4fab-b240-3a9c4a335e69\nstudent_profiles|51a1664e-7f04-4c73-b596-a938357418bf\nsubscription_plans|c99f311c-bc0d-4233-97c6-c1ac0e19937a\ntrust_evidence|29cd673d-9315-420a-a237-d82e478340a1\ntrust_scores|186a2407-c719-436d-b789-1d4db0b0a1ac\nusage_counters|fe5482f7-d1a1-40fe-b4ef-dd13a382b4ac\nuser_subscriptions|3ce43b73-ed79-4b95-acf0-9ea45574161d\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "stop",
+        "scalescope-uuid-test-7730e317f4"
+      ],
+      "exit_code": 0,
+      "stdout": "scalescope-uuid-test-7730e317f4\n",
+      "stderr": ""
+    }
+  ]
+}

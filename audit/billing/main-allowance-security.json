@@ -1,0 +1,28 @@
+{
+  "time": "2026-10-20T15:46:39.070Z",
+  "project": "gqkjvxcyetesvqmjkuus.supabase.co",
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "direct allowance RPC",
+      "result": "DENIED"
+    },
+    {
+      "name": "direct subscription RPC",
+      "result": "DENIED"
+    },
+    {
+      "name": "direct request insertion",
+      "result": "DENIED"
+    },
+    {
+      "name": "direct subscription update",
+      "result": "DENIED"
+    },
+    {
+      "name": "direct usage update",
+      "result": "DENIED"
+    }
+  ],
+  "checkoutEnabled": false
+}

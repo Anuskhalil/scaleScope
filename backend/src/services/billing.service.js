@@ -1,5 +1,8 @@
 const crypto = require('crypto');
 const supabase = require('../config/supabase');
+const { hasPaidAccess, safePaymentUrl } = require('./billingPolicy');
+const { reservedCheckout } = require('./checkoutReservation');
+const durableCheckoutEnabled = () => process.env.BILLING_DURABLE_CHECKOUT_ENABLED === 'true';
 
 const MONTHLY_PERIOD = () => new Date().toISOString().slice(0, 7);
 
@@ -7,7 +10,7 @@ const DEFAULT_PLANS = [
   {
     code: 'free',
     name: 'Free',
-    role_scope: ['student', 'early-stage-founder', 'mentor', 'investor'],
+    role_scope: ['early-stage-founder', 'investor'],
     price_monthly: 0,
     price_yearly: 0,
     currency: 'USD',
@@ -26,31 +29,6 @@ const DEFAULT_PLANS = [
       ai_match_reports: 1,
       saved_profiles: 5,
       profile_boosts: 0,
-    },
-    is_active: true,
-  },
-  {
-    code: 'student_pro',
-    name: 'Student Pro',
-    role_scope: ['student'],
-    price_monthly: 5,
-    price_yearly: 48,
-    currency: 'USD',
-    description: 'For students who want better co-founder, mentor, and startup guidance.',
-    features: {
-      included: [
-        '30 connection requests per month',
-        'AI profile quality deep report',
-        'Startup idea readiness score',
-        'Portfolio/resume verification context',
-        'Priority mentor and co-founder suggestions',
-      ],
-    },
-    limits: {
-      connection_requests: 30,
-      ai_match_reports: 20,
-      saved_profiles: 50,
-      profile_boosts: 1,
     },
     is_active: true,
   },
@@ -83,25 +61,6 @@ const DEFAULT_PLANS = [
 ];
 
 const ECOSYSTEM_ACCESS_BY_ROLE = {
-  mentor: {
-    name: 'Mentor Ecosystem Access',
-    description: 'Free full access for mentors so the ecosystem has high-quality guidance supply.',
-    features: {
-      included: [
-        'Free mentor profile and credibility signals',
-        'High-quality 60%+ mentee matches on dashboard',
-        'Full founder/student discovery access',
-        'Advanced mentor-relevant filters',
-        'Messaging and meetings after accepted connection',
-      ],
-    },
-    limits: {
-      connection_requests: 9999,
-      ai_match_reports: 100,
-      saved_profiles: 500,
-      profile_boosts: 0,
-    },
-  },
   investor: {
     name: 'Investor Ecosystem Access',
     description: 'Free full access for investors to strengthen startup deal-flow and platform trust.',
@@ -134,30 +93,36 @@ const tableMissing = (error) => {
 };
 
 const LEMON_API_BASE = 'https://api.lemonsqueezy.com/v1';
-const PAID_PLAN_CODES = ['student_pro', 'founder_pro'];
+const PAID_PLAN_CODES = ['founder_pro'];
 
 const planVariantEnvKey = (planCode) =>
   `LEMONSQUEEZY_${String(planCode || '').toUpperCase()}_VARIANT_ID`;
 
 const lemonConfigured = () =>
   Boolean(
+    process.env.BILLING_CHECKOUT_ENABLED === 'true' &&
+    process.env.BILLING_PRICING_FINALIZED === 'true' &&
     process.env.LEMONSQUEEZY_API_KEY &&
-    process.env.LEMONSQUEEZY_STORE_ID
+    process.env.LEMONSQUEEZY_STORE_ID &&
+    process.env.LEMONSQUEEZY_WEBHOOK_SECRET
   );
 
 const lemonTestMode = () => String(process.env.LEMONSQUEEZY_TEST_MODE || 'true') !== 'false';
 
-const getPlanVariantId = (planCode) => {
-  const value = process.env[planVariantEnvKey(planCode)];
+const getPlanVariantId = (planCode, interval = 'monthly') => {
+  const value = interval === 'yearly'
+    ? process.env[`LEMONSQUEEZY_${planCode.toUpperCase()}_YEARLY_VARIANT_ID`]
+    : process.env[planVariantEnvKey(planCode)];
   return value ? String(value) : null;
 };
 
 const getPlanCodeByVariantId = (variantId) => {
   const found = PAID_PLAN_CODES.find((planCode) => {
-    return getPlanVariantId(planCode) === String(variantId || '');
+    return ['monthly', 'yearly'].some(interval => getPlanVariantId(planCode, interval) === String(variantId || ''));
   });
 
-  return found || null;
+  const legacyTestVariants = (process.env.LEMONSQUEEZY_LEGACY_TEST_FOUNDER_VARIANT_IDS || '').split(',').map(value => value.trim()).filter(Boolean);
+  return found || (lemonTestMode() && legacyTestVariants.includes(String(variantId)) ? 'founder_pro' : null);
 };
 
 async function getProfile(userId) {
@@ -180,6 +145,7 @@ async function lemonRequest(path, { method = 'GET', body } = {}) {
       Authorization: `Bearer ${process.env.LEMONSQUEEZY_API_KEY}`,
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15000),
   });
 
   const payload = await response.json().catch(() => ({}));
@@ -199,14 +165,23 @@ async function lemonRequest(path, { method = 'GET', body } = {}) {
   return payload;
 }
 
+const { founderTestPrice } = require('./billingTestPrice');
+
 const normalizePlan = (plan = {}) => ({
   ...plan,
-  role_scope: Array.isArray(plan.role_scope) ? plan.role_scope : [],
-  features: plan.features && typeof plan.features === 'object' ? plan.features : { included: [] },
-  limits: plan.limits && typeof plan.limits === 'object' ? plan.limits : {},
+  role_scope: Array.isArray(plan.role_scope) ? plan.role_scope.filter(role => ['early-stage-founder', 'investor'].includes(role)) : [],
+  features: { included: plan.code === 'founder_pro'
+    ? ['Higher monthly connection request allowance', 'Profile-based matching', 'Messaging after accepted connections', 'Trust review remains separate from payment']
+    : ['Profile-based matching', 'Public profile discovery', 'Messaging after accepted connections'] },
+  checkout_intervals: plan.code === 'founder_pro' && lemonConfigured()
+    ? ['monthly', 'yearly'].filter(interval => getPlanVariantId(plan.code, interval)) : [],
+  test_mode: lemonTestMode(),
+  pricing_finalized: process.env.BILLING_PRICING_FINALIZED === 'true',
+  limits: { connection_requests: plan.metadata?.ecosystem_access ? 9999 : plan.code === 'founder_pro' ? 50 : 5 },
   price_monthly: Number(plan.price_monthly || 0),
   price_yearly: Number(plan.price_yearly || 0),
   currency: plan.currency || 'USD',
+  ...(plan.code === 'founder_pro' ? founderTestPrice(lemonTestMode()) : null),
 });
 
 const applyRoleFreeAccess = (plan, role) => {
@@ -234,7 +209,7 @@ const applyRoleFreeAccess = (plan, role) => {
 function getFallbackPlans(role) {
   return DEFAULT_PLANS
     .filter((plan) => {
-      return plan.code === 'free' || !role || plan.role_scope.includes(role);
+      return ['free', 'founder_pro'].includes(plan.code) && (plan.code === 'free' || !role || plan.role_scope.includes(role));
     })
     .map((plan) => applyRoleFreeAccess(normalizePlan(plan), role));
 }
@@ -276,7 +251,7 @@ async function getUserRole(userId) {
     .maybeSingle();
 
   if (error) throw error;
-  return data?.user_type || 'student';
+  return data?.user_type === 'student' ? 'early-stage-founder' : data?.user_type || null;
 }
 
 exports.getUserSubscription = async (userId) => {
@@ -303,7 +278,8 @@ exports.getUserSubscription = async (userId) => {
       cancel_at_period_end: false,
     };
 
-    const plan = plans.find((item) => item.code === subscription.plan_code) || freePlan;
+    const paid = hasPaidAccess(subscription, lemonTestMode());
+    const plan = (paid && plans.find((item) => item.code === subscription.plan_code)) || freePlan;
 
     return {
       role,
@@ -371,7 +347,8 @@ exports.checkUsageLimit = async (userId, featureKey) => {
   const limit = billing.entitlements?.[featureKey];
   const usage = await exports.getUsage(userId, featureKey);
 
-  if (usage.fallback || limit === undefined || limit === null) {
+  if (usage.fallback) throw Object.assign(new Error('Usage limits are temporarily unavailable. Please retry.'), {status:503});
+  if (limit === undefined || limit === null) {
     return {
       allowed: true,
       featureKey,
@@ -395,54 +372,16 @@ exports.checkUsageLimit = async (userId, featureKey) => {
   };
 };
 
-exports.incrementUsage = async (userId, featureKey, amount = 1) => {
-  const periodKey = MONTHLY_PERIOD();
+const checkoutSingleFlight = require('./checkoutSingleFlight').createCheckoutSingleFlight();
+exports.createCheckout = ({ userId, planCode, interval = 'monthly' }) =>
+  checkoutSingleFlight(userId, JSON.stringify([planCode, interval]), () => createCheckout({ userId, planCode, interval }));
+
+const createCheckout = async ({ userId, planCode, interval = 'monthly' }) => {
+  if (!['monthly', 'yearly'].includes(interval)) throw Object.assign(new Error('Invalid billing interval'), {status:400});
+  const testPrice = founderTestPrice(lemonTestMode());
+  if (testPrice && interval !== 'monthly') throw Object.assign(new Error('Test pricing supports monthly billing only.'), {status:400});
   const billing = await exports.getUserSubscription(userId);
-  const limit = billing.entitlements?.[featureKey] ?? null;
-  const current = await exports.getUsage(userId, featureKey, periodKey);
-
-  if (current.fallback) {
-    return current;
-  }
-
-  const nextCount = Number(current.used_count || 0) + Number(amount || 1);
-
-  try {
-    const { data, error } = await supabase
-      .from('usage_counters')
-      .upsert({
-        user_id: userId,
-        feature_key: featureKey,
-        period_key: periodKey,
-        used_count: nextCount,
-        limit_count: limit,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id,feature_key,period_key',
-      })
-      .select('*')
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    if (!tableMissing(error)) {
-      console.warn('Billing increment skipped:', error.message);
-    }
-
-    return {
-      user_id: userId,
-      feature_key: featureKey,
-      period_key: periodKey,
-      used_count: nextCount,
-      limit_count: limit,
-      fallback: true,
-    };
-  }
-};
-
-exports.createCheckout = async ({ userId, planCode }) => {
-  const billing = await exports.getUserSubscription(userId);
+  if (planCode !== 'free' && billing.role !== 'early-stage-founder') throw Object.assign(new Error('Investors have free access; Founder Pro requires a founder account.'), {status:403});
   const targetPlan = billing.plans.find((plan) => plan.code === planCode);
 
   if (!targetPlan) {
@@ -457,7 +396,7 @@ exports.createCheckout = async ({ userId, planCode }) => {
     };
   }
 
-  if (!PAID_PLAN_CODES.includes(targetPlan.code)) {
+  if (targetPlan.code !== 'founder_pro') {
     return {
       mode: 'manual',
       url: null,
@@ -467,14 +406,31 @@ exports.createCheckout = async ({ userId, planCode }) => {
   }
 
   if (lemonConfigured()) {
-    const variantId = getPlanVariantId(targetPlan.code);
+    if (billing.subscription.provider_subscription_id && billing.subscription.status !== 'expired') {
+      throw Object.assign(new Error('A subscription already exists. Use Manage Billing to change or resume it.'), {status:409});
+    }
+    const variantId = getPlanVariantId(targetPlan.code, interval);
 
     if (!variantId) {
       throw new Error(`Lemon Squeezy variant ID missing for ${targetPlan.code}. Set ${planVariantEnvKey(targetPlan.code)}.`);
     }
 
     const profile = await getProfile(userId);
+    const variant = (await lemonRequest(`/variants/${encodeURIComponent(variantId)}`))?.data?.attributes;
+    if (variant?.test_mode !== lemonTestMode() || !variant?.is_subscription || variant.interval !== (interval === 'yearly' ? 'year' : 'month') || variant.interval_count !== 1) {
+      throw Object.assign(new Error('The configured payment interval is unavailable. Please contact support.'), {status:503});
+    }
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    if (testPrice) {
+      const store = (await lemonRequest(`/stores/${encodeURIComponent(process.env.LEMONSQUEEZY_STORE_ID)}`))?.data?.attributes;
+      if (store?.currency !== 'PKR') throw Object.assign(new Error('Test checkout requires a PKR store.'), {status:503});
+      if (Number(variant.price) !== testPrice.price_monthly * 100) throw Object.assign(new Error('Test variant price must match the displayed monthly price.'), {status:503});
+    }
+    if (!lemonTestMode() && !durableCheckoutEnabled()) {
+      throw Object.assign(new Error('Live checkout protection must be enabled before accepting payments.'), {status:503});
+    }
+    const createProviderCheckout = async (reservationId) => {
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
     const checkout = await lemonRequest('/checkouts', {
       method: 'POST',
       body: {
@@ -482,7 +438,9 @@ exports.createCheckout = async ({ userId, planCode }) => {
           type: 'checkouts',
           attributes: {
             test_mode: lemonTestMode(),
+            expires_at: expiresAt,
             product_options: {
+              enabled_variants: [Number(variantId)],
               redirect_url: `${frontendUrl.replace(/\/$/, '')}/billing?checkout=success`,
               receipt_button_text: 'Open ScaleScope billing',
               receipt_link_url: `${frontendUrl.replace(/\/$/, '')}/billing`,
@@ -492,8 +450,10 @@ exports.createCheckout = async ({ userId, planCode }) => {
               name: profile.full_name,
               custom: {
                 user_id: userId,
+                ...(reservationId ? { checkout_reservation_id: reservationId } : {}),
                 plan_code: targetPlan.code,
                 role: billing.role,
+                interval,
               },
             },
           },
@@ -516,9 +476,18 @@ exports.createCheckout = async ({ userId, planCode }) => {
     });
 
     return {
-      mode: 'lemonsqueezy',
-      url: checkout?.data?.attributes?.url || null,
+      url: safePaymentUrl(checkout?.data?.attributes?.url),
       checkoutId: checkout?.data?.id || null,
+      expiresAt,
+    };
+    };
+    const checkout = durableCheckoutEnabled()
+      ? await reservedCheckout({ db: supabase, userId, testMode: lemonTestMode(), variantId, interval, create: createProviderCheckout })
+      : await createProviderCheckout();
+    return {
+      mode: 'lemonsqueezy',
+      url: safePaymentUrl(checkout.url),
+      checkoutId: checkout.checkoutId,
       plan: targetPlan,
       testMode: lemonTestMode(),
     };
@@ -527,14 +496,21 @@ exports.createCheckout = async ({ userId, planCode }) => {
   return {
     mode: 'manual',
     url: null,
-    message: 'Payment provider is not configured yet. Add Lemon Squeezy test API keys and variant IDs before live payments.',
+    message: 'Paid upgrades are temporarily unavailable. Your current access is unchanged.',
     plan: targetPlan,
   };
 };
 
 exports.getBillingPortal = async (userId) => {
   const billing = await exports.getUserSubscription(userId);
-  const urls = billing.subscription?.metadata?.urls || {};
+  if (billing.subscription?.provider !== 'lemonsqueezy' || !billing.subscription.provider_subscription_id) {
+    return {url:null,message:'No paid subscription exists for this account.'};
+  }
+  const record = (await lemonRequest(`/subscriptions/${encodeURIComponent(billing.subscription.provider_subscription_id)}`))?.data?.attributes;
+  if (String(record?.store_id) !== String(process.env.LEMONSQUEEZY_STORE_ID) || record?.test_mode !== lemonTestMode() || String(record.customer_id) !== String(billing.subscription.provider_customer_id)) {
+    throw Object.assign(new Error('Billing account could not be verified.'), {status:403});
+  }
+  const urls = record.urls || {};
   const portalUrl =
     urls.customer_portal ||
     urls.customer_portal_update_subscription ||
@@ -543,7 +519,7 @@ exports.getBillingPortal = async (userId) => {
 
   return {
     mode: billing.subscription?.provider || 'manual',
-    url: portalUrl,
+    url: safePaymentUrl(portalUrl),
     message: portalUrl
       ? 'Opening Lemon Squeezy billing portal.'
       : 'Billing portal becomes available after a Lemon Squeezy subscription is created.',
@@ -557,7 +533,7 @@ function verifyLemonSignature(rawBody, signature) {
     throw new Error('LEMONSQUEEZY_WEBHOOK_SECRET is not configured');
   }
 
-  if (!rawBody || !signature) {
+  if (!rawBody || !/^[a-f0-9]{64}$/i.test(String(signature || ''))) {
     const error = new Error('Invalid Lemon Squeezy webhook signature');
     error.status = 400;
     throw error;
@@ -576,130 +552,54 @@ function verifyLemonSignature(rawBody, signature) {
   }
 }
 
-const subscriptionStatusForEvent = (eventName, attributes = {}) => {
-  if (eventName === 'subscription_cancelled') return 'cancelled';
-  if (eventName === 'subscription_expired') return 'expired';
-  if (eventName === 'subscription_paused') return 'paused';
-  if (eventName === 'subscription_unpaused') return 'active';
-  if (eventName === 'subscription_payment_failed') return 'past_due';
+const subscriptionEvents = new Set([
+  'subscription_created', 'subscription_updated', 'subscription_cancelled',
+  'subscription_resumed', 'subscription_expired', 'subscription_paused',
+  'subscription_unpaused', 'subscription_plan_changed',
+  'subscription_payment_success', 'subscription_payment_failed', 'subscription_payment_recovered',
+]);
 
-  return attributes.status || 'active';
-};
-
-const isPaidOrderEvent = (eventName, attributes = {}) => {
-  if (eventName !== 'order_created') return false;
-  return ['paid', 'success', 'complete', 'completed'].includes(
-    String(attributes.status || '').toLowerCase()
-  );
-};
-
-const getWebhookVariantId = (attributes = {}) => {
-  return (
-    attributes.variant_id ||
-    attributes.first_subscription_item?.variant_id ||
-    attributes.first_order_item?.variant_id ||
-    attributes.order_item?.variant_id ||
-    null
-  );
-};
-
-async function getUserIdFromWebhook({ customData = {}, attributes = {} }) {
-  if (customData.user_id) return customData.user_id;
-
-  const email = attributes.user_email || attributes.email || attributes.customer_email;
-  if (!email) return null;
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id')
-    .ilike('email', String(email).trim())
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.id || null;
-}
-
-exports.handleLemonWebhook = async ({ rawBody, signature, payload }) => {
+exports.handleLemonWebhook = async ({ rawBody, signature }) => {
   verifyLemonSignature(rawBody, signature);
-
+  // Only the signed bytes are authoritative, never a separately supplied object.
+  const payload = JSON.parse(rawBody.toString('utf8'));
   const eventName = payload?.meta?.event_name;
-  const data = payload?.data || {};
-  const attributes = data.attributes || {};
-  const customData = payload?.meta?.custom_data || {};
-  const variantId = getWebhookVariantId(attributes);
-  const planCode = customData.plan_code || getPlanCodeByVariantId(variantId);
-  const userId = await getUserIdFromWebhook({ customData, attributes });
-
-  if (!eventName) {
-    throw new Error('Lemon Squeezy webhook event_name missing');
-  }
-
-  if (!eventName.startsWith('subscription_') && !isPaidOrderEvent(eventName, attributes)) {
-    return {
-      ignored: true,
-      eventName,
-    };
-  }
-
-  if (!userId || !planCode) {
-    console.warn('Lemon webhook missing user/plan mapping:', {
-      eventName,
-      userId,
-      planCode,
-      variantId,
-    });
-
-    return {
-      ignored: true,
-      eventName,
-      reason: 'missing_user_or_plan',
-    };
-  }
-
-  const status = eventName === 'order_created'
-    ? 'active'
-    : subscriptionStatusForEvent(eventName, attributes);
-  const activePlanCode = ['cancelled', 'expired'].includes(status) ? 'free' : planCode;
-  const providerSubscriptionId = data.type === 'subscriptions' && data.id
-    ? String(data.id)
-    : null;
-
-  const { data: subscription, error } = await supabase
-    .from('user_subscriptions')
-    .upsert(
-      {
-        user_id: userId,
-        plan_code: activePlanCode,
-        status,
-        provider: 'lemonsqueezy',
-        provider_customer_id: attributes.customer_id ? String(attributes.customer_id) : null,
-        provider_subscription_id: providerSubscriptionId,
-        current_period_start: attributes.created_at || null,
-        current_period_end: attributes.renews_at || attributes.ends_at || null,
-        cancel_at_period_end: Boolean(attributes.cancelled || attributes.ends_at),
-        metadata: {
-          lemon_event: eventName,
-          variant_id: variantId ? String(variantId) : null,
-          product_id: attributes.product_id ? String(attributes.product_id) : null,
-          order_id: attributes.order_id ? String(attributes.order_id) : data.id ? String(data.id) : null,
-          order_number: attributes.order_number || null,
-          order_identifier: attributes.identifier || null,
-          user_email: attributes.user_email || null,
-          test_mode: Boolean(attributes.test_mode),
-          urls: attributes.urls || {},
-          updated_at: new Date().toISOString(),
-        },
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    )
-    .select('*')
-    .single();
-
-  if (error) throw error;
-
-  return {
-    eventName,
-    subscription,
+  if (!subscriptionEvents.has(eventName)) return {ignored:true, reason:'unsupported_event'};
+  const resource = payload.data || {};
+  const incoming = resource.attributes || {};
+  const subscriptionId = resource.type === 'subscriptions' ? resource.id : incoming.subscription_id;
+  if (!/^\d+$/.test(String(subscriptionId || ''))) throw Object.assign(new Error('Invalid subscription ID'), {status:400});
+  const incomingMode = incoming.test_mode ?? payload.meta?.test_mode;
+  if (incomingMode !== lemonTestMode()) return {ignored:true,reason:'wrong_mode'};
+  // Re-read the provider's latest state so delayed invoice events cannot restore old access.
+  const remote = (await lemonRequest('/subscriptions/' + subscriptionId))?.data;
+  const attributes = remote?.attributes;
+  if (!attributes || remote.type !== 'subscriptions' || String(remote.id) !== String(subscriptionId)) throw new Error('Subscription lookup failed');
+  if (String(attributes.store_id) !== String(process.env.LEMONSQUEEZY_STORE_ID) || attributes.test_mode !== lemonTestMode()) return {ignored:true,reason:'wrong_store_or_mode'};
+  const planCode = getPlanCodeByVariantId(attributes.variant_id);
+  if (!planCode) throw Object.assign(new Error('Subscription variant is not configured'), {status:409});
+  const {data:existing,error:lookupError} = await supabase.from('user_subscriptions').select('user_id').eq('provider_subscription_id',String(subscriptionId)).maybeSingle();
+  if (lookupError) throw lookupError;
+  const customUser = payload.meta?.custom_data?.user_id;
+  if (existing && customUser && existing.user_id !== customUser) throw Object.assign(new Error('Subscription owner mismatch'),{status:409});
+  const userId = existing?.user_id || customUser;
+  if (!/^[0-9a-f-]{36}$/i.test(String(userId || ''))) throw Object.assign(new Error('Subscription account mapping missing'),{status:409});
+  if (await getUserRole(userId) !== 'early-stage-founder') throw Object.assign(new Error('Paid plan requires founder role'),{status:409});
+  const snapshot = {
+    user_id:userId, plan_code:planCode, status:attributes.status, provider:'lemonsqueezy',
+    provider_customer_id:String(attributes.customer_id), provider_subscription_id:String(subscriptionId),
+    current_period_start:attributes.created_at,
+    current_period_end:attributes.ends_at || (attributes.status === 'on_trial' ? attributes.trial_ends_at : attributes.renews_at),
+    cancel_at_period_end:Boolean(attributes.cancelled),
+    metadata:{lemon_event:eventName,variant_id:String(attributes.variant_id),test_mode:attributes.test_mode,provider_updated_at:attributes.updated_at},
   };
+  if (!Number.isFinite(Date.parse(attributes.updated_at))) throw new Error('Subscription revision missing');
+  const {data,error} = durableCheckoutEnabled()
+    ? await supabase.rpc('complete_billing_checkout', {
+      p_snapshot: snapshot,
+      p_reservation_id: payload.meta?.custom_data?.checkout_reservation_id || null,
+    })
+    : await supabase.rpc('apply_lemon_subscription_snapshot',{p_snapshot:snapshot});
+  if (error) throw error;
+  return {eventName,result:data};
 };

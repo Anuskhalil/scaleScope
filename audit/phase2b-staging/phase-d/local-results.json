@@ -1,0 +1,749 @@
+{
+  "status": "PASS",
+  "target": "Network-disabled local PostgreSQL 17.6 only",
+  "sql_sha256": "6924be4adb803d8127500aee6e055d5eb8d93c61b5aa1237aee4f7a22616e28e",
+  "report": {
+    "tests": 132,
+    "status": "PASS",
+    "results": [
+      {
+        "status": "PASS",
+        "test_name": "anon no column writes: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no column writes: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no column writes: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no column writes: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no column writes: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no DELETE: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no DELETE: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no DELETE: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no DELETE: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no DELETE: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: create_conversation_with_participants(uuid,uuid,text)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: get_user_profile(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: passport_audit_immutable()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: passport_check_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: passport_claim_is_current(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: passport_evidence_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: passport_evidence_tombstone()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: passport_link_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: passport_no_sharing()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: refresh_matching_scores()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no execute: soft_delete_user(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no INSERT: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no INSERT: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no INSERT: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no INSERT: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no INSERT: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no TRUNCATE: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no TRUNCATE: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no TRUNCATE: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no TRUNCATE: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no TRUNCATE: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no UPDATE: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no UPDATE: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no UPDATE: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no UPDATE: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "anon no UPDATE: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Anonymous cannot read audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Anonymous cannot read checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Anonymous cannot read evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Anonymous cannot read headers"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Audit contains no raw fixture text"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no column writes: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no column writes: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no column writes: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no column writes: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no column writes: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no DELETE: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no DELETE: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no DELETE: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no DELETE: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no DELETE: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: create_conversation_with_participants(uuid,uuid,text)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: get_user_profile(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: passport_audit_immutable()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: passport_check_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: passport_claim_is_current(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: passport_evidence_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: passport_evidence_tombstone()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: passport_link_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: passport_no_sharing()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: refresh_matching_scores()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no execute: soft_delete_user(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no INSERT: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no INSERT: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no INSERT: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no INSERT: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no INSERT: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no TRUNCATE: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no TRUNCATE: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no TRUNCATE: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no TRUNCATE: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no TRUNCATE: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no UPDATE: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no UPDATE: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no UPDATE: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no UPDATE: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "authenticated no UPDATE: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Backend supported claim eligible"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Browser cannot approve own claim"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Browser cannot delete audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Browser cannot edit audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Browser cannot forge reviewer"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Browser cannot read audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Browser cannot read evidence links"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Browser cannot truncate audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Cannot expire before deadline"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Cannot link tombstoned evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Cannot restore evidence tombstone"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Cross-owner evidence link"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Direct evidence remains backend-only"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Duplicate claim version rejected"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Evidence can support multiple claims"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Expired claim excluded"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: create_conversation_with_participants(uuid,uuid,text)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: get_user_profile(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: passport_audit_immutable()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: passport_check_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: passport_claim_is_current(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: passport_evidence_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: passport_evidence_tombstone()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: passport_link_guard()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: passport_no_sharing()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: refresh_matching_scores()"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Fixed search path: soft_delete_user(uuid)"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Immutable evidence hash"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Immutable evidence purpose"
+      },
+      {
+        "status": "PASS",
+        "test_name": "New claim version invalidates previous support"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Other owner header hidden"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Other owner legacy check hidden"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Other user cannot read founder checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Other user cannot read founder passport evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Owner header readable"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Owner legacy check readable"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Owner raw passport checks hidden"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Private evidence sharing blocked"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Rejection audited"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Reviewed link deletion rejected"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Revocation audited"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Revoked claim not eligible"
+      },
+      {
+        "status": "PASS",
+        "test_name": "RLS enabled: profile_verification_checks"
+      },
+      {
+        "status": "PASS",
+        "test_name": "RLS enabled: profile_verification_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "RLS enabled: profile_verifications"
+      },
+      {
+        "status": "PASS",
+        "test_name": "RLS enabled: trust_evidence"
+      },
+      {
+        "status": "PASS",
+        "test_name": "RLS enabled: verification_audit_history"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Self review rejected"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Service cannot delete audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Service cannot edit audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Service cannot insert fabricated audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Service cannot truncate audit"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Skipped review transition rejected"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Terminal claim cannot be revived"
+      },
+      {
+        "status": "PASS",
+        "test_name": "Tombstone invalidates every supported linked claim"
+      }
+    ]
+  },
+  "limitations": [
+    "Managed Auth/Storage are local stubs; Vault guard omitted only locally.",
+    "JWT signature enforcement/API/Storage are not exercised by SET ROLE SQL tests.",
+    "Hosted suite execution remains pending; production untouched."
+  ],
+  "logs": [
+    {
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-d",
+        "--name",
+        "scalescope-security-d-43608e2ada",
+        "--network",
+        "none",
+        "-e",
+        "POSTGRES_HOST_AUTH_METHOD=trust",
+        "postgres:17.6",
+        "-c",
+        "wal_level=logical"
+      ],
+      "returncode": 0,
+      "stdout": "2f665120085c7dd0e32ba53e6e6c8df814e604fc420c3a1da9abefa1168a21ab\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "returncode": 0,
+      "stdout": "CREATE ROLE\nCREATE ROLE\nCREATE ROLE\nCREATE SCHEMA\nCREATE SCHEMA\nCREATE SCHEMA\nCREATE EXTENSION\nCREATE EXTENSION\nCREATE EXTENSION\nCREATE TABLE\nCREATE FUNCTION\nCREATE FUNCTION\nCREATE FUNCTION\nCREATE TABLE\nCREATE TABLE\nCREATE FUNCTION\nCREATE PUBLICATION\nGRANT\nCREATE FUNCTION\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "returncode": 0,
+      "stdout": "BEGIN\nDO\nCOMMIT\n         column1          \n--------------------------\n STAGING_BASELINE_APPLIED\n(1 row)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "returncode": 0,
+      "stdout": "BEGIN\nSET\nSET\nSET\nDO\nCOMMIT\n             column1              \n----------------------------------\n STAGING_UUID_DEFAULTS_ALIGNED_35\n(1 row)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "returncode": 0,
+      "stdout": "INSERT 0 3\nINSERT 0 2\nINSERT 0 1\nINSERT 0 1\nINSERT 0 1\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "returncode": 0,
+      "stdout": "BEGIN\nSET\nSET\nSET\nDO\nSET\nSET\nDO\nALTER TABLE\nALTER TABLE\nCREATE INDEX\nCREATE INDEX\nCREATE INDEX\nALTER TABLE\nCREATE TABLE\nCREATE INDEX\nCREATE TABLE\nCREATE INDEX\nALTER TABLE\nALTER TABLE\nREVOKE\nREVOKE\nGRANT\nGRANT\nCREATE FUNCTION\nREVOKE\nCREATE TRIGGER\nCREATE FUNCTION\nREVOKE\nCREATE TRIGGER\nCREATE FUNCTION\nREVOKE\nCREATE TRIGGER\nCREATE FUNCTION\nREVOKE\nCREATE TRIGGER\nREVOKE\nGRANT\nGRANT\nREVOKE\nCREATE POLICY\nCREATE POLICY\nCREATE POLICY\nCREATE POLICY\nCREATE POLICY\nCREATE POLICY\nCREATE POLICY\nALTER TABLE\nALTER TABLE\nDO\nREVOKE\nGRANT\nREVOKE\nCREATE POLICY\nCREATE POLICY\nCREATE POLICY\nCREATE POLICY\nCREATE FUNCTION\nREVOKE\nCREATE TRIGGER\nCREATE FUNCTION\nREVOKE\nCREATE TRIGGER\nCREATE FUNCTION\nREVOKE\nGRANT\nDO\nCOMMIT\n         column1         \n-------------------------\n PHASE_B_STAGING_APPLIED\n(1 row)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "returncode": 0,
+      "stdout": "BEGIN\nSET\nSET\nDO\nCREATE FUNCTION\nREVOKE\nGRANT\nCREATE FUNCTION\nREVOKE\nGRANT\nALTER FUNCTION\nALTER FUNCTION\nALTER FUNCTION\nREVOKE\nDO\nCOMMIT\n         column1         \n-------------------------\n PHASE_C_STAGING_APPLIED\n(1 row)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "returncode": 0,
+      "stdout": "CREATE TABLE\nDO\n{\"meetings\": [], \"messages\": [], \"profiles\": [{\"id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"bio\": null, \"email\": \"passport-investor@example.invalid\", \"location\": null, \"full_name\": \"Staging Test Investor\", \"user_type\": \"investor\", \"avatar_url\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"deleted_at\": null, \"github_url\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_active\": \"2026-10-07T13:24:58.394365+00:00\", \"twitter_url\": null, \"linkedin_url\": null}, {\"id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"bio\": null, \"email\": \"passport-founder@example.invalid\", \"location\": null, \"full_name\": \"Staging Test Founder\", \"user_type\": \"early-stage-founder\", \"avatar_url\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"deleted_at\": null, \"github_url\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_active\": \"2026-10-07T13:24:58.394365+00:00\", \"twitter_url\": null, \"linkedin_url\": null}, {\"id\": \"8acd8892-8651-423c-ab8b-71437492f02b\", \"bio\": null, \"email\": \"passport-reviewer@example.invalid\", \"location\": null, \"full_name\": \"Staging Test Reviewer\", \"user_type\": \"early-stage-founder\", \"avatar_url\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"deleted_at\": null, \"github_url\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_active\": \"2026-10-07T13:24:58.394365+00:00\", \"twitter_url\": null, \"linkedin_url\": null}], \"audit_log\": [], \"connections\": [], \"user_skills\": [], \"trust_scores\": [], \"conversations\": [], \"opportunities\": [], \"roadmap_tasks\": [], \"match_feedback\": [], \"match_outcomes\": [], \"skill_taxonomy\": [], \"trust_evidence\": [], \"usage_counters\": [], \"ai_growth_plans\": [], \"evidence_grants\": [], \"matching_events\": [], \"mentor_profiles\": [], \"profile_reviews\": [{\"status\": \"pending\", \"user_id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"attempts\": 0, \"revision\": 2, \"ai_report\": null, \"ai_status\": \"queued\", \"updated_at\": \"2026-10-07T13:24:58.404481+00:00\", \"lease_until\": null, \"reviewed_at\": null, \"reviewed_by\": null, \"available_at\": \"2026-10-07T13:25:08.404481+00:00\", \"decision_note\": null}, {\"status\": \"pending\", \"user_id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"attempts\": 0, \"revision\": 2, \"ai_report\": null, \"ai_status\": \"queued\", \"updated_at\": \"2026-10-07T13:24:58.400932+00:00\", \"lease_until\": null, \"reviewed_at\": null, \"reviewed_by\": null, \"available_at\": \"2026-10-07T13:25:08.400932+00:00\", \"decision_note\": null}, {\"status\": \"pending\", \"user_id\": \"8acd8892-8651-423c-ab8b-71437492f02b\", \"attempts\": 0, \"revision\": 2, \"ai_report\": null, \"ai_status\": \"queued\", \"updated_at\": \"2026-10-07T13:24:58.400932+00:00\", \"lease_until\": null, \"reviewed_at\": null, \"reviewed_by\": null, \"available_at\": \"2026-10-07T13:25:08.400932+00:00\", \"decision_note\": null}], \"evidence_reviews\": [], \"founder_profiles\": [{\"id\": \"8260bbb9-d611-4511-9a3c-85a0bbedd6d7\", \"user_id\": \"8acd8892-8651-423c-ab8b-71437492f02b\", \"demo_url\": null, \"industry\": null, \"metadata\": {}, \"is_active\": true, \"is_public\": true, \"key_risks\": [], \"team_size\": 1, \"ask_amount\": null, \"created_at\": \"2026-10-07T13:24:58.400932+00:00\", \"idea_title\": null, \"tech_stack\": [], \"updated_at\": \"2026-10-07T13:24:58.400932+00:00\", \"competitors\": null, \"help_needed\": [], \"looking_for\": [], \"market_size\": null, \"website_url\": null, \"active_users\": 0, \"company_name\": null, \"founder_role\": null, \"hiring_roles\": [], \"legal_status\": null, \"use_of_funds\": null, \"weekly_hours\": null, \"company_stage\": null, \"founding_year\": null, \"funding_stage\": null, \"revenue_model\": null, \"skills_needed\": [], \"startup_stage\": null, \"target_market\": null, \"customer_count\": 0, \"founder_skills\": [], \"funding_raised\": null, \"pitch_deck_url\": null, \"product_status\": null, \"launch_timeline\": null, \"monthly_revenue\": null, \"pitch_video_url\": null, \"problem_solving\": null, \"target_audience\": null, \"cofounder_status\": null, \"commitment_level\": null, \"equity_available\": null, \"startup_location\": null, \"traction_metrics\": {}, \"traction_summary\": null, \"problem_statement\": null, \"validation_status\": null, \"current_challenges\": null, \"profile_completion\": 0, \"customer_validation\": null, \"investment_readiness\": null, \"onboarding_completed\": false, \"solution_description\": null, \"go_to_market_strategy\": null, \"business_model_details\": null, \"cofounder_requirements\": null, \"incubator_or_accelerator\": null, \"milestones_next_6_months\": null, \"unique_value_proposition\": null}, {\"id\": \"ff1914bd-9d58-4dec-a7ba-e6e4a4f52cb7\", \"user_id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"demo_url\": null, \"industry\": null, \"metadata\": {}, \"is_active\": true, \"is_public\": true, \"key_risks\": [], \"team_size\": 1, \"ask_amount\": null, \"created_at\": \"2026-10-07T13:24:58.400932+00:00\", \"idea_title\": null, \"tech_stack\": [], \"updated_at\": \"2026-10-07T13:24:58.400932+00:00\", \"competitors\": null, \"help_needed\": [], \"looking_for\": [], \"market_size\": null, \"website_url\": null, \"active_users\": 0, \"company_name\": null, \"founder_role\": null, \"hiring_roles\": [], \"legal_status\": null, \"use_of_funds\": null, \"weekly_hours\": null, \"company_stage\": null, \"founding_year\": null, \"funding_stage\": null, \"revenue_model\": null, \"skills_needed\": [], \"startup_stage\": null, \"target_market\": null, \"customer_count\": 0, \"founder_skills\": [], \"funding_raised\": null, \"pitch_deck_url\": null, \"product_status\": null, \"launch_timeline\": null, \"monthly_revenue\": null, \"pitch_video_url\": null, \"problem_solving\": null, \"target_audience\": null, \"cofounder_status\": null, \"commitment_level\": null, \"equity_available\": null, \"startup_location\": null, \"traction_metrics\": {}, \"traction_summary\": null, \"problem_statement\": null, \"validation_status\": null, \"current_challenges\": null, \"profile_completion\": 0, \"customer_validation\": null, \"investment_readiness\": null, \"onboarding_completed\": false, \"solution_description\": null, \"go_to_market_strategy\": null, \"business_model_details\": null, \"cofounder_requirements\": null, \"incubator_or_accelerator\": null, \"milestones_next_6_months\": null, \"unique_value_proposition\": null}], \"student_profiles\": [], \"investor_profiles\": [{\"id\": \"c227597e-b30c-4731-9a52-c396d0ca9dda\", \"exits\": 0, \"user_id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"metadata\": {}, \"firm_name\": null, \"fund_name\": null, \"is_active\": true, \"is_public\": true, \"created_at\": \"2026-10-07T13:24:58.404481+00:00\", \"profile_id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"updated_at\": \"2026-10-07T13:24:58.404481+00:00\", \"booking_url\": null, \"is_verified\": false, \"website_url\": null, \"investor_type\": null, \"portfolio_url\": null, \"response_time\": null, \"lead_or_follow\": null, \"check_range_max\": null, \"check_range_min\": null, \"geography_focus\": null, \"portfolio_count\": 0, \"ticket_size_max\": null, \"ticket_size_min\": null, \"what_i_look_for\": null, \"geographic_focus\": null, \"investment_stage\": [], \"preferred_stages\": [], \"successful_exits\": 0, \"accepting_pitches\": true, \"investment_thesis\": null, \"total_investments\": 0, \"profile_completion\": 0, \"notable_investments\": null, \"typical_involvement\": null, \"investment_frequency\": null, \"onboarding_completed\": false, \"preferred_industries\": [], \"industries_of_interest\": [], \"preferred_contact_method\": null, \"minimum_traction_required\": null, \"preferred_business_models\": [], \"due_diligence_requirements\": null}], \"meeting_followups\": [], \"student_activities\": [], \"subscription_plans\": [], \"user_auth_tracking\": [{\"id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"email\": null, \"user_id\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_login\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"login_count\": 0, \"last_ip_address\": null, \"last_user_agent\": null}, {\"id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"email\": null, \"user_id\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_login\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"login_count\": 0, \"last_ip_address\": null, \"last_user_agent\": null}, {\"id\": \"8acd8892-8651-423c-ab8b-71437492f02b\", \"email\": null, \"user_id\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_login\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"login_count\": 0, \"last_ip_address\": null, \"last_user_agent\": null}], \"user_subscriptions\": [], \"connection_requests\": [], \"evidence_ai_reviews\": [], \"interaction_history\": [], \"conversation_members\": [], \"matching_preferences\": [], \"meeting_participants\": [], \"mentorship_milestones\": [], \"profile_verifications\": [{\"id\": \"69ab8613-8bef-4482-aff5-64db73c77c93\", \"role\": \"early-stage-founder\", \"status\": \"partially_verified\", \"summary\": {}, \"user_id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"warnings\": [], \"checked_at\": \"2026-10-07T13:24:58.40733+00:00\", \"created_at\": \"2026-10-07T13:24:58.40733+00:00\", \"updated_at\": \"2026-10-07T13:24:58.40733+00:00\", \"trust_score\": 75, \"failed_links\": 0, \"verified_links\": 0, \"required_passed\": false, \"required_failures\": []}], \"profile_evidence_files\": [], \"profile_review_history\": [], \"startup_readiness_scores\": [], \"conversation_participants\": [], \"connected_identity_accounts\": [], \"profile_verification_checks\": [{\"id\": \"6f513091-706c-40b8-b1c4-d430dc96b2f4\", \"role\": \"early-stage-founder\", \"score\": 100, \"status\": \"passed\", \"message\": null, \"user_id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"metadata\": {}, \"check_type\": \"link\", \"checked_at\": \"2026-10-07T13:24:58.409614+00:00\", \"created_at\": \"2026-10-07T13:24:58.409614+00:00\", \"target_key\": \"github\", \"target_label\": \"GitHub\", \"target_value\": null, \"verification_id\": null}]}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "returncode": 0,
+      "stdout": "BEGIN\nSET\nSET\nDO\nCREATE TABLE\nGRANT\nCREATE FUNCTION\nCREATE FUNCTION\nDO\nINSERT 0 2\nINSERT 0 2\nCREATE FUNCTION\nCREATE FUNCTION\nSET\nd8ac3fd7-a088-4c7b-8afc-4190886fab95\n0141eb1a-324d-4ca9-b1a2-b791f498aac3\nINSERT 0 2\n\nINSERT 0 2\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nRESET\nSET\n42fce0f8-b0d3-41a9-b246-2d4a5def266e\n\n\n\n\n\n\n\n\n\n\n\n\n\n3ec91991-f475-4f07-a038-e2a7e1c8b24d\n\n\nRESET\nSET\n\n\n\n\nRESET\nSET\nd438ed70-4a3b-41d7-be3a-10ce29970e94\n\n\nUPDATE 1\n\n\n\n1610ea18-da97-4621-81db-bd2e5486d417\n\n40ca1213-4b93-4e61-b1d6-11fcff4f2bff\n\n180c8741-c3f5-4aa0-8cb9-e9d02d5d3fd4\n\nUPDATE 1\n\n\n\n70d9f7eb-400e-41e9-921e-1d5bb40deceb\nUPDATE 1\nUPDATE 1\n\n\nUPDATE 1\n\n\n\nRESET\n{\"tests\": 132, \"status\": \"PASS\", \"results\": [{\"status\": \"PASS\", \"test_name\": \"anon no column writes: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no column writes: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no column writes: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no column writes: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no column writes: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: create_conversation_with_participants(uuid,uuid,text)\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: get_user_profile(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_audit_immutable()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_check_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_claim_is_current(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_evidence_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_evidence_tombstone()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_link_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_no_sharing()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: refresh_matching_scores()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: soft_delete_user(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"Anonymous cannot read audit\"}, {\"status\": \"PASS\", \"test_name\": \"Anonymous cannot read checks\"}, {\"status\": \"PASS\", \"test_name\": \"Anonymous cannot read evidence\"}, {\"status\": \"PASS\", \"test_name\": \"Anonymous cannot read headers\"}, {\"status\": \"PASS\", \"test_name\": \"Audit contains no raw fixture text\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: create_conversation_with_participants(uuid,uuid,text)\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: get_user_profile(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_audit_immutable()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_check_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_claim_is_current(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_evidence_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_evidence_tombstone()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_link_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_no_sharing()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: refresh_matching_scores()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: soft_delete_user(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"Backend supported claim eligible\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot approve own claim\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot delete audit\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot edit audit\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot forge reviewer\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot read audit\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot read evidence links\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot truncate audit\"}, {\"status\": \"PASS\", \"test_name\": \"Cannot expire before deadline\"}, {\"status\": \"PASS\", \"test_name\": \"Cannot link tombstoned evidence\"}, {\"status\": \"PASS\", \"test_name\": \"Cannot restore evidence tombstone\"}, {\"status\": \"PASS\", \"test_name\": \"Cross-owner evidence link\"}, {\"status\": \"PASS\", \"test_name\": \"Direct evidence remains backend-only\"}, {\"status\": \"PASS\", \"test_name\": \"Duplicate claim version rejected\"}, {\"status\": \"PASS\", \"test_name\": \"Evidence can support multiple claims\"}, {\"status\": \"PASS\", \"test_name\": \"Expired claim excluded\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: create_conversation_with_participants(uuid,uuid,text)\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: get_user_profile(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_audit_immutable()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_check_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_claim_is_current(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_evidence_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_evidence_tombstone()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_link_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_no_sharing()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: refresh_matching_scores()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: soft_delete_user(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"Immutable evidence hash\"}, {\"status\": \"PASS\", \"test_name\": \"Immutable evidence purpose\"}, {\"status\": \"PASS\", \"test_name\": \"New claim version invalidates previous support\"}, {\"status\": \"PASS\", \"test_name\": \"Other owner header hidden\"}, {\"status\": \"PASS\", \"test_name\": \"Other owner legacy check hidden\"}, {\"status\": \"PASS\", \"test_name\": \"Other user cannot read founder checks\"}, {\"status\": \"PASS\", \"test_name\": \"Other user cannot read founder passport evidence\"}, {\"status\": \"PASS\", \"test_name\": \"Owner header readable\"}, {\"status\": \"PASS\", \"test_name\": \"Owner legacy check readable\"}, {\"status\": \"PASS\", \"test_name\": \"Owner raw passport checks hidden\"}, {\"status\": \"PASS\", \"test_name\": \"Private evidence sharing blocked\"}, {\"status\": \"PASS\", \"test_name\": \"Rejection audited\"}, {\"status\": \"PASS\", \"test_name\": \"Reviewed link deletion rejected\"}, {\"status\": \"PASS\", \"test_name\": \"Revocation audited\"}, {\"status\": \"PASS\", \"test_name\": \"Revoked claim not eligible\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"Self review rejected\"}, {\"status\": \"PASS\", \"test_name\": \"Service cannot delete audit\"}, {\"status\": \"PASS\", \"test_name\": \"Service cannot edit audit\"}, {\"status\": \"PASS\", \"test_name\": \"Service cannot insert fabricated audit\"}, {\"status\": \"PASS\", \"test_name\": \"Service cannot truncate audit\"}, {\"status\": \"PASS\", \"test_name\": \"Skipped review transition rejected\"}, {\"status\": \"PASS\", \"test_name\": \"Terminal claim cannot be revived\"}, {\"status\": \"PASS\", \"test_name\": \"Tombstone invalidates every supported linked claim\"}]}\nROLLBACK\nPHASE_D_SECURITY_PASS_ROLLED_BACK\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "returncode": 0,
+      "stdout": "CREATE TABLE\nDO\n{\"meetings\": [], \"messages\": [], \"profiles\": [{\"id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"bio\": null, \"email\": \"passport-investor@example.invalid\", \"location\": null, \"full_name\": \"Staging Test Investor\", \"user_type\": \"investor\", \"avatar_url\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"deleted_at\": null, \"github_url\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_active\": \"2026-10-07T13:24:58.394365+00:00\", \"twitter_url\": null, \"linkedin_url\": null}, {\"id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"bio\": null, \"email\": \"passport-founder@example.invalid\", \"location\": null, \"full_name\": \"Staging Test Founder\", \"user_type\": \"early-stage-founder\", \"avatar_url\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"deleted_at\": null, \"github_url\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_active\": \"2026-10-07T13:24:58.394365+00:00\", \"twitter_url\": null, \"linkedin_url\": null}, {\"id\": \"8acd8892-8651-423c-ab8b-71437492f02b\", \"bio\": null, \"email\": \"passport-reviewer@example.invalid\", \"location\": null, \"full_name\": \"Staging Test Reviewer\", \"user_type\": \"early-stage-founder\", \"avatar_url\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"deleted_at\": null, \"github_url\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_active\": \"2026-10-07T13:24:58.394365+00:00\", \"twitter_url\": null, \"linkedin_url\": null}], \"audit_log\": [], \"connections\": [], \"user_skills\": [], \"trust_scores\": [], \"conversations\": [], \"opportunities\": [], \"roadmap_tasks\": [], \"match_feedback\": [], \"match_outcomes\": [], \"skill_taxonomy\": [], \"trust_evidence\": [], \"usage_counters\": [], \"ai_growth_plans\": [], \"evidence_grants\": [], \"matching_events\": [], \"mentor_profiles\": [], \"profile_reviews\": [{\"status\": \"pending\", \"user_id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"attempts\": 0, \"revision\": 2, \"ai_report\": null, \"ai_status\": \"queued\", \"updated_at\": \"2026-10-07T13:24:58.404481+00:00\", \"lease_until\": null, \"reviewed_at\": null, \"reviewed_by\": null, \"available_at\": \"2026-10-07T13:25:08.404481+00:00\", \"decision_note\": null}, {\"status\": \"pending\", \"user_id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"attempts\": 0, \"revision\": 2, \"ai_report\": null, \"ai_status\": \"queued\", \"updated_at\": \"2026-10-07T13:24:58.400932+00:00\", \"lease_until\": null, \"reviewed_at\": null, \"reviewed_by\": null, \"available_at\": \"2026-10-07T13:25:08.400932+00:00\", \"decision_note\": null}, {\"status\": \"pending\", \"user_id\": \"8acd8892-8651-423c-ab8b-71437492f02b\", \"attempts\": 0, \"revision\": 2, \"ai_report\": null, \"ai_status\": \"queued\", \"updated_at\": \"2026-10-07T13:24:58.400932+00:00\", \"lease_until\": null, \"reviewed_at\": null, \"reviewed_by\": null, \"available_at\": \"2026-10-07T13:25:08.400932+00:00\", \"decision_note\": null}], \"evidence_reviews\": [], \"founder_profiles\": [{\"id\": \"8260bbb9-d611-4511-9a3c-85a0bbedd6d7\", \"user_id\": \"8acd8892-8651-423c-ab8b-71437492f02b\", \"demo_url\": null, \"industry\": null, \"metadata\": {}, \"is_active\": true, \"is_public\": true, \"key_risks\": [], \"team_size\": 1, \"ask_amount\": null, \"created_at\": \"2026-10-07T13:24:58.400932+00:00\", \"idea_title\": null, \"tech_stack\": [], \"updated_at\": \"2026-10-07T13:24:58.400932+00:00\", \"competitors\": null, \"help_needed\": [], \"looking_for\": [], \"market_size\": null, \"website_url\": null, \"active_users\": 0, \"company_name\": null, \"founder_role\": null, \"hiring_roles\": [], \"legal_status\": null, \"use_of_funds\": null, \"weekly_hours\": null, \"company_stage\": null, \"founding_year\": null, \"funding_stage\": null, \"revenue_model\": null, \"skills_needed\": [], \"startup_stage\": null, \"target_market\": null, \"customer_count\": 0, \"founder_skills\": [], \"funding_raised\": null, \"pitch_deck_url\": null, \"product_status\": null, \"launch_timeline\": null, \"monthly_revenue\": null, \"pitch_video_url\": null, \"problem_solving\": null, \"target_audience\": null, \"cofounder_status\": null, \"commitment_level\": null, \"equity_available\": null, \"startup_location\": null, \"traction_metrics\": {}, \"traction_summary\": null, \"problem_statement\": null, \"validation_status\": null, \"current_challenges\": null, \"profile_completion\": 0, \"customer_validation\": null, \"investment_readiness\": null, \"onboarding_completed\": false, \"solution_description\": null, \"go_to_market_strategy\": null, \"business_model_details\": null, \"cofounder_requirements\": null, \"incubator_or_accelerator\": null, \"milestones_next_6_months\": null, \"unique_value_proposition\": null}, {\"id\": \"ff1914bd-9d58-4dec-a7ba-e6e4a4f52cb7\", \"user_id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"demo_url\": null, \"industry\": null, \"metadata\": {}, \"is_active\": true, \"is_public\": true, \"key_risks\": [], \"team_size\": 1, \"ask_amount\": null, \"created_at\": \"2026-10-07T13:24:58.400932+00:00\", \"idea_title\": null, \"tech_stack\": [], \"updated_at\": \"2026-10-07T13:24:58.400932+00:00\", \"competitors\": null, \"help_needed\": [], \"looking_for\": [], \"market_size\": null, \"website_url\": null, \"active_users\": 0, \"company_name\": null, \"founder_role\": null, \"hiring_roles\": [], \"legal_status\": null, \"use_of_funds\": null, \"weekly_hours\": null, \"company_stage\": null, \"founding_year\": null, \"funding_stage\": null, \"revenue_model\": null, \"skills_needed\": [], \"startup_stage\": null, \"target_market\": null, \"customer_count\": 0, \"founder_skills\": [], \"funding_raised\": null, \"pitch_deck_url\": null, \"product_status\": null, \"launch_timeline\": null, \"monthly_revenue\": null, \"pitch_video_url\": null, \"problem_solving\": null, \"target_audience\": null, \"cofounder_status\": null, \"commitment_level\": null, \"equity_available\": null, \"startup_location\": null, \"traction_metrics\": {}, \"traction_summary\": null, \"problem_statement\": null, \"validation_status\": null, \"current_challenges\": null, \"profile_completion\": 0, \"customer_validation\": null, \"investment_readiness\": null, \"onboarding_completed\": false, \"solution_description\": null, \"go_to_market_strategy\": null, \"business_model_details\": null, \"cofounder_requirements\": null, \"incubator_or_accelerator\": null, \"milestones_next_6_months\": null, \"unique_value_proposition\": null}], \"student_profiles\": [], \"investor_profiles\": [{\"id\": \"c227597e-b30c-4731-9a52-c396d0ca9dda\", \"exits\": 0, \"user_id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"metadata\": {}, \"firm_name\": null, \"fund_name\": null, \"is_active\": true, \"is_public\": true, \"created_at\": \"2026-10-07T13:24:58.404481+00:00\", \"profile_id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"updated_at\": \"2026-10-07T13:24:58.404481+00:00\", \"booking_url\": null, \"is_verified\": false, \"website_url\": null, \"investor_type\": null, \"portfolio_url\": null, \"response_time\": null, \"lead_or_follow\": null, \"check_range_max\": null, \"check_range_min\": null, \"geography_focus\": null, \"portfolio_count\": 0, \"ticket_size_max\": null, \"ticket_size_min\": null, \"what_i_look_for\": null, \"geographic_focus\": null, \"investment_stage\": [], \"preferred_stages\": [], \"successful_exits\": 0, \"accepting_pitches\": true, \"investment_thesis\": null, \"total_investments\": 0, \"profile_completion\": 0, \"notable_investments\": null, \"typical_involvement\": null, \"investment_frequency\": null, \"onboarding_completed\": false, \"preferred_industries\": [], \"industries_of_interest\": [], \"preferred_contact_method\": null, \"minimum_traction_required\": null, \"preferred_business_models\": [], \"due_diligence_requirements\": null}], \"meeting_followups\": [], \"student_activities\": [], \"subscription_plans\": [], \"user_auth_tracking\": [{\"id\": \"3ec91991-f475-4f07-a038-e2a7e1c8b24d\", \"email\": null, \"user_id\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_login\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"login_count\": 0, \"last_ip_address\": null, \"last_user_agent\": null}, {\"id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"email\": null, \"user_id\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_login\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"login_count\": 0, \"last_ip_address\": null, \"last_user_agent\": null}, {\"id\": \"8acd8892-8651-423c-ab8b-71437492f02b\", \"email\": null, \"user_id\": null, \"created_at\": \"2026-10-07T13:24:58.394365+00:00\", \"last_login\": null, \"updated_at\": \"2026-10-07T13:24:58.394365+00:00\", \"login_count\": 0, \"last_ip_address\": null, \"last_user_agent\": null}], \"user_subscriptions\": [], \"connection_requests\": [], \"evidence_ai_reviews\": [], \"interaction_history\": [], \"conversation_members\": [], \"matching_preferences\": [], \"meeting_participants\": [], \"mentorship_milestones\": [], \"profile_verifications\": [{\"id\": \"69ab8613-8bef-4482-aff5-64db73c77c93\", \"role\": \"early-stage-founder\", \"status\": \"partially_verified\", \"summary\": {}, \"user_id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"warnings\": [], \"checked_at\": \"2026-10-07T13:24:58.40733+00:00\", \"created_at\": \"2026-10-07T13:24:58.40733+00:00\", \"updated_at\": \"2026-10-07T13:24:58.40733+00:00\", \"trust_score\": 75, \"failed_links\": 0, \"verified_links\": 0, \"required_passed\": false, \"required_failures\": []}], \"profile_evidence_files\": [], \"profile_review_history\": [], \"startup_readiness_scores\": [], \"conversation_participants\": [], \"connected_identity_accounts\": [], \"profile_verification_checks\": [{\"id\": \"6f513091-706c-40b8-b1c4-d430dc96b2f4\", \"role\": \"early-stage-founder\", \"score\": 100, \"status\": \"passed\", \"message\": null, \"user_id\": \"42fce0f8-b0d3-41a9-b246-2d4a5def266e\", \"metadata\": {}, \"check_type\": \"link\", \"checked_at\": \"2026-10-07T13:24:58.409614+00:00\", \"created_at\": \"2026-10-07T13:24:58.409614+00:00\", \"target_key\": \"github\", \"target_label\": \"GitHub\", \"target_value\": null, \"verification_id\": null}]}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-security-d-43608e2ada",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "returncode": 0,
+      "stdout": "BEGIN\nSET\nSET\nDO\nCREATE TABLE\nGRANT\nCREATE FUNCTION\nCREATE FUNCTION\nDO\nINSERT 0 2\nINSERT 0 2\nCREATE FUNCTION\nCREATE FUNCTION\nSET\n             submit_claim             \n--------------------------------------\n a6611322-70be-42bf-b883-f201700991a8\n(1 row)\n\n             submit_claim             \n--------------------------------------\n af9ba1c3-55cf-4e3c-a113-89ac36348ad5\n(1 row)\n\nINSERT 0 2\n reject \n--------\n \n(1 row)\n\nINSERT 0 2\n assert_pass \n-------------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n decide_claim \n--------------\n \n(1 row)\n\n decide_claim \n--------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\nRESET\nSET\n              set_config              \n--------------------------------------\n 42fce0f8-b0d3-41a9-b246-2d4a5def266e\n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n              set_config              \n--------------------------------------\n 3ec91991-f475-4f07-a038-e2a7e1c8b24d\n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\nRESET\nSET\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\nRESET\nSET\n             submit_claim             \n--------------------------------------\n e7009727-a80e-4573-8b04-ea0f8efe86da\n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\nUPDATE 1\n assert_pass \n-------------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n             submit_claim             \n--------------------------------------\n 5e4da690-8c33-4ddc-8c9a-531a95b1b705\n(1 row)\n\n decide_claim \n--------------\n \n(1 row)\n\n             submit_claim             \n--------------------------------------\n e124ad11-5b8c-46f6-bf34-55310b667b52\n(1 row)\n\n decide_claim \n--------------\n \n(1 row)\n\n             submit_claim             \n--------------------------------------\n 034de438-dbb3-479b-aad8-24714a21b8ba\n(1 row)\n\n decide_claim \n--------------\n \n(1 row)\n\nUPDATE 1\n assert_pass \n-------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\n             submit_claim             \n--------------------------------------\n 82e8c8d0-5520-49a0-a047-2aabba7a974f\n(1 row)\n\nUPDATE 1\nUPDATE 1\n reject \n--------\n \n(1 row)\n\n pg_sleep \n----------\n \n(1 row)\n\nUPDATE 1\n assert_pass \n-------------\n \n(1 row)\n\n reject \n--------\n \n(1 row)\n\n assert_pass \n-------------\n \n(1 row)\n\nRESET\n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  security_report                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \n-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n {\"tests\": 132, \"status\": \"PASS\", \"results\": [{\"status\": \"PASS\", \"test_name\": \"anon no column writes: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no column writes: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no column writes: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no column writes: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no column writes: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no DELETE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: create_conversation_with_participants(uuid,uuid,text)\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: get_user_profile(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_audit_immutable()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_check_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_claim_is_current(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_evidence_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_evidence_tombstone()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_link_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: passport_no_sharing()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: refresh_matching_scores()\"}, {\"status\": \"PASS\", \"test_name\": \"anon no execute: soft_delete_user(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no INSERT: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no TRUNCATE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"anon no UPDATE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"Anonymous cannot read audit\"}, {\"status\": \"PASS\", \"test_name\": \"Anonymous cannot read checks\"}, {\"status\": \"PASS\", \"test_name\": \"Anonymous cannot read evidence\"}, {\"status\": \"PASS\", \"test_name\": \"Anonymous cannot read headers\"}, {\"status\": \"PASS\", \"test_name\": \"Audit contains no raw fixture text\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no column writes: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no DELETE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: create_conversation_with_participants(uuid,uuid,text)\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: get_user_profile(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_audit_immutable()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_check_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_claim_is_current(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_evidence_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_evidence_tombstone()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_link_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: passport_no_sharing()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: refresh_matching_scores()\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no execute: soft_delete_user(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no INSERT: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no TRUNCATE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"authenticated no UPDATE: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"Backend supported claim eligible\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot approve own claim\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot delete audit\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot edit audit\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot forge reviewer\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot read audit\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot read evidence links\"}, {\"status\": \"PASS\", \"test_name\": \"Browser cannot truncate audit\"}, {\"status\": \"PASS\", \"test_name\": \"Cannot expire before deadline\"}, {\"status\": \"PASS\", \"test_name\": \"Cannot link tombstoned evidence\"}, {\"status\": \"PASS\", \"test_name\": \"Cannot restore evidence tombstone\"}, {\"status\": \"PASS\", \"test_name\": \"Cross-owner evidence link\"}, {\"status\": \"PASS\", \"test_name\": \"Direct evidence remains backend-only\"}, {\"status\": \"PASS\", \"test_name\": \"Duplicate claim version rejected\"}, {\"status\": \"PASS\", \"test_name\": \"Evidence can support multiple claims\"}, {\"status\": \"PASS\", \"test_name\": \"Expired claim excluded\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: create_conversation_with_participants(uuid,uuid,text)\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: get_user_profile(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_audit_immutable()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_check_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_claim_is_current(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_evidence_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_evidence_tombstone()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_link_guard()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: passport_no_sharing()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: refresh_matching_scores()\"}, {\"status\": \"PASS\", \"test_name\": \"Fixed search path: soft_delete_user(uuid)\"}, {\"status\": \"PASS\", \"test_name\": \"Immutable evidence hash\"}, {\"status\": \"PASS\", \"test_name\": \"Immutable evidence purpose\"}, {\"status\": \"PASS\", \"test_name\": \"New claim version invalidates previous support\"}, {\"status\": \"PASS\", \"test_name\": \"Other owner header hidden\"}, {\"status\": \"PASS\", \"test_name\": \"Other owner legacy check hidden\"}, {\"status\": \"PASS\", \"test_name\": \"Other user cannot read founder checks\"}, {\"status\": \"PASS\", \"test_name\": \"Other user cannot read founder passport evidence\"}, {\"status\": \"PASS\", \"test_name\": \"Owner header readable\"}, {\"status\": \"PASS\", \"test_name\": \"Owner legacy check readable\"}, {\"status\": \"PASS\", \"test_name\": \"Owner raw passport checks hidden\"}, {\"status\": \"PASS\", \"test_name\": \"Private evidence sharing blocked\"}, {\"status\": \"PASS\", \"test_name\": \"Rejection audited\"}, {\"status\": \"PASS\", \"test_name\": \"Reviewed link deletion rejected\"}, {\"status\": \"PASS\", \"test_name\": \"Revocation audited\"}, {\"status\": \"PASS\", \"test_name\": \"Revoked claim not eligible\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: profile_verification_checks\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: profile_verification_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: profile_verifications\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: trust_evidence\"}, {\"status\": \"PASS\", \"test_name\": \"RLS enabled: verification_audit_history\"}, {\"status\": \"PASS\", \"test_name\": \"Self review rejected\"}, {\"status\": \"PASS\", \"test_name\": \"Service cannot delete audit\"}, {\"status\": \"PASS\", \"test_name\": \"Service cannot edit audit\"}, {\"status\": \"PASS\", \"test_name\": \"Service cannot insert fabricated audit\"}, {\"status\": \"PASS\", \"test_name\": \"Service cannot truncate audit\"}, {\"status\": \"PASS\", \"test_name\": \"Skipped review transition rejected\"}, {\"status\": \"PASS\", \"test_name\": \"Terminal claim cannot be revived\"}, {\"status\": \"PASS\", \"test_name\": \"Tombstone invalidates every supported linked claim\"}]}\n(1 row)\n\nROLLBACK\n              column1              \n-----------------------------------\n PHASE_D_SECURITY_PASS_ROLLED_BACK\n(1 row)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "stop",
+        "scalescope-security-d-43608e2ada"
+      ],
+      "returncode": 0,
+      "stdout": "scalescope-security-d-43608e2ada\n",
+      "stderr": ""
+    }
+  ]
+}

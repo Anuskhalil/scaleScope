@@ -1,5 +1,6 @@
 // src/services/studentService.js — PRODUCTION-READY, FIXED & OPTIMIZED
 import { supabase } from '../lib/supabaseClient';
+import { backendApi } from '../lib/backendApi';
 import { attachMatchIntelligence } from './intelligentMatching';
 
 const CACHE = new Map();
@@ -618,14 +619,11 @@ export async function respondToRequest(requestId, status) {
 }
 
 export async function getOrCreateConversation(userId, otherUserId) {
-  const { data, error } = await supabase
-    .rpc('create_conversation_with_participants', {
-      p_created_by: userId,
-      p_other_user: otherUserId,
-      p_type: 'direct'
-    });
-  if (error) throw error;
-  return data;
+  if (!userId) throw new Error('userId is required');
+  if (!otherUserId) throw new Error('otherUserId is required');
+  // The backend derives the caller from the authenticated session.
+  const data = await backendApi.getOrCreateConversation(otherUserId);
+  return data.conversationId || data.id || data.data?.id;
 }
 
 export async function fetchConversations(userId, { fresh = false } = {}) {

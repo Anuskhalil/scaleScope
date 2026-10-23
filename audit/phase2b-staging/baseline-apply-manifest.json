@@ -1,0 +1,9 @@
+{
+  "target": "sopklyxvzmungxwgboqs",
+  "rehearsal_result": "User reported BASELINE_REHEARSAL_PASS_ROLLED_BACK",
+  "source_sha256": "0dde75ab93f06194b5952e1926b8d1a3d7767d1e44968eccd8f1b322e028271d",
+  "apply_sha256": "d3f0caa72264b64068c9cdd94daaf5b0c29841f68fdc3f0dc310669d774edc02",
+  "executed_on_hosted_database_by_assistant": false,
+  "behavior": "Single transaction; abort on nonempty public schema or failed check. Not idempotent.",
+  "security": "Legacy grants preserved for baseline parity, not production-safe hardening."
+}

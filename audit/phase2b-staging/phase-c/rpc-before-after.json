@@ -1,0 +1,129 @@
+{
+  "source": "Local reconstructed staging baseline; not a live database read",
+  "before": [
+    {
+      "owner": "postgres",
+      "signature": "create_conversation_with_participants(uuid,uuid,text)",
+      "definition": "CREATE OR REPLACE FUNCTION public.create_conversation_with_participants(p_created_by uuid, p_other_user uuid, p_type text DEFAULT 'direct'::text)\n RETURNS uuid\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\ndeclare\r\n  v_conversation_id uuid;\r\nbegin\r\n  if p_created_by is null or p_other_user is null then\r\n    raise exception 'Both participants are required';\r\n  end if;\r\n\r\n  if p_created_by = p_other_user then\r\n    raise exception 'Cannot create conversation with yourself';\r\n  end if;\r\n\r\n  select cp1.conversation_id\r\n    into v_conversation_id\r\n  from public.conversation_participants cp1\r\n  join public.conversation_participants cp2\r\n    on cp2.conversation_id = cp1.conversation_id\r\n  join public.conversations c\r\n    on c.id = cp1.conversation_id\r\n  where cp1.user_id = p_created_by\r\n    and cp2.user_id = p_other_user\r\n    and c.type = coalesce(p_type, 'direct')\r\n  order by c.created_at asc\r\n  limit 1;\r\n\r\n  if v_conversation_id is null then\r\n    insert into public.conversations(type, created_at, updated_at, last_message_at)\r\n    values (coalesce(p_type, 'direct'), now(), now(), now())\r\n    returning id into v_conversation_id;\r\n\r\n    insert into public.conversation_participants(conversation_id, user_id, created_at)\r\n    values\r\n      (v_conversation_id, p_created_by, now()),\r\n      (v_conversation_id, p_other_user, now())\r\n    on conflict (conversation_id, user_id) do nothing;\r\n\r\n    insert into public.conversation_members(conversation_id, user_id, joined_at)\r\n    values\r\n      (v_conversation_id, p_created_by, now()),\r\n      (v_conversation_id, p_other_user, now())\r\n    on conflict (conversation_id, user_id) do nothing;\r\n  end if;\r\n\r\n  return v_conversation_id;\r\nend;\r\n$function$\n",
+      "anon_execute": true,
+      "configuration": [
+        "search_path=public"
+      ],
+      "public_execute": true,
+      "service_execute": true,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "owner": "postgres",
+      "signature": "get_user_profile(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.get_user_profile(user_uuid uuid)\n RETURNS json\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\r\nDECLARE\r\n    profile_data JSON;\r\n    role_data JSON;\r\n    user_role TEXT;\r\nBEGIN\r\n    -- Get base profile\r\n    SELECT row_to_json(up.*) INTO profile_data\r\n    FROM public.user_profiles up\r\n    WHERE up.id = user_uuid;\r\n    \r\n    IF profile_data IS NULL THEN\r\n        RETURN NULL;\r\n    END IF;\r\n    \r\n    -- Get user role\r\n    SELECT user_type INTO user_role\r\n    FROM public.user_profiles\r\n    WHERE id = user_uuid;\r\n    \r\n    -- Get role-specific data\r\n    CASE user_role\r\n        WHEN 'student' THEN\r\n            SELECT row_to_json(sp.*) INTO role_data\r\n            FROM public.student_profiles sp\r\n            WHERE sp.user_id = user_uuid;\r\n        WHEN 'early-stage-founder' THEN\r\n            SELECT row_to_json(fp.*) INTO role_data\r\n            FROM public.founder_profiles fp\r\n            WHERE fp.user_id = user_uuid;\r\n        WHEN 'mentor' THEN\r\n            SELECT row_to_json(mp.*) INTO role_data\r\n            FROM public.mentor_profiles mp\r\n            WHERE mp.user_id = user_uuid;\r\n        WHEN 'investor' THEN\r\n            SELECT row_to_json(ip.*) INTO role_data\r\n            FROM public.investor_profiles ip\r\n            WHERE ip.user_id = user_uuid;\r\n        ELSE\r\n            role_data := NULL;\r\n    END CASE;\r\n    \r\n    -- Combine profile and role data\r\n    RETURN json_build_object(\r\n        'profile', profile_data,\r\n        'role_data', role_data\r\n    );\r\nEND;\r\n$function$\n",
+      "anon_execute": true,
+      "configuration": null,
+      "public_execute": true,
+      "service_execute": true,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "owner": "postgres",
+      "signature": "increment_login_tracking(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.increment_login_tracking(p_user_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\r\nBEGIN\r\n  INSERT INTO public.user_auth_tracking (id, last_login, login_count)\r\n  VALUES (p_user_id, now(), 1)\r\n  ON CONFLICT (id)\r\n  DO UPDATE SET\r\n    last_login = now(),\r\n    login_count = COALESCE(user_auth_tracking.login_count, 0) + 1;\r\nEND;\r\n$function$\n",
+      "anon_execute": true,
+      "configuration": null,
+      "public_execute": true,
+      "service_execute": true,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "owner": "postgres",
+      "signature": "refresh_matching_scores()",
+      "definition": "CREATE OR REPLACE FUNCTION public.refresh_matching_scores()\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\r\nBEGIN\r\n  REFRESH MATERIALIZED VIEW CONCURRENTLY public.matching_candidate_scores;\r\nEND;\r\n$function$\n",
+      "anon_execute": true,
+      "configuration": null,
+      "public_execute": true,
+      "service_execute": true,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "owner": "postgres",
+      "signature": "soft_delete_user(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.soft_delete_user(user_uuid uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\r\nBEGIN\r\n  UPDATE public.profiles \r\n  SET deleted_at = NOW(), \r\n      onboarding_completed = false,\r\n      metadata = jsonb_set(metadata, '{deleted_reason}', '\"user_requested\"')\r\n  WHERE id = user_uuid;\r\n  -- Related tables auto-CASCADE due to FK constraints\r\nEND;\r\n$function$\n",
+      "anon_execute": true,
+      "configuration": null,
+      "public_execute": true,
+      "service_execute": true,
+      "security_definer": true,
+      "authenticated_execute": true
+    }
+  ],
+  "after": [
+    {
+      "owner": "postgres",
+      "signature": "create_conversation_with_participants(uuid,uuid,text)",
+      "definition": "CREATE OR REPLACE FUNCTION public.create_conversation_with_participants(p_created_by uuid, p_other_user uuid, p_type text DEFAULT 'direct'::text)\n RETURNS uuid\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\r\nDECLARE conversation uuid;\r\nBEGIN\r\n IF current_user NOT IN ('service_role','postgres') THEN\r\n  RAISE EXCEPTION 'Backend authority required' USING ERRCODE='42501';\r\n END IF;\r\n IF p_created_by IS NULL OR p_other_user IS NULL OR p_created_by=p_other_user\r\n  OR coalesce(p_type,'direct')<>'direct' THEN\r\n  RAISE EXCEPTION 'Two distinct participants and direct conversation required' USING ERRCODE='22023';\r\n END IF;\r\n IF (SELECT count(*) FROM public.profiles WHERE id IN (p_created_by,p_other_user)\r\n     AND deleted_at IS NULL)<>2 THEN\r\n  RAISE EXCEPTION 'Active participants required' USING ERRCODE='42501';\r\n END IF;\r\n IF NOT EXISTS(SELECT 1 FROM public.connections\r\n  WHERE (user_1=p_created_by AND user_2=p_other_user) OR (user_2=p_created_by AND user_1=p_other_user)) THEN\r\n  RAISE EXCEPTION 'Connect first before opening a conversation' USING ERRCODE='42501';\r\n END IF;\r\n -- Serialize a pair to prevent duplicate rooms from simultaneous backend calls.\r\n PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(\r\n  least(p_created_by,p_other_user)::text||':'||greatest(p_created_by,p_other_user)::text,0));\r\n SELECT a.conversation_id INTO conversation FROM public.conversation_participants a\r\n JOIN public.conversation_participants b ON b.conversation_id=a.conversation_id\r\n JOIN public.conversations c ON c.id=a.conversation_id\r\n WHERE a.user_id=p_created_by AND b.user_id=p_other_user AND c.type='direct'\r\n  AND (SELECT count(*) FROM public.conversation_participants x WHERE x.conversation_id=c.id)=2\r\n ORDER BY c.created_at,c.id LIMIT 1;\r\n IF conversation IS NULL THEN\r\n  INSERT INTO public.conversations(type,created_at,updated_at,last_message_at)\r\n  VALUES('direct',now(),now(),now()) RETURNING id INTO conversation;\r\n  INSERT INTO public.conversation_participants(conversation_id,user_id,created_at)\r\n  VALUES(conversation,p_created_by,now()),(conversation,p_other_user,now());\r\n  INSERT INTO public.conversation_members(conversation_id,user_id,joined_at)\r\n  VALUES(conversation,p_created_by,now()),(conversation,p_other_user,now());\r\n END IF;\r\n RETURN conversation;\r\nEND $function$\n",
+      "anon_execute": false,
+      "configuration": [
+        "search_path=\"\""
+      ],
+      "public_execute": false,
+      "service_execute": true,
+      "security_definer": false,
+      "authenticated_execute": false
+    },
+    {
+      "owner": "postgres",
+      "signature": "get_user_profile(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.get_user_profile(user_uuid uuid)\n RETURNS json\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\nDECLARE\r\n    profile_data JSON;\r\n    role_data JSON;\r\n    user_role TEXT;\r\nBEGIN\r\n    -- Get base profile\r\n    SELECT row_to_json(up.*) INTO profile_data\r\n    FROM public.user_profiles up\r\n    WHERE up.id = user_uuid;\r\n    \r\n    IF profile_data IS NULL THEN\r\n        RETURN NULL;\r\n    END IF;\r\n    \r\n    -- Get user role\r\n    SELECT user_type INTO user_role\r\n    FROM public.user_profiles\r\n    WHERE id = user_uuid;\r\n    \r\n    -- Get role-specific data\r\n    CASE user_role\r\n        WHEN 'student' THEN\r\n            SELECT row_to_json(sp.*) INTO role_data\r\n            FROM public.student_profiles sp\r\n            WHERE sp.user_id = user_uuid;\r\n        WHEN 'early-stage-founder' THEN\r\n            SELECT row_to_json(fp.*) INTO role_data\r\n            FROM public.founder_profiles fp\r\n            WHERE fp.user_id = user_uuid;\r\n        WHEN 'mentor' THEN\r\n            SELECT row_to_json(mp.*) INTO role_data\r\n            FROM public.mentor_profiles mp\r\n            WHERE mp.user_id = user_uuid;\r\n        WHEN 'investor' THEN\r\n            SELECT row_to_json(ip.*) INTO role_data\r\n            FROM public.investor_profiles ip\r\n            WHERE ip.user_id = user_uuid;\r\n        ELSE\r\n            role_data := NULL;\r\n    END CASE;\r\n    \r\n    -- Combine profile and role data\r\n    RETURN json_build_object(\r\n        'profile', profile_data,\r\n        'role_data', role_data\r\n    );\r\nEND;\r\n$function$\n",
+      "anon_execute": false,
+      "configuration": [
+        "search_path=\"\""
+      ],
+      "public_execute": false,
+      "service_execute": true,
+      "security_definer": true,
+      "authenticated_execute": false
+    },
+    {
+      "owner": "postgres",
+      "signature": "increment_login_tracking(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.increment_login_tracking(p_user_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\nBEGIN\r\n IF auth.uid() IS NULL OR p_user_id IS DISTINCT FROM auth.uid() THEN\r\n  RAISE EXCEPTION 'Own authenticated account required' USING ERRCODE='42501';\r\n END IF;\r\n IF NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=p_user_id AND deleted_at IS NULL) THEN\r\n  RAISE EXCEPTION 'Active profile required' USING ERRCODE='42501';\r\n END IF;\r\n INSERT INTO public.user_auth_tracking AS tracking(id,last_login,login_count)\r\n VALUES(p_user_id,now(),1)\r\n ON CONFLICT(id) DO UPDATE SET last_login=now(),login_count=coalesce(tracking.login_count,0)+1;\r\nEND $function$\n",
+      "anon_execute": false,
+      "configuration": [
+        "search_path=\"\""
+      ],
+      "public_execute": false,
+      "service_execute": false,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "owner": "postgres",
+      "signature": "refresh_matching_scores()",
+      "definition": "CREATE OR REPLACE FUNCTION public.refresh_matching_scores()\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\nBEGIN\r\n  REFRESH MATERIALIZED VIEW CONCURRENTLY public.matching_candidate_scores;\r\nEND;\r\n$function$\n",
+      "anon_execute": false,
+      "configuration": [
+        "search_path=\"\""
+      ],
+      "public_execute": false,
+      "service_execute": true,
+      "security_definer": true,
+      "authenticated_execute": false
+    },
+    {
+      "owner": "postgres",
+      "signature": "soft_delete_user(uuid)",
+      "definition": "CREATE OR REPLACE FUNCTION public.soft_delete_user(user_uuid uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\nBEGIN\r\n  UPDATE public.profiles \r\n  SET deleted_at = NOW(), \r\n      onboarding_completed = false,\r\n      metadata = jsonb_set(metadata, '{deleted_reason}', '\"user_requested\"')\r\n  WHERE id = user_uuid;\r\n  -- Related tables auto-CASCADE due to FK constraints\r\nEND;\r\n$function$\n",
+      "anon_execute": false,
+      "configuration": [
+        "search_path=\"\""
+      ],
+      "public_execute": false,
+      "service_execute": true,
+      "security_definer": true,
+      "authenticated_execute": false
+    }
+  ]
+}

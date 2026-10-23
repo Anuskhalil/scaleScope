@@ -15,8 +15,7 @@ import {
 } from 'lucide-react';
 
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
-  .ss{font-family:'Syne',sans-serif}.dm{font-family:'DM Sans',sans-serif}
+  .ss{font-family:var(--font-heading)}.dm{font-family:var(--font-sans)}
   .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
   .lift:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(27,45,127,.12)}
   .g-brand,.g-ment{background:linear-gradient(135deg,#98DE38,#7EC42E)}
@@ -29,7 +28,7 @@ const CSS = `
   @keyframes si{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
   .shimmer{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:sh 1.4s infinite;border-radius:12px}
   @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
-  .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .14s;background:#fff}
+  .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:var(--font-sans);transition:border-color .14s;background:#fff}
   .inp:focus{border-color:#98DE38}
   .mentor-brand .text-emerald-300,.mentor-brand .text-emerald-500,.mentor-brand .text-emerald-600,.mentor-brand .text-emerald-700{color:#1B2D7F!important}
   .mentor-brand .bg-emerald-50,.mentor-brand .bg-emerald-100{background-color:rgba(152,222,56,.14)!important}

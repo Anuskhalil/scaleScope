@@ -15,7 +15,7 @@ module.exports = async (req, res, next) => {
     }
     
     req.user = user;
-    next();
+    require('../services/reviewerSession').withValidatedSession(token,user,next);
   } catch (err) {
     console.error('Auth error:', err);
     return res.status(500).json({ error: 'Authentication failed' });

@@ -397,7 +397,7 @@ export default function MeetingRoomPage() {
     roomRef.current?.disconnect();
     roomRef.current = null;
     setState((prev) => ({ ...prev, connected: false }));
-    navigate(messagesPath);
+    navigate('/trust-workspace?tab=meetings');
   };
 
   const copyMeetingLink = async () => {
@@ -544,7 +544,7 @@ export default function MeetingRoomPage() {
                   Invite connected users
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Add mentors, investors, founders, or students already connected with you.
+                  Add founders or investors already connected with you.
                 </p>
 
                 <div className="space-y-2 mt-3 max-h-56 overflow-y-auto pr-1">

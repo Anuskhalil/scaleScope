@@ -3,13 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   CheckCircle,
-  GraduationCap,
   Loader,
   Rocket,
   Shield,
   Sparkles,
   TrendingUp,
-  UserCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -35,23 +33,19 @@ const CSS = `
 
 const roleFilters = [
   { label: 'All', value: '', Icon: Sparkles },
-  { label: 'Students', value: 'student', Icon: GraduationCap },
   { label: 'Founders', value: 'early-stage-founder', Icon: Rocket },
-  { label: 'Mentors', value: 'mentor', Icon: UserCheck },
   { label: 'Investors', value: 'investor', Icon: TrendingUp },
 ];
 
 const formatPrice = (plan, yearly) => {
+  if (plan.code === 'founder_pro' && !plan.pricing_finalized) return 'Price to be confirmed';
   if (plan.metadata?.ecosystem_access) return 'Free';
 
   const value = yearly ? plan.price_yearly : plan.price_monthly;
   if (!Number(value)) return 'Free';
 
-  if (yearly) {
-    return `$${Number(value).toLocaleString()}/yr`;
-  }
-
-  return `$${Number(value).toLocaleString()}/mo`;
+  const price = new Intl.NumberFormat('en-US', { style: 'currency', currency: plan.currency || 'USD' }).format(Number(value));
+  return `${price}/${yearly ? 'yr' : 'mo'}`;
 };
 
 const included = (plan) => {
@@ -61,12 +55,8 @@ const included = (plan) => {
 
 const limitRows = (plan) => {
   const limits = plan.limits || {};
-  return [
-    ['Connection requests / month', limits.connection_requests],
-    ['AI match reports / month', limits.ai_match_reports],
-    ['Saved profiles', limits.saved_profiles],
-    ['Profile boosts / month', limits.profile_boosts],
-  ].filter(([, value]) => value !== undefined && value !== null);
+  return [['Connection requests / month', limits.connection_requests]]
+    .filter(([, value]) => value !== undefined && value !== null);
 };
 
 const formatLimit = (value) => {
@@ -81,7 +71,7 @@ const formatLimit = (value) => {
 export default function PricingPage() {
   const { session, profile } = useAuth();
   const [plans, setPlans] = useState([]);
-  const [role, setRole] = useState('');
+  const [role, setRole] = useState(profile?.user_type || '');
   const [yearly, setYearly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [checkoutPlan, setCheckoutPlan] = useState(null);
@@ -118,6 +108,7 @@ export default function PricingPage() {
   }, [plans, role]);
 
   const handleSelectPlan = async (plan) => {
+    if (checkoutPlan) return;
     if (!session) {
       window.location.href = '/register';
       return;
@@ -130,7 +121,7 @@ export default function PricingPage() {
 
     try {
       setCheckoutPlan(plan.code);
-      const checkout = await backendApi.createBillingCheckout(plan.code);
+      const checkout = await backendApi.createBillingCheckout(plan.code, yearly ? 'yearly' : 'monthly');
 
       if (checkout.url) {
         window.location.href = checkout.url;
@@ -140,7 +131,6 @@ export default function PricingPage() {
       toast(checkout.message || 'Payment provider is not configured yet.', {
         style: { background: '#1B2D7F', color: '#fff' },
       });
-      window.location.href = '/billing';
     } catch (error) {
       toast.error(error.message || 'Could not start checkout');
     } finally {
@@ -149,7 +139,7 @@ export default function PricingPage() {
   };
 
   const recommendedRole = profile?.user_type || role;
-  const ecosystemRole = ['mentor', 'investor'].includes(role || profile?.user_type);
+  const ecosystemRole = ['investor'].includes(role || profile?.user_type);
 
   return (
     <>
@@ -159,14 +149,14 @@ export default function PricingPage() {
           <header className="text-center max-w-3xl mx-auto mb-10">
             <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 text-green-700 border border-green-200 text-xs font-black uppercase">
               <Shield className="w-3.5" />
-              Trust-based pricing
+              Plans and pricing
             </span>
             <h1 className="text-3xl sm:text-5xl font-black text-gray-900 mt-4">
-              Grow from free matching to serious startup execution.
+              ScaleScope plans
             </h1>
             <p className="text-sm sm:text-base text-gray-500 mt-4">
-              Students and founders can upgrade for higher outreach, AI reports, and priority visibility.
-              Mentors and investors receive free ecosystem access to keep guidance and deal-flow strong.
+              Early Founders can upgrade for more connection requests. Investors have free ecosystem access.
+              Paid plans do not buy verification, approval, or a better match score.
             </p>
           </header>
 
@@ -216,10 +206,10 @@ export default function PricingPage() {
             <div className="mb-6 bg-white border border-green-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-[#1B2D7F]">
-                  {role === 'investor' ? 'Investors' : 'Mentors'} are free on ScaleScope
+                  Investors are free on ScaleScope
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  We keep mentors and investors free so students and founders get stronger guidance, better deal-flow, and more trust.
+                  Investors have free full access. Student and professional Early Founders can choose Free or Founder Pro.
                 </p>
               </div>
               <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-[#98DE38]/20 text-[#1B2D7F] text-xs font-black uppercase">
@@ -268,9 +258,9 @@ export default function PricingPage() {
 
                     <div className="mt-5">
                       <p className="text-3xl font-black text-gray-900">{formatPrice(plan, yearly)}</p>
-                      {Number(plan.price_yearly) > 0 && yearly && (
+                      {plan.pricing_finalized && Number(plan.price_yearly) > 0 && yearly && (
                         <p className="text-xs text-gray-400 mt-1">
-                          Equivalent to about ${Math.round(Number(plan.price_yearly) / 12)}/mo.
+                          Billed annually. Taxes and any discounts are shown at checkout.
                         </p>
                       )}
                     </div>
@@ -278,7 +268,7 @@ export default function PricingPage() {
                     <button
                       type="button"
                       onClick={() => handleSelectPlan(plan)}
-                      disabled={checkoutPlan === plan.code}
+                      disabled={Boolean(checkoutPlan) || (plan.code !== 'free' && (!plan.checkout_intervals?.includes(yearly ? 'yearly' : 'monthly') || (session && profile?.user_type !== 'early-stage-founder')))}
                       className={`w-full mt-5 py-3 rounded-xl text-sm font-black flex items-center justify-center gap-2 disabled:opacity-60 ${
                         plan.code === 'free'
                           ? 'border-2 border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
@@ -286,7 +276,7 @@ export default function PricingPage() {
                       }`}
                     >
                       {checkoutPlan === plan.code ? <Loader className="w-4 animate-spin" /> : null}
-                      {plan.metadata?.ecosystem_access ? 'Use Free Access' : plan.code === 'free' ? 'Start Free' : 'Upgrade'}
+                      {plan.metadata?.ecosystem_access ? 'Use Free Access' : plan.code === 'free' ? 'Start Free' : !plan.checkout_intervals?.includes(yearly ? 'yearly' : 'monthly') ? 'Currently unavailable' : `Continue with ${yearly ? 'yearly' : 'monthly'} Pro`}
                       <ArrowRight className="w-4" />
                     </button>
 
@@ -321,10 +311,10 @@ export default function PricingPage() {
           <section className="mt-10 bg-gray-900 text-white rounded-2xl p-6">
             <div className="grid lg:grid-cols-3 gap-5 items-center">
               <div className="lg:col-span-2">
-                <h2 className="text-xl font-black">Payment provider note</h2>
+                <h2 className="text-xl font-black">Manage your subscription</h2>
                 <p className="text-sm text-gray-300 mt-2">
-                  ScaleScope checkout is wired for Lemon Squeezy test mode. Add backend env vars,
-                  run the billing SQL, and use Lemon test variants to verify subscriptions before going live.
+                  Checkout and payment details are handled by Lemon Squeezy. Review the total before paying.
+                  Manage renewal or cancellation from Billing. Your plan updates after payment confirmation.
                 </p>
               </div>
 

@@ -1,0 +1,10 @@
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { MemoryRouter } from "react-router-dom";
+import "../src/index.css";
+import Founder from "../src/pages/EarlyStageFounderRolePages/FounderProfile.jsx";
+import Register from "../src/auth/RegisterPage.jsx";
+import Navbar from "../src/components/landing-page/Navbar.jsx";
+import RoleNavbar from "../src/components/landing-page/RoleNavbar.jsx";
+const mode = new URLSearchParams(location.search).get("mode");
+createRoot(document.getElementById("root")).render(<MemoryRouter>{mode === "register" ? <><Navbar /><main className="pt-24"><Register /></main></> : mode === "nav" ? <RoleNavbar /> : <Founder />}</MemoryRouter>);

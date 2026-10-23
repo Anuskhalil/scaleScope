@@ -1,3 +1,5 @@
+import { investmentFit } from '../utils/investmentFit';
+
 const pct = (value) => Math.max(0, Math.min(100, Math.round(value || 0)));
 
 export const safeArray = (value) => {
@@ -195,6 +197,25 @@ const complementaryScore = (current = {}, candidate = {}, context = '') => {
 };
 
 export function buildMatchIntelligence({ currentProfile = {}, candidate = {}, context = 'cofounder', baseScore } = {}) {
+  if (candidate.serverMatch) {
+    const fit = candidate.serverMatch;
+    return { ...fit, smartScore: fit.matchScore, scoreBreakdown: [],
+      proofBadges: [], activityLabel: 'Profile-based fit, not verification',
+      outreachSuggestion: fit.unknowns.length ? 'Clarify missing criteria before outreach.' : 'Discuss the matching criteria.' };
+  }
+  if (context === 'founder-to-investor' || context === 'investor-to-startup') {
+    const fit = context === 'founder-to-investor'
+      ? investmentFit(currentProfile, candidate) : investmentFit(candidate, currentProfile);
+    return {
+      ...fit,
+      smartScore: fit.eligible ? fit.matchScore : 0,
+      scoreBreakdown: [{ label: 'Investment fit (not verification)', value: fit.matchScore }],
+      proofBadges: getProofBadges(candidate),
+      activityLabel: activityLabel(candidate),
+      reasons: [...fit.reasons, ...fit.mismatches, ...fit.unknowns],
+      outreachSuggestion: fit.unknowns.length ? 'Clarify the missing investment criteria before pitching.' : 'Discuss the matched investment criteria.',
+    };
+  }
   const base = Number.isFinite(Number(baseScore)) ? Number(baseScore) : getBaseScore(candidate);
   const complement = complementaryScore(currentProfile, candidate, context);
   const trust = trustScore(candidate);
@@ -240,8 +261,9 @@ export function attachMatchIntelligence(items = [], currentProfile = {}, context
         ...intelligence,
         matchScore: intelligence.smartScore,
         _score: intelligence.smartScore,
-        reasons: item.reasons?.length ? item.reasons : intelligence.reasons,
+        reasons: intelligence.eligible !== undefined ? intelligence.reasons : (item.reasons?.length ? item.reasons : intelligence.reasons),
       };
     })
+    .filter(item => item.eligible !== false)
     .sort((a, b) => Number(b.smartScore || b.matchScore || 0) - Number(a.smartScore || a.matchScore || 0));
 }

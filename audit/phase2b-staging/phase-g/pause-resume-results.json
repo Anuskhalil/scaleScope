@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "checks": [
+    "Synthetic reviewer enabled",
+    "founder authenticated",
+    "reviewer authenticated",
+    "Temporary backend staging identity",
+    "Normal workspace writable",
+    "Existing synthetic evidence available",
+    "Owner download before pause",
+    "Temporary backend staging identity",
+    "Paused workspace readable",
+    "Paused owner summary readable",
+    "Paused owner download unchanged",
+    "Paused authorized reviewer download unchanged",
+    "Paused anonymous download denied",
+    "Paused mutation blocked: /api/passport/evidence",
+    "Paused mutation blocked: /api/passport/claims",
+    "Paused mutation blocked: /api/passport/claims/00000000-0000-4000-8000-000000000099/decision",
+    "Pause attempts preserved claims/evidence/audit",
+    "Temporary backend staging identity",
+    "Resumed workspace writable",
+    "Resumed request reaches validation without creating claim",
+    "Resume preserved claims/evidence/audit"
+  ],
+  "scope": "Temporary local backend against hosted synthetic staging; no valid mutations submitted",
+  "limitations": [
+    "No in-flight request draining test",
+    "No production execution",
+    "Auth login records may change from test sign-ins"
+  ]
+}

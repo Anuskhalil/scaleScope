@@ -21,13 +21,13 @@ const features = [
     icon: UserCheck,
     title: 'Co-founder discovery',
     description:
-      'Students and founders can find people who complement their strengths and match their startup-building goals.',
+      'Student and professional founders can find people who complement their strengths and match their startup-building goals.',
   },
   {
     icon: Target,
-    title: 'Mentor discovery',
+    title: 'AI Mentor',
     description:
-      'Find mentors based on the exact areas you need help with, such as product strategy, validation, pitch deck, or growth.',
+      'AI mentorship is coming for product strategy, validation, pitch preparation, and growth.',
   },
   {
     icon: TrendingUp,

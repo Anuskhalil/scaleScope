@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { FounderRequestConfirmation } from '../FounderAllowance';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Menu, X, LogOut, User, Settings, Search,
+  Menu, X, LogOut, User, Settings, Search, ShieldCheck,
   MessageSquare, Bell, Home, Users, TrendingUp,
   GraduationCap, Rocket, Briefcase, UserCheck
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
+import { normalizeRole } from '../../utils/roles';
 import { supabase } from '../../lib/supabaseClient';
 import { backendApi } from '../../lib/backendApi';
 import { initSocket } from '../../lib/socketClient';
@@ -21,13 +23,55 @@ export default function RoleNavbar() {
   const [profileData, setProfileData] = useState(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [billing, setBilling] = useState(null);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true, socket;
+    const seen = new Set();
+    async function refresh(notification) {
+      try {
+        const response = await backendApi.getConversations();
+        if (!active) return;
+        const rows = response.data || [];
+        setUnreadMessages(rows.reduce((sum, row) => sum + Number(row.unreadCount || 0), 0));
+        if (!notification?.id || seen.has(notification.id)) return;
+        seen.add(notification.id);
+        if (seen.size > 200) seen.delete(seen.values().next().value);
+        const row = rows.find(item => item.id === notification.conversation_id);
+        if (!row) return;
+        toast(t => <button onClick={() => {toast.dismiss(t.id); navigate('/messages');}}>
+          New message from {row.otherUser?.full_name || 'your connection'}. Open Messages
+        </button>, {id: notification.id, duration: 6000});
+      } catch { if (active) setUnreadMessages(0); }
+    }
+    const onMessage = notification => refresh(notification);
+    const onRefresh = () => refresh();
+    initSocket(user.id).then(value => {
+      if (!active || !value) return;
+      socket = value;
+      socket.on('message:notification', onMessage);
+      socket.on('connect', onRefresh);
+      socket.on('conv:read', onRefresh);
+    });
+    refresh();
+    const timer = setInterval(onRefresh, 15000);
+    window.addEventListener('focus', onRefresh);
+    return () => {
+      active = false; clearInterval(timer);
+      window.removeEventListener('focus', onRefresh);
+      socket?.off('message:notification', onMessage);
+      socket?.off('connect', onRefresh);
+      socket?.off('conv:read', onRefresh);
+    };
+  }, [user?.id, navigate]);
   // ✅ NEW: Separate state for the resolved avatar URL
   const [avatarUrl, setAvatarUrl] = useState(null);
 
-  const userRole =
+  const userRole = normalizeRole(
     profileData?.user_type ||
     profile?.user_type ||
-    null;
+    null);
 
   const fetchProfile = useCallback(async () => {
     if (!user?.id) return;
@@ -88,9 +132,13 @@ export default function RoleNavbar() {
     }
 
     loadBilling();
+    window.addEventListener('focus', loadBilling);
+    window.addEventListener('scalescope:billing-updated', loadBilling);
 
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', loadBilling);
+      window.removeEventListener('scalescope:billing-updated', loadBilling);
     };
   }, [user?.id]);
 
@@ -166,13 +214,22 @@ export default function RoleNavbar() {
   const roleBase = getRoleBasePath(userRole);
   const plan = billing?.plan || {};
   const subscription = billing?.subscription || {};
-  const hasProPlan =
-    plan.code &&
-    plan.code !== 'free' &&
-    !['cancelled', 'expired', 'free'].includes(String(subscription.status || '').toLowerCase());
+  const hasProPlan = plan.code === 'founder_pro';
+  useEffect(() => {
+    const showLimit = (event) => toast((notification) => (
+      <div className="text-sm max-w-xs">
+        <p>{event.detail?.message || 'Monthly connection request limit reached.'}</p>
+        <Link to={userRole === 'early-stage-founder' && !hasProPlan ? '/pricing' : '/billing'} onClick={() => toast.dismiss(notification.id)} className="mt-2 inline-block font-semibold underline">
+          {userRole === 'early-stage-founder' && !hasProPlan ? 'Compare Founder Pro' : 'View billing and limits'}
+        </Link>
+      </div>
+    ), { id: 'billing-limit', duration: 10000 });
+    window.addEventListener('scalescope:usage-limit', showLimit);
+    return () => window.removeEventListener('scalescope:usage-limit', showLimit);
+  }, [userRole, hasProPlan]);
   const ecosystemAccess =
     plan.metadata?.ecosystem_access ||
-    ['mentor', 'investor'].includes(userRole);
+    userRole === 'investor';
   const planLabel = ecosystemAccess ? 'Access' : hasProPlan ? 'Pro' : 'Free';
 
   const handleLogout = async () => {
@@ -185,6 +242,7 @@ export default function RoleNavbar() {
       { icon: <Home className="w-3 h-4" />, label: 'Dashboard', path: `${roleBase}/dashboard` },
       { icon: <Search className="w-4 h-4" />, label: 'Discover', path: `${roleBase}/discover` },
       { icon: <MessageSquare className="w-4 h-4" />, label: 'Messages', path: `${roleBase}/messages` },
+      { icon: <UserCheck className="w-4 h-4" />, label: 'Trust & connections', path: '/trust-workspace' },
     ];
 
     switch (userRole) {
@@ -200,7 +258,7 @@ export default function RoleNavbar() {
           ...baseItems,
           { icon: <Users className="w-3 h-4" />, label: 'Find Team', path: '/founder/find-team' },
           { icon: <Briefcase className="w-3 h-4" />, label: 'Find Investors', path: '/founder/find-investors' },
-          { icon: <UserCheck className="w-3 h-4" />, label: 'Find Mentors', path: '/founder/find-mentors' },
+          { icon: <UserCheck className="w-3 h-4" />, label: 'AI Mentor', path: '/founder/ai-mentor' },
         ];
 
       case 'mentor':
@@ -243,38 +301,40 @@ export default function RoleNavbar() {
   };
 
   return (
+    <>
     <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white shadow-md' : 'bg-white/95 backdrop-blur-lg'
       } border-b border-slate-200`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16 gap-3">
           {/* Logo */}
-          <div className="flex-shrink-0 flex items-center mt-3 md:mt-5 min-w-0">
+          <div className="flex-shrink-0 flex items-center min-w-0">
             <Link to={`${roleBase}/dashboard`} className="flex items-center gap-2 group min-w-0">
               <img
                 src={ScalScopeLogo}
                 alt="Scale Scope Logo"
-                className="h-auto w-40 sm:w-52 md:w-60 md:h-14 lg:h-16 object-cover"
+                className="w-36 sm:w-44 h-12 object-cover"
               />
             </Link>
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden min-[1440px]:flex items-center gap-1">
             {navItems.map((item, idx) => (
               <Link
                 key={idx}
                 to={item.path}
-                className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all font-medium text-sm"
+                className="flex shrink-0 whitespace-nowrap items-center gap-1.5 px-2 py-2 text-slate-600 hover:text-[#1B2D7F] hover:bg-[#98DE38]/15 rounded-lg transition-all font-medium text-sm"
               >
                 {item.icon}
                 <span>{item.label}</span>
+                {item.label === 'Messages' && unreadMessages > 0 && <span aria-label={`${unreadMessages} unread messages`} className="rounded-full bg-[#98DE38] px-1.5 text-xs text-black">{unreadMessages > 99 ? '99+' : unreadMessages}</span>}
               </Link>
             ))}
           </div>
 
           {/* Desktop Right Section */}
-          <div className="hidden md:flex items-center gap-4">
-            {/* <button className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all relative">
+          <div className="hidden min-[1440px]:flex shrink-0 items-center gap-2">
+            {/* <button className="p-2 text-slate-600 hover:text-[#1B2D7F] hover:bg-[#98DE38]/15 rounded-lg transition-all relative">
               <Bell className="w-5 h-5" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </button> */}
@@ -285,14 +345,14 @@ export default function RoleNavbar() {
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 className="flex items-center gap-3 p-2 pr-4 hover:bg-slate-50 rounded-full transition-all"
               >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center overflow-hidden">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#1B2D7F] to-[#2A3F8F] flex items-center justify-center overflow-hidden">
                   {getAvatarDisplay()}
                 </div>
-                <div className="text-left">
-                  <div className="text-sm font-semibold text-slate-800 leading-tight">
+                <div className="text-left min-w-0 max-w-44">
+                  <div className="text-sm font-semibold text-slate-800 leading-tight truncate">
                     {profileData?.full_name || 'User'}
                   </div>
-                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                  <div className="text-xs text-slate-500 flex flex-wrap items-center gap-1">
                     {getRoleIcon()}
                     {userRole?.replace('-', ' ')}
                     <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
@@ -338,6 +398,15 @@ export default function RoleNavbar() {
                     </Link>
 
                     <Link
+                      to="/mfa/setup"
+                      onClick={() => setShowProfileMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 transition-all"
+                    >
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <span className="text-sm font-medium">Two-factor authentication</span>
+                    </Link>
+
+                    <Link
                       to="/settings"
                       onClick={() => setShowProfileMenu(false)}
                       className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 transition-all"
@@ -354,6 +423,7 @@ export default function RoleNavbar() {
                       <Briefcase className="w-4 h-4" />
                       <span className="text-sm font-medium">Billing</span>
                     </Link>
+                    {userRole === 'early-stage-founder' && !hasProPlan && <Link to="/pricing" onClick={() => setShowProfileMenu(false)} className="flex items-center gap-3 px-4 py-3 bg-[#98DE38]/20 text-[#1B2D7F] font-semibold"><Rocket className="w-4 h-4"/>Explore Founder Pro</Link>}
 
                     <div className="border-t border-slate-100 mt-2 pt-2">
                       <button
@@ -373,7 +443,10 @@ export default function RoleNavbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 text-slate-600"
+            className="min-[1440px]:hidden shrink-0 p-2 text-slate-600"
+            aria-label="Toggle navigation menu"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="role-mobile-menu"
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -382,10 +455,10 @@ export default function RoleNavbar() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-slate-200">
+        <div id="role-mobile-menu" className="min-[1440px]:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto bg-white border-t border-slate-200">
           <div className="px-4 py-4 space-y-2">
             <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl mb-4">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center overflow-hidden">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#1B2D7F] to-[#2A3F8F] flex items-center justify-center overflow-hidden">
                 {getAvatarDisplay()}
               </div>
               <div>
@@ -413,6 +486,7 @@ export default function RoleNavbar() {
               >
                 {item.icon}
                 <span className="font-medium">{item.label}</span>
+                {item.label === 'Messages' && unreadMessages > 0 && <span aria-label={`${unreadMessages} unread messages`} className="rounded-full bg-[#98DE38] px-1.5 text-xs text-black">{unreadMessages > 99 ? '99+' : unreadMessages}</span>}
               </Link>
             ))}
 
@@ -424,6 +498,15 @@ export default function RoleNavbar() {
               >
                 <User className="w-4 h-4" />
                 <span className="font-medium">My Profile</span>
+              </Link>
+
+              <Link
+                to="/mfa/setup"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 text-slate-700 hover:bg-slate-50 rounded-xl transition-all"
+              >
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                <span className="font-medium">Two-factor authentication</span>
               </Link>
 
               <Link
@@ -443,6 +526,7 @@ export default function RoleNavbar() {
                 <Briefcase className="w-4 h-4" />
                 <span className="font-medium">Billing</span>
               </Link>
+              {userRole === 'early-stage-founder' && !hasProPlan && <Link to="/pricing" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 bg-[#98DE38]/20 rounded-lg text-[#1B2D7F] font-semibold"><Rocket className="w-4 h-4"/>Explore Founder Pro</Link>}
 
               <button
                 onClick={handleLogout}
@@ -456,5 +540,7 @@ export default function RoleNavbar() {
         </div>
       )}
     </nav>
+    <FounderRequestConfirmation enabled={userRole === 'early-stage-founder'} />
+    </>
   );
 }

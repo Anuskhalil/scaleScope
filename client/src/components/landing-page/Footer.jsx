@@ -25,7 +25,7 @@ export default function Footer() {
             </div>
 
             <p className="text-slate-400 max-w-md leading-relaxed">
-              AI-powered platform helping students, founders, mentors, and investors
+              AI-powered platform helping early founders and investors
               discover trusted startup connections and opportunities.
             </p>
           </div>

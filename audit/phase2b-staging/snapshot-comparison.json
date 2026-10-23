@@ -1,0 +1,162 @@
+{
+  "date": "2026-10-04",
+  "status": "STOP_SCHEMA_PARITY_NOT_MET",
+  "source": "User-supplied CSV snapshots; project identity asserted by user, not independently connected",
+  "production_ref": "gqkjvxcyetesvqmjkuus",
+  "staging_ref": "sopklyxvzmungxwgboqs",
+  "sql_executed": false,
+  "comparison": "Exact parsed CSV row sets, ignoring row order. JSON-valued cell formatting is not canonicalized; counts describe exported rows, not distinct schema objects.",
+  "confirmed": {
+    "production_public_tables": 43,
+    "staging_public_tables": 0,
+    "missing_public_functions": 23,
+    "production_buckets": 5,
+    "staging_buckets": 0
+  },
+  "queries": [
+    {
+      "query": "Q01",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (12).csv",
+      "production_sha256": "7DF132A75ECB556D9B11734DC15E670404757016D6CFF7045B7EEF84821480DF",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (24).csv",
+      "staging_sha256": "B70BD56D523594CCB2FC0A79D8AA63D8CEF7DD3FBE3FB6124B2FA556904C2C60",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 104,
+      "staging_rows": 54,
+      "production_only_count": 60,
+      "staging_only_count": 10
+    },
+    {
+      "query": "Q02",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (13).csv",
+      "production_sha256": "A3A731465D9DFACB73C00C23CA9C70EA4A0EB5FF784BE43672045D80259CBAD4",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (25).csv",
+      "staging_sha256": "8F20F4F36C8B0DD9787984E61CF50E47B163437ADD5ED34637ADEF9BE776718E",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 624,
+      "staging_rows": 73,
+      "production_only_count": 554,
+      "staging_only_count": 3
+    },
+    {
+      "query": "Q03",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (14).csv",
+      "production_sha256": "E4870241C4FD0BF1DB4A33A068529C2C169FC7BE51C6772B137EB0C916CEEA60",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (26).csv",
+      "staging_sha256": "1B66A34752EA35BD5FEF61C06D335210E472BFBB207AEA5BEAE40286BABE9A7F",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 443,
+      "staging_rows": 40,
+      "production_only_count": 403,
+      "staging_only_count": 0
+    },
+    {
+      "query": "Q04",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (15).csv",
+      "production_sha256": "33B0E3555BE661E34204EA4253600A58B7C491EE976891B2AC2CCCDD0684B58F",
+      "staging_file": null,
+      "staging_sha256": null,
+      "staging_empty_reported_by_user": true,
+      "production_rows": 117,
+      "staging_rows": 0,
+      "production_only_count": 117,
+      "staging_only_count": 0
+    },
+    {
+      "query": "Q05",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (16).csv",
+      "production_sha256": "BA5B93999001A73F9C2DFC8CA832EFD83AD7C62E1C453C305B33F31BE9BFCAAC",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (27).csv",
+      "staging_sha256": "08E8C878A343F6CA1FA60B35D95729C6C519FAF0089355450D2F83F601CBB861",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 2943,
+      "staging_rows": 387,
+      "production_only_count": 2556,
+      "staging_only_count": 0
+    },
+    {
+      "query": "Q06",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (17).csv",
+      "production_sha256": "C928661F0AA1A698761AF03F1642045C04134124DA722C2AB916412C09B6CEF6",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (28).csv",
+      "staging_sha256": "E2BC210F759BC446CA29141B7EB7CB4319A2EE8C6EF9FB60A416CDE2E913163F",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 113,
+      "staging_rows": 72,
+      "production_only_count": 50,
+      "staging_only_count": 9
+    },
+    {
+      "query": "Q07",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (18).csv",
+      "production_sha256": "36386DDB54DC25BF6EDD1038CD42722ACAE7A0E3DD19A2C5D8812ED5B4C06DAC",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (29).csv",
+      "staging_sha256": "F9D1AF6675BD00E3C4087DBB15FED719AACF15D8EE43CFA15425C40EEA0DAFAC",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 43,
+      "staging_rows": 20,
+      "production_only_count": 23,
+      "staging_only_count": 0
+    },
+    {
+      "query": "Q08",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (19).csv",
+      "production_sha256": "EA4D272D137DCF2178E02B25E478FF587D3C42605D8DFC2302E2A64724D142EE",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (30).csv",
+      "staging_sha256": "9C65C946E1C6005D805F3CE8F68495C864CB729859FD7C5ABFAD4695999268B1",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 43,
+      "staging_rows": 20,
+      "production_only_count": 23,
+      "staging_only_count": 0
+    },
+    {
+      "query": "Q09",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (20).csv",
+      "production_sha256": "5BD759C0E476F024AAC9112AB233E328C12774FA51640E0448B645BAE42F97C3",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (31).csv",
+      "staging_sha256": "7F92D3DFB44E38F447F0D797DAFB4D9BF9EE635318F3060BA43BD5294C34F812",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 29,
+      "staging_rows": 8,
+      "production_only_count": 21,
+      "staging_only_count": 0
+    },
+    {
+      "query": "Q10",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (21).csv",
+      "production_sha256": "39441D48D2E9C18868F288B9645715E8A747B187F0A1CEA7E6855AD0DAF263C7",
+      "staging_file": null,
+      "staging_sha256": null,
+      "staging_empty_reported_by_user": true,
+      "production_rows": 5,
+      "staging_rows": 0,
+      "production_only_count": 5,
+      "staging_only_count": 0
+    },
+    {
+      "query": "Q11",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (22).csv",
+      "production_sha256": "575FFB1FE015679DA3F8E52F183C60481EB15387C3EB8589313A7D6770A2A5AE",
+      "staging_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (32).csv",
+      "staging_sha256": "575FFB1FE015679DA3F8E52F183C60481EB15387C3EB8589313A7D6770A2A5AE",
+      "staging_empty_reported_by_user": false,
+      "production_rows": 4,
+      "staging_rows": 4,
+      "production_only_count": 0,
+      "staging_only_count": 0
+    },
+    {
+      "query": "Q12",
+      "production_file": "D:\\Users\\AnusD\\Downloads\\Supabase Snippet Untitled query (23).csv",
+      "production_sha256": "A7CDC30B562D23E9142C440800EAD12DDF2A5916380EAEB3166B041D31807545",
+      "staging_file": null,
+      "staging_sha256": null,
+      "staging_empty_reported_by_user": true,
+      "production_rows": 196,
+      "staging_rows": 0,
+      "production_only_count": 196,
+      "staging_only_count": 0
+    }
+  ]
+}

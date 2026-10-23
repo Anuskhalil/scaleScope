@@ -1,3 +1,4 @@
+import CofounderConsentFields from '../../components/CofounderConsentFields';
 // src/pages/EarlyStageFoundeRolerPages/FounderProfile.jsx
 // Founder Profile — Student Profile style/design, Founder-specific data + smart suggestions
 
@@ -7,6 +8,12 @@ import { useAuth } from '../../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import RoleNavbar from '../../components/landing-page/RoleNavbar';
 import AIProfileQualityChecker from '../../components/AIProfileQualityChecker';
+import EvidenceEntry from '../../components/EvidenceEntry';
+import FounderIntentFields from '../../components/FounderIntentFields';
+import FounderRequirementsFields from '../../components/FounderRequirementsFields';
+import InvestmentMandateFields from '../../components/InvestmentMandateFields';
+import { validateCheckRange } from '../../utils/investmentFit';
+import { founderIntent, personalFounderChecks } from '../../utils/founderIntent';
 import {
   User,
   Rocket,
@@ -21,7 +28,6 @@ import {
   Camera,
   Loader,
   Github,
-  Twitter,
   Linkedin,
   X,
   Tag,
@@ -61,8 +67,8 @@ const STYLES = `
     --gray-200: #E5E7EB;
   }
 
-  .ss { font-family: 'Syne', sans-serif; }
-  .dm { font-family: 'DM Sans', sans-serif; }
+  .ss { font-family: var(--font-heading); }
+  .dm { font-family: var(--font-sans); }
 
   .lift {
     transition: transform .2s cubic-bezier(.22,.68,0,1.2), box-shadow .2s ease;
@@ -95,7 +101,7 @@ const STYLES = `
     font-size: 14px;
     outline: none;
     transition: border-color .15s;
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-sans);
   }
 
   .inp:focus {
@@ -113,7 +119,7 @@ const STYLES = `
     outline: none;
     appearance: none;
     transition: border-color .15s;
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-sans);
   }
 
   .sel:focus {
@@ -131,7 +137,7 @@ const STYLES = `
     outline: none;
     resize: none;
     transition: border-color .15s;
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-sans);
   }
 
   .ta:focus {
@@ -143,7 +149,7 @@ const STYLES = `
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: .06em;
+    letter-spacing: 0;
     color: var(--secondary);
     display: flex;
     align-items: center;
@@ -306,12 +312,8 @@ const WEEKLY_HOURS = [
 ];
 
 const LOOKING_FOR_OPTS = [
-  { val: 'Co-Founder', icon: '👥', desc: 'Build together' },
-  { val: 'Developer', icon: '💻', desc: 'Tech talent' },
-  { val: 'Designer', icon: '🎨', desc: 'Product design' },
-  { val: 'Marketer', icon: '📣', desc: 'Growth help' },
-  { val: 'Mentor', icon: '🧠', desc: 'Guidance' },
-  { val: 'Investor', icon: '💰', desc: 'Funding' },
+  { val: 'Co-Founder', desc: 'Build together' },
+  { val: 'Investor', desc: 'Funding and strategic support' },
 ];
 
 const HELP_NEEDED_CHIPS = [
@@ -375,23 +377,8 @@ const TECH_STACK_CHIPS = [
   'AWS',
 ];
 
-const HIRING_ROLE_CHIPS = [
-  'Technical Co-Founder',
-  'Frontend Developer',
-  'Backend Developer',
-  'Mobile Developer',
-  'UI/UX Designer',
-  'Growth Marketer',
-  'Sales Lead',
-  'Operations Lead',
-  'Finance / CFO',
-  'Content Creator',
-];
-const EXTRA_LOOKING_FOR_OPTS = [
-  { val: 'Sales Lead', icon: 'S', desc: 'Revenue support' },
-  { val: 'Advisor', icon: 'A', desc: 'Strategic support' },
-  { val: 'Operations Lead', icon: 'O', desc: 'Execution support' },
-];
+
+
 
 const KEY_RISK_CHIPS = [
   'Technical risk',
@@ -462,7 +449,7 @@ const makeEmpty = (user) => ({
   is_active: true,
   created_at: '',
   updated_at: '',
-  metadata: {},
+  metadata: { founder_background: 'student' },
 
   // enhanced founder profile fields
   founder_role: '',
@@ -501,6 +488,10 @@ const slugify = (text) =>
     .replace(/[^a-z0-9-]/g, '');
 
 function calcFounderCompletionWithBreakdown(f) {
+  if (founderIntent(f) !== 'building') {
+    const all = personalFounderChecks(f);
+    return { percentage: Math.round(all.filter(item => item.condition).length / all.length * 100), missing: all.filter(item => !item.condition).slice(0, 3), all };
+  }
   const checks = [
     { field: 'full_name', condition: (f.full_name || '').trim().length > 1, points: 6, label: 'Full name' },
     { field: 'bio', condition: (f.bio || '').trim().length > 20, points: 6, label: 'Founder bio' },
@@ -517,8 +508,8 @@ function calcFounderCompletionWithBreakdown(f) {
     { field: 'industry', condition: !!f.industry, points: 5, label: 'Industry' },
     { field: 'stage', condition: !!f.startup_stage, points: 5, label: 'Startup stage' },
     { field: 'stage_proof', condition: !!f.startup_stage, points: 4, label: 'Startup stage proof' },
-    { field: 'startup_location', condition: !!f.startup_location, points: 3, label: 'Startup location' },
-    { field: 'investment_readiness', condition: !!f.investment_readiness, points: 3, label: 'Investment readiness' },
+    ...(shouldShowTractionFunding(f.startup_stage) ? [{ field: 'startup_location', condition: !!f.startup_location, points: 3, label: 'Startup location' },] : []),
+    ...(shouldShowTractionFunding(f.startup_stage) ? [{ field: 'investment_readiness', condition: !!f.investment_readiness, points: 3, label: 'Investment readiness' },] : []),
     { field: 'validation_status', condition: !!f.validation_status, points: 5, label: 'Validation status' },
     { field: 'problem', condition: (f.problem_solving || f.problem_statement || '').trim().length > 20, points: 8, label: 'Problem statement' },
     { field: 'uvp', condition: (f.unique_value_proposition || '').trim().length > 10, points: 6, label: 'Unique value' },
@@ -526,7 +517,7 @@ function calcFounderCompletionWithBreakdown(f) {
     { field: 'gtm', condition: (f.go_to_market_strategy || '').trim().length > 10, points: 5, label: 'Go-to-market strategy' },
     { field: 'challenges', condition: (f.current_challenges || '').trim().length > 10, points: 4, label: 'Current challenges' },
     { field: 'looking_for', condition: safeArray(f.looking_for).length > 0, points: 4, label: 'Looking for' },
-    { field: 'help_needed', condition: safeArray(f.help_needed).length > 0, points: 4, label: 'Help needed' },
+
     { field: 'pitch_deck', condition: !!f.pitch_deck_url, points: 4, label: 'Pitch deck' },
   ];
 
@@ -542,6 +533,7 @@ function calcFounderCompletionWithBreakdown(f) {
 }
 
 function getFounderQualityChecks(f) {
+  if (founderIntent(f) !== 'building') return { required: personalFounderChecks(f), recommended: [] };
   const stageProof = getFounderStageProof(f.startup_stage);
   const stageProofValue = f.metadata?.[stageProof.key] || '';
   const stageProofOk =
@@ -561,7 +553,7 @@ function getFounderQualityChecks(f) {
     { field: 'problem', condition: (f.problem_solving || f.problem_statement || '').trim().length > 30, label: 'Problem statement with at least 30 characters' },
     { field: 'target_market', condition: (f.target_market || '').trim().length > 5, label: 'Target market' },
     { field: 'looking_for', condition: safeArray(f.looking_for).length > 0, label: 'Looking for preference' },
-    { field: 'help_needed', condition: safeArray(f.help_needed).length > 0, label: 'Help needed areas' },
+
   ];
 
   const recommended = calcFounderCompletionWithBreakdown(f).all.filter((item) => {
@@ -746,6 +738,7 @@ export default function FounderProfile() {
   const navigate = useNavigate();
 
   const snapRef = useRef(null);
+  const savedProfileRef = useRef(null);
   const saveTimerRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
@@ -873,7 +866,7 @@ export default function FounderProfile() {
       const pd = profile || {};
       const fp = founderProfile || {};
 
-      const dbUpdatedAt = new Date(pd?.updated_at || fp?.updated_at || 0).getTime();
+      const dbUpdatedAt = Math.max(new Date(pd?.updated_at || 0).getTime(), new Date(fp?.updated_at || 0).getTime());
       const draftUpdatedAt = draft?._savedAt || 0;
       const useDraft = draft && draft._userId === user.id && draftUpdatedAt >= dbUpdatedAt;
 
@@ -933,7 +926,7 @@ export default function FounderProfile() {
         pitch_video_url: source.pitch_video_url || '',
         investment_readiness: source.investment_readiness || '',
         cofounder_status: source.cofounder_status || '',
-        looking_for: safeArray(source.looking_for),
+        looking_for: safeArray(source.looking_for).filter(item => ['Co-Founder', 'Investor'].includes(item)),
         help_needed: safeArray(source.help_needed),
         skills_needed: safeArray(source.skills_needed),
         profile_completion: source.profile_completion || 0,
@@ -968,10 +961,24 @@ export default function FounderProfile() {
         product_status: source.product_status || '',
         tech_stack: safeArray(source.tech_stack),
         key_risks: safeArray(source.key_risks),
-        metadata: source.metadata || {},
+        metadata: {
+          ...(source.metadata || {}),
+          founder_background: source.metadata?.founder_background === 'professional' ? 'professional' : 'student',
+          founder_intent: 'building',
+          open_to_joining: source.metadata?.open_to_joining === true,
+        },
       };
 
       snapRef.current = normalized;
+      // Keep the database version separate from any restored, unsaved draft.
+      savedProfileRef.current = {
+        ...makeEmpty(user), ...pd, ...fp,
+        metadata: {
+          ...(fp.metadata || {}),
+          founder_background: fp.metadata?.founder_background === 'professional' ? 'professional' : 'student',
+          founder_intent: 'building', open_to_joining: fp.metadata?.open_to_joining === true,
+        },
+      };
       setFormData(normalized);
 
       const signedAvatar = await resolveAvatarUrl(normalized.avatar_url);
@@ -1009,6 +1016,19 @@ export default function FounderProfile() {
   const updateField = useCallback((key, value) => {
     setFormData((prev) => {
       setHasUnsavedChanges(true);
+      if (key === 'metadata' && value.founder_background !== prev.metadata?.founder_background) {
+        const saved = savedProfileRef.current;
+        if (saved?.metadata?.founder_background === value.founder_background) {
+          return { ...saved, avatar_url: prev.avatar_url, linkedin_url: prev.linkedin_url, github_url: prev.github_url };
+        }
+        return {
+          ...makeEmpty({ id: prev.user_id, email: prev.email }),
+          id: prev.id, user_id: prev.user_id, full_name: prev.full_name,
+          email: prev.email, avatar_url: prev.avatar_url,
+          linkedin_url: prev.linkedin_url, github_url: prev.github_url,
+          metadata: { founder_background: value.founder_background, founder_intent: 'building', open_to_joining: false },
+        };
+      }
       return { ...prev, [key]: value };
     });
   }, []);
@@ -1061,7 +1081,15 @@ export default function FounderProfile() {
   const handleUpdate = async (e) => {
     if (e) e.preventDefault();
     if (saving || !user?.id) return;
+    if (!['student', 'professional'].includes(formData.metadata?.founder_background)) {
+      setSaveError('Select Student or Professional in Founder Background.');
+      return;
+    }
 
+    const years = formData.metadata?.founder_background === 'professional' ? formData.metadata?.relevant_experience_years : undefined;
+    if (years !== undefined && years !== '' && (!Number.isInteger(Number(years)) || Number(years) < 0)) { setSaveError('Relevant experience must be a whole number of years, zero or greater.'); return; }
+    const rangeError = validateCheckRange(formData.metadata?.desired_check_min, formData.metadata?.desired_check_max);
+    if (rangeError && founderIntent(formData) === 'building') { setSaveError(rangeError); return; }
     const quality = getFounderQualityChecks(formData);
     const missingRequired = quality.required.filter((item) => !item.condition);
     if (missingRequired.length > 0) {
@@ -1071,7 +1099,7 @@ export default function FounderProfile() {
       return;
     }
 
-    const linkFields = ['pitch_deck_url', 'pitch_video_url', 'demo_url', 'website_url', 'linkedin_url', 'github_url', 'twitter_url'];
+    const linkFields = ['pitch_deck_url', 'demo_url', 'website_url', 'linkedin_url', 'github_url'];
     const invalidLinks = linkFields.filter((field) => formData[field] && getLinkStatus(formData[field]) !== 'Format verified');
     const stageProof = getFounderStageProof(formData.startup_stage);
     const stageProofUrl = formData.metadata?.[stageProof.key] || '';
@@ -1161,7 +1189,7 @@ export default function FounderProfile() {
         investment_readiness: formData.investment_readiness || '',
         cofounder_status: formData.cofounder_status || '',
 
-        looking_for: safeArray(formData.looking_for),
+        looking_for: safeArray(formData.looking_for).filter(item => ['Co-Founder', 'Investor'].includes(item)),
         help_needed: safeArray(formData.help_needed),
         skills_needed: safeArray(formData.skills_needed),
 
@@ -1195,14 +1223,17 @@ export default function FounderProfile() {
         key_risks: [],
         metadata: {
           ...(formData.metadata || {}),
+          founder_intent: 'building',
+          open_to_joining: formData.metadata?.open_to_joining === true,
           link_verification: linkFields.reduce((acc, field) => ({
             ...acc,
             [field]: getLinkStatus(formData[field]),
           }), {}),
-          verified_at: now,
+          format_checked_at: now,
         },
       });
 
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       clearDraft();
       setHasUnsavedChanges(false);
 
@@ -1356,7 +1387,7 @@ export default function FounderProfile() {
                   <p className="text-sm text-black/80 mt-1">
                     {completion.missing.length
                       ? `Next: ${completion.missing.map((m) => m.label).join(', ')}`
-                      : 'Better mentor and investor matches await.'}
+                      : 'Better co-founder and investor matches await.'}
                   </p>
                 </div>
 
@@ -1503,6 +1534,7 @@ export default function FounderProfile() {
 
             <section className="lg:col-span-3">
               <div className="space-y-6">
+              <EvidenceEntry />
               <AIProfileQualityChecker
                 roleLabel="Founder profile"
                 completion={completion}
@@ -1564,11 +1596,14 @@ function ViewMode({ formData, onEditClick }) {
           Founder Profile
         </h1>
         <p className="text-gray-500 text-sm">
-          Your startup identity powers mentor, investor, and team matching.
+          Your startup identity powers investor and co-founder matching.
         </p>
       </header>
 
       <Section title="Basic Information" icon={<User className="w-5 h-5 text-[#1B2D7F]" />}>
+        <p className="text-sm text-[#1B2D7F] capitalize">Founder background: {formData.metadata?.founder_background || 'Not provided'}</p>
+        <p className="text-sm text-[#1B2D7F] capitalize">Founder journey: {founderIntent(formData)}</p>
+        {formData.metadata?.founder_background === 'professional' && formData.metadata?.relevant_experience_years !== undefined && formData.metadata.relevant_experience_years !== '' && <p className="text-sm text-gray-700">Relevant experience: {formData.metadata.relevant_experience_years} years</p>}
         <div className="grid md:grid-cols-2 gap-3 mb-4">
           {[
             { l: 'Full Name', v: formData.full_name, I: User },
@@ -1602,9 +1637,34 @@ function ViewMode({ formData, onEditClick }) {
             <p className="text-sm text-gray-700 leading-relaxed">{formData.bio}</p>
           </div>
         )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[{ key: 'linkedin_url', label: 'LinkedIn', Icon: Linkedin }, { key: 'github_url', label: 'GitHub', Icon: Github }].filter(link => formData[link.key]).map(link => (
+            <a key={link.key} href={formData[link.key]} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-start gap-3 rounded-lg border border-gray-200 p-3 text-[#1B2D7F] hover:bg-gray-50">
+              <link.Icon className="mt-1 h-4 w-4 shrink-0" />
+              <span className="min-w-0"><span className="block text-sm font-bold">{link.label}</span><span className="block break-all text-xs">{formData[link.key]}</span></span>
+            </a>
+          ))}
+        </div>
       </Section>
 
-      <Section title="Startup Overview" icon={<Rocket className="w-5 h-5 text-[#1B2D7F]" />}>
+      {formData.metadata?.founder_background === 'student' &&
+        (formData.metadata.university?.trim() || formData.metadata.degree?.trim()) && (
+        <Section title="Education">
+          <dl className="grid gap-4 sm:grid-cols-2">
+            {[
+              ['University / Institute', formData.metadata.university],
+              ['Degree / Major', formData.metadata.degree],
+            ].filter(([, value]) => value?.trim()).map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-xs font-semibold text-gray-500">{label}</dt>
+                <dd className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-800">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+      )}
+
+      <Section visible={founderIntent(formData) === 'building'} title="Startup Overview" icon={<Rocket className="w-5 h-5 text-[#1B2D7F]" />}>
         {(formData.company_name || formData.idea_title || formData.problem_solving) ? (
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 text-white rounded-2xl p-5">
             <div className="flex items-start justify-between mb-3">
@@ -1643,7 +1703,7 @@ function ViewMode({ formData, onEditClick }) {
             )}
 
             {(formData.problem_solving || formData.problem_statement) && (
-              <p className="text-sm text-gray-300 leading-relaxed line-clamp-4">
+              <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
                 {formData.problem_solving || formData.problem_statement}
               </p>
             )}
@@ -1660,7 +1720,7 @@ function ViewMode({ formData, onEditClick }) {
             <Rocket className="w-10 h-10 mx-auto text-gray-300 mb-3" />
             <p className="text-sm text-gray-500 mb-1">No startup details yet.</p>
             <p className="text-xs text-gray-400 mb-4">
-              Add startup details to get better mentor and investor matches.
+              Add startup details to get better co-founder and investor matches.
             </p>
             <button
               onClick={onEditClick}
@@ -1672,15 +1732,13 @@ function ViewMode({ formData, onEditClick }) {
         )}
       </Section>
 
-      <Section title="Traction & Funding" icon={<TrendingUp className="w-5 h-5 text-[#1B2D7F]" />}>
+      <Section visible={founderIntent(formData) === 'building' && shouldShowTractionFunding(formData.startup_stage)} title="Traction & Funding" icon={<TrendingUp className="w-5 h-5 text-[#1B2D7F]" />}>
         <div className="grid md:grid-cols-2 gap-3">
           {[
             { l: 'Team Size', v: formData.team_size, I: Users },
             { l: 'Funding Stage', v: formData.funding_stage, I: DollarSign },
             { l: 'Funding Raised', v: formData.funding_raised, I: DollarSign },
             { l: 'Ask Amount', v: formData.ask_amount, I: DollarSign },
-            { l: 'Revenue Model', v: formData.revenue_model, I: Briefcase },
-            { l: 'Market Size', v: formData.market_size, I: TrendingUp },
           ].map((x, i) => (
             <div key={i} className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
               <div className="p-2 bg-gray-100 rounded-lg" style={{ color: '#1B2D7F' }}>
@@ -1741,9 +1799,9 @@ function ViewMode({ formData, onEditClick }) {
         )}
       </Section>
 
-      <Section title="Looking For" icon={<Target className="w-5 h-5 text-[#1B2D7F]" />}>
+      <Section visible={founderIntent(formData) === 'building'} title="Looking For" icon={<Target className="w-5 h-5 text-[#1B2D7F]" />}>
         {safeArray(formData.looking_for).length > 0 ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {safeArray(formData.looking_for).map((val, i) => {
               const opt = LOOKING_FOR_OPTS.find((o) => o.val === val);
 
@@ -1770,7 +1828,7 @@ function ViewMode({ formData, onEditClick }) {
         )}
       </Section>
 
-      <Section title="Help Needed" icon={<Heart className="w-5 h-5 text-red-500" />}>
+      <Section visible={false} title="Help Needed" icon={<Heart className="w-5 h-5 text-red-500" />}>
         {safeArray(formData.help_needed).length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {safeArray(formData.help_needed).map((item, i) => (
@@ -1788,7 +1846,7 @@ function ViewMode({ formData, onEditClick }) {
             ))}
           </div>
         ) : (
-          <Empty label="No help areas specified. Add some to get relevant mentor matches." />
+          <Empty label="No help areas specified. Add some to get more relevant suggestions." />
         )}
       </Section>
 
@@ -1816,44 +1874,11 @@ function ViewMode({ formData, onEditClick }) {
       </Section>
       )}
 
-      <Section title="Hiring & Co-Founder Requirements" icon={<Users className="w-5 h-5 text-[#1B2D7F]" />}>
-        {(safeArray(formData.hiring_roles).length > 0 || formData.cofounder_requirements) && (
-          <div className="mb-4 rounded-xl bg-[#98DE38]/10 border border-[#98DE38]/30 p-3 text-xs font-bold text-[#1B2D7F]">
-            This founder is hiring a co-founder with these requirements.
-          </div>
-        )}
+      {safeArray(formData.looking_for).some(item => ['Co-Founder', 'Investor'].includes(item)) && <Section title="Requirements" icon={<Users className="w-5 h-5 text-[#1B2D7F]" />}>
+        <FounderRequirementsFields value={formData} readOnly />
+      </Section>}
 
-        {safeArray(formData.hiring_roles).length > 0 ? (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {safeArray(formData.hiring_roles).map((item, i) => (
-              <span
-                key={`${item}-${i}`}
-                className="px-3 py-2 rounded-full text-xs font-semibold border"
-                style={{
-                  background: 'rgba(27,45,127,0.08)',
-                  color: '#1B2D7F',
-                  borderColor: 'rgba(27,45,127,0.2)',
-                }}
-              >
-                {item}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <Empty label="No hiring roles selected yet." />
-        )}
-
-        {formData.cofounder_requirements && (
-          <div className="p-4 bg-gray-50 rounded-xl border-l-4 mt-4" style={{ borderColor: '#98DE38' }}>
-            <p className="text-xs font-bold uppercase mb-1" style={{ color: '#98DE38' }}>
-              Co-Founder Requirements
-            </p>
-            <p className="text-sm text-gray-700 leading-relaxed">{formData.cofounder_requirements}</p>
-          </div>
-        )}
-      </Section>
-
-      <Section title="Readiness & Operating Metrics" icon={<TrendingUp className="w-5 h-5 text-[#1B2D7F]" />}>
+      <Section visible={founderIntent(formData) === 'building' && shouldShowTractionFunding(formData.startup_stage)} title="Readiness & Operating Metrics" icon={<TrendingUp className="w-5 h-5 text-[#1B2D7F]" />}>
         <div className="grid md:grid-cols-3 gap-3">
           {[
             { l: 'Startup Location', v: formData.startup_location, I: MapPin },
@@ -1898,22 +1923,14 @@ function ViewMode({ formData, onEditClick }) {
       <Section title="Links & Assets" icon={<LinkIcon className="w-5 h-5 text-[#1B2D7F]" />}>
         {[
           formData.pitch_deck_url,
-          formData.pitch_video_url,
           formData.demo_url,
           formData.website_url,
-          formData.linkedin_url,
-          formData.github_url,
-          formData.twitter_url,
         ].some(Boolean) ? (
           <div className="grid md:grid-cols-2 gap-3">
             {[
               { k: 'pitch_deck_url', l: 'Pitch Deck', I: FileText, bg: 'bg-lime-50', c: 'text-[#1B2D7F]' },
-              { k: 'pitch_video_url', l: 'Pitch Video', I: Globe, bg: 'bg-lime-50', c: 'text-[#1B2D7F]' },
               { k: 'demo_url', l: 'Demo', I: Globe, bg: 'bg-gray-50', c: 'text-gray-700' },
               { k: 'website_url', l: 'Website', I: Globe, bg: 'bg-gray-50', c: 'text-gray-700' },
-              { k: 'linkedin_url', l: 'LinkedIn', I: Linkedin, bg: 'bg-blue-50', c: 'text-blue-600' },
-              { k: 'github_url', l: 'GitHub', I: Github, bg: 'bg-gray-50', c: 'text-gray-600' },
-              { k: 'twitter_url', l: 'Twitter', I: Twitter, bg: 'bg-sky-50', c: 'text-sky-600' },
             ]
               .filter((link) => formData[link.k])
               .map((link) => (
@@ -1962,7 +1979,7 @@ function EditMode({
   const completion = calcFounderCompletionWithBreakdown(formData);
   const autoHelpSuggestions = generateFounderHelpSuggestions(formData);
   const autoSkillSuggestions = generateFounderSkillSuggestions(formData);
-  const allLookingForOptions = [...LOOKING_FOR_OPTS, ...EXTRA_LOOKING_FOR_OPTS];
+  const allLookingForOptions = LOOKING_FOR_OPTS;
   const stageProof = getFounderStageProof(formData.startup_stage);
   const tractionReady = shouldShowTractionFunding(formData.startup_stage);
 
@@ -1983,6 +2000,8 @@ function EditMode({
     updateField('skills_needed', merged);
     toast.success('Auto skill suggestions added!');
   };
+
+  if (!['student', 'professional'].includes(formData.metadata?.founder_background)) return <FounderIntentFields value={formData} onChange={updateField} />;
 
   return (
     <form onSubmit={(e) => e.preventDefault()} className="space-y-10 dm">
@@ -2022,6 +2041,7 @@ function EditMode({
         )}
       </div>
 
+      <FounderIntentFields value={formData} onChange={updateField} />
       <EditSection title="Basic Information" icon={<User className="w-4 h-4" />}>
         <div className="grid md:grid-cols-2 gap-4">
           <FormInput
@@ -2058,12 +2078,16 @@ function EditMode({
           rows={3}
           max={400}
         />
+        <div className="grid md:grid-cols-2 gap-4">
+          <FormInput label="LinkedIn URL" type="url" value={formData.linkedin_url} onChange={v => updateField('linkedin_url', v)} icon={<Linkedin className="w-4 h-4" />} />
+          <FormInput label="GitHub URL" type="url" value={formData.github_url} onChange={v => updateField('github_url', v)} icon={<Github className="w-4 h-4" />} />
+        </div>
       </EditSection>
 
       <EditSection
-        title="Startup Information"
+        visible={founderIntent(formData) === 'building'} title="Startup Information"
         icon={<Rocket className="w-4 h-4" />}
-        hint="This is the core data used for mentor, investor, and team matching."
+        hint="This is the core data used for investor and co-founder matching."
       >
         <div className="grid md:grid-cols-2 gap-4">
           <FormInput
@@ -2279,7 +2303,7 @@ function EditMode({
       <EditSection
         title="Founder Commitment"
         icon={<Clock className="w-4 h-4" />}
-        hint="This helps match you with co-founders and mentors who fit your seriousness level."
+        hint="This helps match you with co-founders who fit your working commitment."
       >
         <div className="grid md:grid-cols-3 gap-4">
           <SelectField
@@ -2309,9 +2333,9 @@ function EditMode({
       </EditSection>
 
       <EditSection
-        title="Traction & Funding"
+        visible={founderIntent(formData) === 'building'} title="Traction & Funding"
         icon={<TrendingUp className="w-4 h-4" />}
-        hint="Even early signals help mentors and investors understand your stage."
+        hint="Even early signals help investors understand your stage."
       >
         {!tractionReady && (
           <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
@@ -2468,8 +2492,8 @@ function EditMode({
       </EditSection>
       )}
 
-      <EditSection title="Looking For" icon={<Target className="w-4 h-4" />} hint="What does your startup need right now?">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <EditSection visible={founderIntent(formData) === 'building'} title="Looking For" icon={<Target className="w-4 h-4" />} hint="What does your startup need right now?">
+        <div className="grid grid-cols-2 gap-3">
           {allLookingForOptions.map((opt) => {
             const selected = safeArray(formData.looking_for).includes(opt.val);
 
@@ -2483,7 +2507,7 @@ function EditMode({
                   : 'border-gray-200 bg-white hover:border-[#98DE38]/50'
                   }`}
               >
-                <span className="text-2xl">{opt.icon}</span>
+                {opt.val === 'Co-Founder' ? <Users className="w-6 h-6" /> : <DollarSign className="w-6 h-6" />}
                 <span className="text-xs font-bold ss">{opt.val}</span>
                 <span className="text-[10px] text-gray-400">{opt.desc}</span>
                 {selected && (
@@ -2498,7 +2522,7 @@ function EditMode({
       </EditSection>
 
       <EditSection
-        title="Help Needed"
+        visible={false} title="Help Needed"
         icon={<Heart className="w-4 h-4" />}
         hint="Auto suggestions are generated from your startup idea, stage, market, and current challenges."
       >
@@ -2593,88 +2617,19 @@ function EditMode({
       </EditSection>
       )}
 
-      <EditSection
-        title="Hiring & Co-Founder Requirements"
-        icon={<Users className="w-4 h-4" />}
-        hint="This helps Find Team and AI matching understand who you need."
-      >
-        <div className="flex flex-wrap gap-2 mb-4">
-          {HIRING_ROLE_CHIPS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => toggleArrayField('hiring_roles', item)}
-              className={`chip ${safeArray(formData.hiring_roles).includes(item) ? 'selected' : ''}`}
-            >
-              {safeArray(formData.hiring_roles).includes(item) ? '✓' : '+'} {item}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-2 mb-4">
-          <input
-            className="inp flex-1"
-            value={formData.metadata?.custom_hiring_role || ''}
-            onChange={(e) =>
-              updateField('metadata', {
-                ...(formData.metadata || {}),
-                custom_hiring_role: e.target.value,
-              })
-            }
-            placeholder="Add custom co-founder requirement..."
-          />
-
-          <button
-            type="button"
-            onClick={() => {
-              const value = (formData.metadata?.custom_hiring_role || '').trim();
-              if (!value) return;
-
-              updateField('hiring_roles', [
-                ...new Set([...safeArray(formData.hiring_roles), value]),
-              ]);
-              updateField('metadata', {
-                ...(formData.metadata || {}),
-                custom_hiring_role: '',
-              });
-            }}
-            className="px-4 py-2.5 g-brand text-black rounded-xl text-sm font-bold hover:opacity-90 transition-opacity"
-          >
-            Add
-          </button>
-        </div>
-
-        {(safeArray(formData.hiring_roles).length > 0 || formData.cofounder_requirements) && (
-          <div className="mb-4 rounded-xl bg-[#98DE38]/10 border border-[#98DE38]/30 p-3 text-xs font-bold text-[#1B2D7F]">
-            This founder is hiring a co-founder with these requirements.
-          </div>
-        )}
-
-        <div className="grid md:grid-cols-2 gap-4">
-          <FormInput
-            label="Equity Available"
-            value={formData.equity_available}
-            onChange={(v) => updateField('equity_available', v)}
-            icon={<DollarSign className="w-4 h-4" />}
-            placeholder="e.g. 5–15% for technical co-founder"
-          />
-
-          <FormTextarea
-            label="Co-Founder Requirements"
-            value={formData.cofounder_requirements}
-            onChange={(v) => updateField('cofounder_requirements', v)}
-            placeholder="Describe ideal co-founder: skills, personality, commitment, location, etc."
-            rows={3}
-            max={500}
-          />
-        </div>
-      </EditSection>
+      <CofounderConsentFields value={formData} onChange={updateField} />
+      {safeArray(formData.looking_for).some(item => ['Co-Founder', 'Investor'].includes(item)) && (
+        <EditSection title="Requirements" icon={<Users className="w-4 h-4" />}>
+          <FounderRequirementsFields value={formData} onChange={updateField} skillSuggestions={autoSkillSuggestions} />
+          {formData.looking_for.includes('Investor') && <InvestmentMandateFields value={formData} onChange={updateField} founder />}
+        </EditSection>
+      )}
 
       {SHOW_LEGACY_FOUNDER_FIELDS && (
       <EditSection
         title="Risks & Constraints"
         icon={<Shield className="w-4 h-4" />}
-        hint="Being honest about risks helps mentors give better guidance."
+        hint="Being honest about risks helps others understand your startup."
       >
         <div className="flex flex-wrap gap-2">
           {KEY_RISK_CHIPS.map((item) => (
@@ -2692,7 +2647,7 @@ function EditMode({
       )}
 
       {SHOW_LEGACY_FOUNDER_FIELDS && (
-      <EditSection title="Visibility & Status" icon={<Shield className="w-4 h-4" />} hint="Control whether mentors, investors, and team candidates can discover this startup profile.">
+      <EditSection title="Visibility & Status" icon={<Shield className="w-4 h-4" />} hint="Control whether investors and team candidates can discover this startup profile.">
         <div className="grid md:grid-cols-2 gap-3">
           <label className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-2xl cursor-pointer hover:border-[#98DE38]/50 transition-all">
             <input type="checkbox" checked={formData.is_public !== false} onChange={(e) => updateField('is_public', e.target.checked)} className="mt-1 w-4 h-4 rounded border-gray-300 text-[#1B2D7F] focus:ring-[#98DE38]" />
@@ -2710,12 +2665,8 @@ function EditMode({
         <div className="grid md:grid-cols-2 gap-4">
           {[
             { field: 'pitch_deck_url', Icon: FileText, label: 'Pitch Deck URL', points: 4, placeholder: 'Google Drive, Notion, or direct link' },
-            { field: 'pitch_video_url', Icon: Globe, label: 'Pitch Video URL', points: 3, placeholder: 'Loom, YouTube, or video pitch URL' },
             { field: 'demo_url', Icon: Globe, label: 'Demo / Product URL', points: 3, placeholder: 'Loom, YouTube, or live demo URL' },
             { field: 'website_url', Icon: Globe, label: 'Website URL', points: 2, placeholder: 'https://yourstartup.com' },
-            { field: 'linkedin_url', Icon: Linkedin, label: 'LinkedIn URL', points: 3, placeholder: 'https://linkedin.com/in/you' },
-            { field: 'github_url', Icon: Github, label: 'GitHub URL', points: 2, placeholder: 'https://github.com/you' },
-            { field: 'twitter_url', Icon: Twitter, label: 'Twitter URL', points: 1, placeholder: 'https://twitter.com/you' },
           ].map((item) => (
             <div key={item.field}>
               <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
@@ -2749,31 +2700,6 @@ function EditMode({
           ))}
         </div>
 
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
-          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-            Upload Pitch Deck / Founder Assets
-          </p>
-
-          <input
-            type="file"
-            accept=".pdf,.ppt,.pptx,.doc,.docx"
-            disabled={uploading}
-            onChange={(e) =>
-              onFileUpload?.({
-                file: e.target.files?.[0],
-                folder: 'assets',
-                metadataKey: 'pitch_deck_file_url',
-              })
-            }
-            className="block w-full text-sm text-gray-600"
-          />
-
-          {formData.metadata?.pitch_deck_file_url && (
-            <p className="text-xs text-green-700 font-semibold mt-2">
-              Uploaded: {formData.metadata.pitch_deck_file_url}
-            </p>
-          )}
-        </div>
       </EditSection>
 
       <button
@@ -2799,7 +2725,7 @@ function EditMode({
 }
 
 // ─── SHARED UI PRIMITIVES ───
-const Section = ({ title, icon, children }) => (
+const Section = ({ title, icon, children, visible = true }) => visible && (
   <section className="space-y-4 pt-6 border-t border-gray-100 first:pt-0 first:border-t-0">
     <div className="flex items-center gap-2 mb-3">
       {icon}
@@ -2809,7 +2735,7 @@ const Section = ({ title, icon, children }) => (
   </section>
 );
 
-const EditSection = ({ title, icon, hint, children }) => (
+const EditSection = ({ title, icon, hint, children, visible = true }) => visible && (
   <section className="space-y-4 pt-8 border-t border-gray-100 first:pt-0 first:border-t-0">
     <div>
       <p className="sec-label">

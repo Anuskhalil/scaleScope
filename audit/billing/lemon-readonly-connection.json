@@ -1,0 +1,92 @@
+{
+  "checkedAt": "2026-10-21T11:08:08.224Z",
+  "readOnly": true,
+  "checks": [
+    {
+      "check": "Local configuration",
+      "status": "INFO",
+      "apiKeyConfigured": true,
+      "webhookSecretConfigured": true,
+      "expectedTestMode": true,
+      "checkoutEnabled": false,
+      "pricingFinalized": false
+    },
+    {
+      "check": "API authentication",
+      "status": "PASS",
+      "httpStatus": 200
+    },
+    {
+      "check": "API key mode",
+      "status": "PASS",
+      "providerTestMode": true,
+      "expectedTestMode": true
+    },
+    {
+      "check": "Store",
+      "status": "PASS",
+      "httpStatus": 200,
+      "name": "scaleScope",
+      "currency": "PKR"
+    },
+    {
+      "check": "monthly variant",
+      "status": "PASS",
+      "httpStatus": 200,
+      "name": "Founder Pro",
+      "variantStatus": "published"
+    },
+    {
+      "check": "monthly recurrence",
+      "status": "PASS",
+      "isSubscription": true,
+      "interval": "month",
+      "intervalCount": 1,
+      "priceMinorUnits": 210000
+    },
+    {
+      "check": "monthly mode",
+      "status": "PASS",
+      "providerTestMode": true
+    },
+    {
+      "check": "monthly product ownership",
+      "status": "PASS",
+      "httpStatus": 200,
+      "productName": "ScaleScope Pro",
+      "productStatus": "published"
+    },
+    {
+      "check": "yearly variant",
+      "status": "MISSING"
+    },
+    {
+      "check": "Webhook configuration",
+      "status": "INFO",
+      "count": 1,
+      "morePages": false
+    },
+    {
+      "check": "Webhook endpoint",
+      "status": "INFO",
+      "host": "e160-101-53-236-137.ngrok-free.app",
+      "https": true,
+      "expectedPath": true,
+      "modeMatches": true,
+      "events": [
+        "subscription_created",
+        "subscription_updated",
+        "subscription_cancelled",
+        "subscription_paused",
+        "subscription_unpaused",
+        "subscription_payment_success",
+        "subscription_payment_failed"
+      ],
+      "secretMatches": "not_exposed"
+    },
+    {
+      "check": "End-to-end payment and webhook delivery",
+      "status": "NOT_TESTED"
+    }
+  ]
+}

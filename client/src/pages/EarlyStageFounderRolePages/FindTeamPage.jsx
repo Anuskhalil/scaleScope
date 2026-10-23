@@ -1,11 +1,10 @@
-﻿// src/pages/FounderRolePages/FindTeamPage.jsx
+// src/pages/FounderRolePages/FindTeamPage.jsx
 // Source: student_profiles WHERE looking_for contains 'Co-Founder' OR 'Startup'
 // Founder invites a student to their team â†’ creates connection_request (type: 'team_invite')
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import { supabase } from '../../lib/supabaseClient';
 import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   fetchTeamCandidates,
@@ -31,9 +30,8 @@ import {
 import toast from 'react-hot-toast';
 
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
   :root{--primary:#98DE38;--primary-dark:#7EC42E;--secondary:#1B2D7F;--secondary-light:#2A3F8F;--gray-50:#F9FAFB;--gray-200:#E5E7EB}
-  .ss{font-family:'Syne',sans-serif}.dm{font-family:'DM Sans',sans-serif}
+  .ss{font-family:var(--font-heading)}.dm{font-family:var(--font-sans)}
   .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
   .lift:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(27,45,127,.12)}
   .g-brand{background:linear-gradient(135deg,var(--primary),var(--primary-dark))}
@@ -49,7 +47,7 @@ const CSS = `
   @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
   .modal-pop{animation:mp .22s cubic-bezier(.34,1.4,.64,1) both}
   @keyframes mp{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-  .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .14s;background:#fff}
+  .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:var(--font-sans);transition:border-color .14s;background:#fff}
   .inp:focus{border-color:#98DE38}
   .lf-badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600}
   .tooltip-wrap{position:relative}
@@ -168,16 +166,16 @@ function CandidateCard({ candidate, founderProfile, onInvite, onMessage, inviteS
             <div>
               <p className="font-bold text-slate-900 ss leading-tight">{candidate.name || 'Unnamed'}</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                {candidate.candidate_type === 'founder' ? 'Early-stage founder collaborator' : 'Student team candidate'}
+                {candidate.candidate_type === 'founder' ? 'Early-stage founder collaborator' : 'Early founder team candidate'}
                 {candidate.idea_domain || candidate.industry ? ` Â· ${candidate.idea_domain || candidate.industry}` : ''}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="text-xs font-black px-2.5 py-3 rounded-full bg-[#98DE38]/20 text-[#1B2D7F]">
-                {candidate.matchScore || 20}% Match
+                {candidate.matchScore ?? 0}% Match
               </span>
               <span className="text-xs font-bold px-2.5 py-3 rounded-full bg-indigo-50 text-indigo-700">
-                {candidate.candidate_type === 'founder' ? 'Founder' : 'Student'}
+                {candidate.candidate_type === 'founder' ? 'Founder' : 'Founder'}
               </span>
             </div>
           </div>
@@ -445,7 +443,7 @@ export default function FindTeamPage() {
               <div>
                 <h1 className="ss font-black text-4xl text-slate-900 mb-2">Build Your Core Team</h1>
                 <p className="text-slate-600 text-sm max-w-xl">
-                  Students and early-stage founders matched to your skill gaps, hiring roles, startup focus, and commitment.
+                  Student and professional early founders matched to your skill gaps, hiring roles, startup focus, and commitment.
                 </p>
               </div>
               <Link to="/founder/profile" className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50">
@@ -527,7 +525,7 @@ export default function FindTeamPage() {
                   <p className="text-slate-500 text-sm mb-4">
                     {(roleFilter || commFilter || skillFilter || search || matchBand !== 'all')
                       ? 'Try different filters'
-                      : 'Students who select "Co-Founder" or "Startup" on their profile appear here.'}
+                      : 'Founders who select "Co-Founder" on their profile appear here.'}
                   </p>
                   {(roleFilter || commFilter || skillFilter || search || matchBand !== 'all') && (
                     <button onClick={resetFilters}

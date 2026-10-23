@@ -1,0 +1,8 @@
+{
+  "01_REHEARSAL_ROLLBACK.sql": "33b83b6019547691bfa961086e4e33e4e0094a3e373e2d1e7a8b3e554c5f1d22",
+  "202610070002_rpc_hardening_STAGING.sql": "d12a5443324990ecde0f5bd9adca793ad06fda8e5e999de0421056da4c948906",
+  "changes.sql": "a92f814a2500a28182d76553e898ac93149e5f9a56690d20a6cc5446d5ae53e7",
+  "inventory.sql": "bcc7c2268309d0d03aa7d90af7abe6b61ee755181a704c0e293f57a465e8748a",
+  "postflight.sql": "7a22a536500aadd6ea1effc4b3cd3e4979cb2a462baeb53800ddb681f1e7acc6",
+  "smoke.sql": "349b162b58a35b55e00c9ddceb8ea1a002103fc2b8a5693ad3d4706fc7eea21e"
+}

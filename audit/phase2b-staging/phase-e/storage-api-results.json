@@ -1,0 +1,111 @@
+{
+  "status": "PASS",
+  "project": "sopklyxvzmungxwgboqs",
+  "runId": "61e18384-3f16-4622-b56c-e019278d5a83",
+  "fixturePrefix": "founders/42fce0f8-b0d3-41a9-b246-2d4a5def266e/phase-e/61e18384-3f16-4622-b56c-e019278d5a83",
+  "cleanupSuccessful": true,
+  "checks": [
+    {
+      "test": "founder staging identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "investor staging identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "Private bucket and 5MB limit",
+      "status": "PASS"
+    },
+    {
+      "test": "Allowed MIME configuration",
+      "status": "PASS"
+    },
+    {
+      "test": "Backend service uploads harmless PNG",
+      "status": "PASS"
+    },
+    {
+      "test": "Backend service downloads exact bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "Public object URL denied",
+      "status": "PASS"
+    },
+    {
+      "test": "anonymous direct upload denied",
+      "status": "PASS"
+    },
+    {
+      "test": "anonymous direct read denied",
+      "status": "PASS"
+    },
+    {
+      "test": "anonymous update denied",
+      "status": "PASS"
+    },
+    {
+      "test": "anonymous delete denied or zero objects removed",
+      "status": "PASS"
+    },
+    {
+      "test": "anonymous cannot change or remove stored bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "owner direct upload denied",
+      "status": "PASS"
+    },
+    {
+      "test": "owner direct read denied",
+      "status": "PASS"
+    },
+    {
+      "test": "owner update denied",
+      "status": "PASS"
+    },
+    {
+      "test": "owner delete denied or zero objects removed",
+      "status": "PASS"
+    },
+    {
+      "test": "owner cannot change or remove stored bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "other-user direct upload denied",
+      "status": "PASS"
+    },
+    {
+      "test": "other-user direct read denied",
+      "status": "PASS"
+    },
+    {
+      "test": "other-user update denied",
+      "status": "PASS"
+    },
+    {
+      "test": "other-user delete denied or zero objects removed",
+      "status": "PASS"
+    },
+    {
+      "test": "other-user cannot change or remove stored bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "html upload rejected even for backend",
+      "status": "PASS"
+    },
+    {
+      "test": "oversize upload rejected even for backend",
+      "status": "PASS"
+    }
+  ],
+  "remaining": [
+    "Backend HTTP upload/download and magic-byte checks",
+    "Passport-private sharing via backend",
+    "Reviewer access",
+    "Other bucket configuration comparison"
+  ]
+}

@@ -1,10 +1,11 @@
+import MatchExplanation from '../../components/MatchExplanation';
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
 import { useRealtime } from '../../hooks/useRealtime';
 import GrowthSignalPanel from '../../components/GrowthSignalPanel';
+import { FounderAllowance } from '../../components/FounderAllowance';
 import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   Rocket,
@@ -374,7 +375,7 @@ const normalizeInvestor = (investor, founderProfile) => {
     avatar_url: investor.avatar_url || profile.avatar_url || null,
     location: investor.location || profile.location || '',
     bio: investor.bio || profile.bio || investor.investment_thesis || '',
-    matchScore: getMatchScore(investor) || calculated.matchScore,
+    matchScore: investor.serverMatch ? investor.serverMatch.matchScore : getMatchScore(investor) || calculated.matchScore,
     reasons: safeArray(investor.reasons).length ? investor.reasons : calculated.reasons,
   };
 };
@@ -391,7 +392,7 @@ const normalizeTeamCandidate = (candidate, founderProfile) => {
     avatar_url: candidate.avatar_url || profile.avatar_url || null,
     location: candidate.location || profile.location || '',
     bio: candidate.bio || profile.bio || '',
-    matchScore: getMatchScore(candidate) || calculated.matchScore,
+    matchScore: candidate.serverMatch ? candidate.serverMatch.matchScore : getMatchScore(candidate) || calculated.matchScore,
     reasons: safeArray(candidate.reasons).length ? candidate.reasons : calculated.reasons,
   };
 };
@@ -471,11 +472,10 @@ function ConnectionActionNotice({ notice, onClose, onMessage, onFeedback }) {
     <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm lift">
       <div className="flex items-start gap-3">
         <div
-          className={`w-12 h-12 rounded-xl text-white flex items-center justify-center font-bold overflow-hidden flex-shrink-0 ${
-            isAccepted
-              ? 'bg-gradient-to-br from-indigo-500 to-purple-500'
-              : 'bg-gradient-to-br from-gray-400 to-gray-600'
-          }`}
+          className={`w-12 h-12 rounded-xl text-white flex items-center justify-center font-bold overflow-hidden flex-shrink-0 ${isAccepted
+            ? 'bg-gradient-to-br from-indigo-500 to-purple-500'
+            : 'bg-gradient-to-br from-gray-400 to-gray-600'
+            }`}
         >
           {person.avatar_url ? (
             <Avatar name={name} path={person.avatar_url} size="lg" />
@@ -557,7 +557,7 @@ function MyConnectionsCard({ connections = [], onMessage }) {
           </p>
 
           <p className="text-xs text-gray-400 mt-1">
-            Connect with mentors, investors, and team members to build your startup network.
+            Connect with investors and team members to build your startup network.
           </p>
 
           <Link
@@ -744,6 +744,7 @@ function MatchSuggestionCard({
         </span>
       </div>
 
+      <MatchExplanation fit={person.serverMatch} />
       {person.bio && (
         <p className="text-xs text-gray-600 mb-3 line-clamp-2">
           {person.bio}
@@ -768,11 +769,10 @@ function MatchSuggestionCard({
           type="button"
           onClick={handleMessage}
           disabled={connectionStatus !== 'accepted'}
-          className={`py-2 border-2 rounded-xl text-xs font-bold transition flex items-center justify-center ${
-            connectionStatus === 'accepted'
-              ? 'border-gray-200 hover:border-gray-300 text-gray-800 bg-white'
-              : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
-          }`}
+          className={`py-2 border-2 rounded-xl text-xs font-bold transition flex items-center justify-center ${connectionStatus === 'accepted'
+            ? 'border-gray-200 hover:border-gray-300 text-gray-800 bg-white'
+            : 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+            }`}
         >
           <MessageSquare className="w-3.5 mr-1" />
           {connectionStatus === 'accepted' ? 'Message' : 'Connect first'}
@@ -881,13 +881,13 @@ export default function FounderDashboard() {
 
       const investors = safeArray(dashboardData.investors)
         .map((investor) => normalizeInvestor(investor, founder))
-        .filter((investor) => getMatchScore(investor) >= 60)
+        .filter((investor) => getMatchScore(investor) >= 60 && investor.serverMatch?.status === 'potential_fit')
         .sort((a, b) => getMatchScore(b) - getMatchScore(a))
         .slice(0, 5);
 
       const teamCandidates = safeArray(dashboardData.teamCandidates)
         .map((candidate) => normalizeTeamCandidate(candidate, founder))
-        .filter((candidate) => getMatchScore(candidate) >= 60)
+        .filter((candidate) => getMatchScore(candidate) >= 60 && candidate.serverMatch?.status === 'potential_fit')
         .sort((a, b) => getMatchScore(b) - getMatchScore(a))
         .slice(0, 5);
 
@@ -1244,20 +1244,18 @@ export default function FounderDashboard() {
         <div className="max-w-7xl mx-auto">
           {/* ROLE-BASED HEADER */}
           <div
-            className={`rounded-2xl p-6 mb-6 border ${
-              hasStartup
-                ? 'bg-gray-900 text-white border-gray-800'
-                : 'bg-white border-gray-200'
-            }`}
+            className={`rounded-2xl p-6 mb-6 border ${hasStartup
+              ? 'bg-gray-900 text-white border-gray-800'
+              : 'bg-white border-gray-200'
+              }`}
           >
             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
               <div>
                 <span
-                  className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                    hasStartup
-                      ? 'bg-white/10'
-                      : 'bg-green-100 text-green-700'
-                  }`}
+                  className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${hasStartup
+                    ? 'bg-white/10'
+                    : 'bg-green-100 text-green-700'
+                    }`}
                 >
                   {currentRole.replace(/-/g, ' ')}
                 </span>
@@ -1269,11 +1267,10 @@ export default function FounderDashboard() {
                 </h1>
 
                 <p
-                  className={`mt-2 text-sm max-w-lg ${
-                    hasStartup ? 'text-gray-300' : 'text-gray-500'
-                  }`}
+                  className={`mt-2 text-sm max-w-lg ${hasStartup ? 'text-gray-300' : 'text-gray-500'
+                    }`}
                 >
-                  Your founder mission control. Find mentors, investors, team members, and opportunities.
+                  Your founder mission control. Find investors, co-founders, team members, and opportunities.
                 </p>
               </div>
 
@@ -1287,11 +1284,10 @@ export default function FounderDashboard() {
 
                 <Link
                   to="/find-investors"
-                  className={`px-4 py-2 border-2 font-semibold text-sm rounded-xl ${
-                    hasStartup
-                      ? 'border-white/20 text-white hover:bg-white/10'
-                      : 'border-gray-200 hover:bg-gray-50'
-                  }`}
+                  className={`px-4 py-2 border-2 font-semibold text-sm rounded-xl ${hasStartup
+                    ? 'border-white/20 text-white hover:bg-white/10'
+                    : 'border-gray-200 hover:bg-gray-50'
+                    }`}
                 >
                   Investors
                 </Link>
@@ -1347,6 +1343,7 @@ export default function FounderDashboard() {
           </div>
 
           <div className="mb-6">
+            <FounderAllowance />
             <GrowthSignalPanel
               profile={profile}
               founderProfile={founder}
@@ -1437,9 +1434,8 @@ export default function FounderDashboard() {
                     <div className="flex justify-between items-start gap-3">
                       <div className="flex items-start gap-3 flex-1">
                         <span
-                          className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            hasStartup ? 'bg-green-100' : 'bg-indigo-100'
-                          }`}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${hasStartup ? 'bg-green-100' : 'bg-indigo-100'
+                            }`}
                         >
                           {hasStartup ? '✓' : '🚀'}
                         </span>
@@ -1508,7 +1504,7 @@ export default function FounderDashboard() {
 
                         <div>
                           <p className="font-semibold text-sm">
-                            Mentor Guidance
+                            AI Mentor
                           </p>
 
                           <p className="text-xs text-gray-500">
@@ -1518,10 +1514,10 @@ export default function FounderDashboard() {
                       </div>
 
                       <Link
-                        to="/find-mentors"
+                        to="/founder/ai-mentor"
                         className="text-xs font-bold px-3 py-1.5 g-brand text-black rounded-lg"
                       >
-                        Find Mentor
+                        AI Mentor
                       </Link>
                     </div>
                   </div>
@@ -1601,51 +1597,11 @@ export default function FounderDashboard() {
                 )}
               </div>
 
-              {/* AI SUGGESTED MENTORS */}
-              <div className="bg-white rounded-2xl p-5 border border-gray-100">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="font-bold text-gray-900 flex items-center gap-2">
-                    <GraduationCap className="w-5 text-indigo-500" />
-                    AI Suggested Mentors
-                  </h2>
-
-                  <Link
-                    to="/find-mentors"
-                    className="text-xs text-indigo-600 font-semibold"
-                  >
-                    Browse all →
-                  </Link>
-                </div>
-
-                {visibleMentors.length > 0 ? (
-                  <div className="space-y-3">
-                    {visibleMentors.slice(0, 5).map((mentor) => {
-                      const mentorId = getPersonId(mentor);
-
-                      return (
-                        <MatchSuggestionCard
-                          key={mentorId}
-                          person={mentor}
-                          type="mentor"
-                          connectionStatus={connStatusMap[mentorId]}
-                          onStatusChange={updateConnStatus}
-                          onOpenChat={(convId) => {
-                            setActiveConvId(convId);
-                            navigate(`/messages?conv=${convId}`);
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <EmptySuggestion
-                    title="No strong mentor matches right now"
-                    text="Dashboard only shows top 5 mentor matches with 60%+ score. Add help-needed and current challenges to improve mentor suggestions."
-                    to="/find-mentors"
-                    label="Browse mentors"
-                  />
-                )}
-              </div>
+              <section className="bg-white rounded-2xl p-5 border border-gray-100">
+                <h2 className="font-bold text-[#1B2D7F]">AI Mentor</h2>
+                <p className="text-sm text-gray-500 mt-2">Personalised startup mentorship is coming soon.</p>
+                <Link to="/founder/ai-mentor" className="inline-flex mt-3 font-semibold text-[#1B2D7F]">View AI Mentor</Link>
+              </section>
 
               {/* AI SUGGESTED INVESTORS */}
               <div className="bg-white rounded-2xl p-5 border border-gray-100">
@@ -1763,8 +1719,8 @@ export default function FounderDashboard() {
                       Icon: UserPlus,
                     },
                     {
-                      label: 'Find Mentor',
-                      to: '/find-mentors',
+                      label: 'AI Mentor',
+                      to: '/founder/ai-mentor',
                       Icon: GraduationCap,
                     },
                     {

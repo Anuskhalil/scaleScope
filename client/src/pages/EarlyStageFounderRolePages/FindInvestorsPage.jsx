@@ -14,6 +14,7 @@ import {
   formatCheckSize,
 } from '../../services/founderService';
 import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import ProfileAvatar from '../../components/ProfileAvatar';
 import {
   DISCOVERY_INDUSTRIES,
   DISCOVERY_LOCATIONS,
@@ -29,9 +30,8 @@ import {
 import toast from 'react-hot-toast';
 
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap');
   :root{--primary:#98DE38;--secondary:#1B2D7F;--gray-50:#F9FAFB}
-  .ss{font-family:'Syne',sans-serif}.dm{font-family:'DM Sans',sans-serif}
+  .ss{font-family:var(--font-heading)}.dm{font-family:var(--font-sans)}
   .lift{transition:transform .22s cubic-bezier(.22,.68,0,1.2),box-shadow .22s ease}
   .lift:hover{transform:translateY(-3px);box-shadow:0 16px 44px rgba(27,45,127,.12)}
   .g-found{background:linear-gradient(135deg,#1B2D7F,#2A3F8F)}
@@ -46,9 +46,9 @@ const CSS = `
   @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
   .modal-pop{animation:mp .22s cubic-bezier(.34,1.4,.64,1) both}
   @keyframes mp{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-  .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:'DM Sans',sans-serif;transition:border-color .14s;background:#fff}
+  .inp{width:100%;padding:10px 14px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:13px;outline:none;font-family:var(--font-sans);transition:border-color .14s;background:#fff}
   .inp:focus{border-color:#98DE38}
-  .ta{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:12px;font-size:14px;outline:none;resize:none;font-family:'DM Sans',sans-serif;transition:border-color .14s;background:#f8fafc}
+  .ta{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:12px;font-size:14px;outline:none;resize:none;font-family:var(--font-sans);transition:border-color .14s;background:#f8fafc}
   .ta:focus{border-color:#059669;background:#fff}
   .verify-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:#ecfdf5;color:#059669;border:1.5px solid #6ee7b7}
   .tooltip-wrap{position:relative}
@@ -57,10 +57,6 @@ const CSS = `
 `;
 
 
-function initials(name) {
-  if (!name) return '?';
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-}
 function gradFor(id) {
   const g = ['from-emerald-500 to-teal-500', 'from-blue-500 to-indigo-500',
     'from-violet-500 to-indigo-500', 'from-amber-500 to-orange-500',
@@ -74,9 +70,9 @@ function InvestorCard({ investor, founderProfile, onPitch, onMessage, pitchState
   const stages = investor.preferred_stages || investor.investment_stage || [];
   const inds = investor.preferred_industries || investor.industries_of_interest || [];
   const ticket = investor.check_range_min || investor.check_range_max
-    ? formatCheckSize(investor.check_range_min, investor.check_range_max)
+    ? formatCheckSize(investor.check_range_min, investor.check_range_max, investor.metadata?.check_currency || 'USD')
     : investor.ticket_size_min || investor.ticket_size_max
-      ? formatCheckSize(investor.ticket_size_min, investor.ticket_size_max)
+      ? formatCheckSize(investor.ticket_size_min, investor.ticket_size_max, investor.metadata?.check_currency || 'USD')
       : null;
   const uid = investor.profile_id || investor.user_id;
 
@@ -87,9 +83,7 @@ function InvestorCard({ investor, founderProfile, onPitch, onMessage, pitchState
         <div className="flex-1 min-w-0">
         {/* Header */}
         <div className="flex items-start gap-3 mb-3">
-          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradFor(uid)} flex items-center justify-center text-white text-sm font-bold ss flex-shrink-0`}>
-            {initials(p.full_name)}
-          </div>
+          <ProfileAvatar value={p.avatar_url} name={p.full_name} className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradFor(uid)} text-white text-sm font-bold ss`} />
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -98,8 +92,8 @@ function InvestorCard({ investor, founderProfile, onPitch, onMessage, pitchState
                   {investor.fund_name || investor.firm_name || investor.investor_type || 'Independent Investor'}
                 </p>
               </div>
-              {(investor.is_verified || investor.accepting_pitches) && (
-                <span className="verify-badge flex-shrink-0">✓ Active</span>
+              {investor.accepting_pitches === true && (
+                <span className="verify-badge flex-shrink-0">Accepting pitches</span>
               )}
             </div>
             {p.location && (
@@ -120,7 +114,7 @@ function InvestorCard({ investor, founderProfile, onPitch, onMessage, pitchState
 
         <div className="flex flex-wrap gap-2 mb-3">
           <span className="text-xs font-black px-2.5 py-1 rounded-full bg-[#98DE38]/20 text-[#1B2D7F]">
-            {investor.matchScore || 15}% Match
+            {investor.matchScore ?? 0}% Match
           </span>
           {(investor.reasons || []).slice(0, 2).map((reason) => (
             <span key={reason} className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-semibold">

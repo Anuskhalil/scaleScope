@@ -1,0 +1,739 @@
+--- before
++++ after
+@@ -2,7 +2,7 @@
+ -- PostgreSQL database dump
+ --
+ 
+-\restrict qoHGSkfsGjJaaG4qbh8NPaCEdnx0n5oX6qL25nRJ5ETfKgc2bi4SvGuPvUNuHcJ
++\restrict NGQhaikGiqz24LNl6fSS271QIemzkK7t6762e5SZ5Qgh7KDouXbfRpLmuGrVCS4
+ 
+ -- Dumped from database version 17.6 (Debian 17.6-2.pgdg13+1)
+ -- Dumped by pg_dump version 17.6 (Debian 17.6-2.pgdg13+1)
+@@ -498,6 +498,271 @@
+ 
+ 
+ ALTER FUNCTION public.log_profile_changes() OWNER TO postgres;
++
++--
++-- Name: passport_audit_immutable(); Type: FUNCTION; Schema: public; Owner: postgres
++--
++
++CREATE FUNCTION public.passport_audit_immutable() RETURNS trigger
++    LANGUAGE plpgsql
++    SET search_path TO ''
++    AS $$
++BEGIN RAISE EXCEPTION 'Passport audit is append-only'; END $$;
++
++
++ALTER FUNCTION public.passport_audit_immutable() OWNER TO postgres;
++
++--
++-- Name: passport_check_guard(); Type: FUNCTION; Schema: public; Owner: postgres
++--
++
++CREATE FUNCTION public.passport_check_guard() RETURNS trigger
++    LANGUAGE plpgsql SECURITY DEFINER
++    SET search_path TO ''
++    AS $$
++DECLARE parent public.profile_verifications; previous integer;
++BEGIN
++ IF TG_OP='DELETE' THEN
++  IF OLD.passport_claim THEN
++   IF EXISTS(SELECT 1 FROM public.profile_verifications WHERE id=OLD.verification_id) THEN
++    RAISE EXCEPTION 'Revoke or stale Passport claims; do not delete retained claim history';
++   END IF;
++   INSERT INTO public.verification_audit_history(check_id,subject_id,event,old_state,claim_value_hash)
++   VALUES(OLD.id,OLD.user_id,'deleted',OLD.passport_state,OLD.claim_value_hash);
++  END IF;
++  RETURN OLD;
++ END IF;
++ IF TG_OP='UPDATE' AND OLD.passport_claim IS DISTINCT FROM NEW.passport_claim THEN
++  RAISE EXCEPTION 'Legacy rows cannot be promoted or passport rows downgraded';
++ END IF;
++ IF NOT NEW.passport_claim THEN RETURN NEW; END IF;
++ IF NEW.decision_actor=NEW.user_id THEN RAISE EXCEPTION 'Self review forbidden'; END IF;
++ SELECT * INTO parent FROM public.profile_verifications
++ WHERE id=NEW.verification_id FOR UPDATE;
++ IF NOT FOUND OR parent.user_id<>NEW.user_id OR parent.role<>NEW.role
++   OR parent.passport_opted_in_at IS NULL THEN
++  RAISE EXCEPTION 'Missing consent or mismatched verification owner/role';
++ END IF;
++ IF NOT EXISTS(SELECT 1 FROM public.profiles p WHERE p.id=NEW.user_id
++   AND p.user_type=NEW.role AND p.deleted_at IS NULL) THEN
++  RAISE EXCEPTION 'Active role required';
++ END IF;
++ IF TG_OP='INSERT' THEN
++  IF NEW.passport_state<>'submitted' OR NEW.decision_actor IS NOT NULL
++    OR NEW.decided_at IS NOT NULL OR NEW.expires_at IS NOT NULL OR NEW.source_kind IS NOT NULL THEN
++   RAISE EXCEPTION 'New claims must be undecided';
++  END IF;
++  SELECT coalesce(max(a.claim_version),0) INTO previous
++   FROM public.verification_audit_history a
++   WHERE a.subject_id=NEW.user_id
++     AND a.target_key_hash=encode(extensions.digest(NEW.target_key,'sha256'),'hex');
++  IF NEW.claim_version<>previous+1 THEN RAISE EXCEPTION 'Claim version conflict'; END IF;
++  INSERT INTO public.verification_audit_history
++   (check_id,subject_id,event,new_state,claim_value_hash,claim_version,target_key_hash)
++   VALUES(NEW.id,NEW.user_id,'submitted',NEW.passport_state,NEW.claim_value_hash,
++     NEW.claim_version,encode(extensions.digest(NEW.target_key,'sha256'),'hex'));
++  UPDATE public.profile_verification_checks SET passport_state='stale'
++   WHERE user_id=NEW.user_id AND target_key=NEW.target_key AND passport_claim
++    AND passport_state IN ('submitted','in_review','supported','needs_changes','rejected');
++ ELSE
++  IF ROW(NEW.user_id,NEW.verification_id,NEW.role,NEW.target_key,NEW.target_value,
++    NEW.claim_kind,NEW.claim_version,NEW.claim_value_hash,NEW.submitted_at)
++   IS DISTINCT FROM ROW(OLD.user_id,OLD.verification_id,OLD.role,OLD.target_key,OLD.target_value,
++    OLD.claim_kind,OLD.claim_version,OLD.claim_value_hash,OLD.submitted_at) THEN
++   RAISE EXCEPTION 'Submit a new version; claim content is immutable';
++  END IF;
++  IF NEW.passport_state=OLD.passport_state AND
++    ROW(NEW.decision_actor,NEW.decided_at,NEW.expires_at,NEW.source_kind)
++    IS DISTINCT FROM ROW(OLD.decision_actor,OLD.decided_at,OLD.expires_at,OLD.source_kind) THEN
++   RAISE EXCEPTION 'Decision details cannot be silently rewritten';
++  END IF;
++  IF NEW.id IS DISTINCT FROM OLD.id OR NEW.check_type IS DISTINCT FROM OLD.check_type
++    OR NEW.target_label IS DISTINCT FROM OLD.target_label
++    OR NEW.metadata IS DISTINCT FROM OLD.metadata THEN
++   RAISE EXCEPTION 'Passport identity and payload are immutable';
++  END IF;
++  IF NEW.passport_state IN ('submitted','in_review') AND
++    (NEW.decision_actor IS NOT NULL OR NEW.decided_at IS NOT NULL
++     OR NEW.expires_at IS NOT NULL OR NEW.source_kind IS NOT NULL) THEN
++   RAISE EXCEPTION 'Undecided claim cannot contain a decision';
++  END IF;
++  IF NEW.passport_state IS DISTINCT FROM OLD.passport_state THEN
++   IF NEW.passport_state IN ('stale','revoked','expired') AND
++    ROW(NEW.decision_actor,NEW.decided_at,NEW.expires_at,NEW.source_kind)
++     IS DISTINCT FROM ROW(OLD.decision_actor,OLD.decided_at,OLD.expires_at,OLD.source_kind) THEN
++    RAISE EXCEPTION 'Invalidation must preserve the prior decision';
++   END IF;
++   IF NEW.passport_state='expired' AND OLD.expires_at > clock_timestamp() THEN
++    RAISE EXCEPTION 'Claim has not expired yet';
++   END IF;
++   IF NEW.passport_state IN ('supported','needs_changes','rejected') THEN
++    IF NEW.decided_at IS NULL OR NEW.decided_at < NEW.submitted_at
++       OR NEW.decided_at > clock_timestamp() THEN
++     RAISE EXCEPTION 'Invalid decision timestamp';
++    END IF;
++    IF NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id=NEW.decision_actor
++                    AND p.deleted_at IS NULL) THEN
++     RAISE EXCEPTION 'Active decision actor required';
++    END IF;
++   END IF;
++   IF NEW.passport_state='supported' AND NEW.expires_at <= clock_timestamp() THEN
++    RAISE EXCEPTION 'Supported claim must have future expiry';
++   END IF;
++   IF NOT (
++    (OLD.passport_state='submitted' AND NEW.passport_state IN ('in_review','stale','revoked')) OR
++    (OLD.passport_state='in_review' AND NEW.passport_state IN ('supported','needs_changes','rejected','stale','revoked')) OR
++    (OLD.passport_state='supported' AND NEW.passport_state IN ('stale','revoked','expired')) OR
++    (OLD.passport_state IN ('needs_changes','rejected') AND NEW.passport_state IN ('stale','revoked'))
++   ) THEN RAISE EXCEPTION 'Invalid claim transition'; END IF;
++   IF NEW.passport_state='supported' AND NEW.source_kind='manual_evidence'
++    AND NOT EXISTS(SELECT 1 FROM public.profile_verification_evidence l
++     JOIN public.trust_evidence e ON e.id=l.evidence_id
++     WHERE l.check_id=NEW.id AND e.passport_private AND e.deleted_at IS NULL) THEN
++    RAISE EXCEPTION 'Manual support requires current private evidence';
++   END IF;
++   INSERT INTO public.verification_audit_history(check_id,subject_id,event,old_state,new_state,actor_id,claim_value_hash)
++    VALUES(NEW.id,NEW.user_id,'transition',OLD.passport_state,NEW.passport_state,
++     CASE WHEN NEW.passport_state IN ('supported','needs_changes','rejected') THEN NEW.decision_actor END,
++     NEW.claim_value_hash);
++  END IF;
++ END IF;
++ RETURN NEW;
++END $$;
++
++
++ALTER FUNCTION public.passport_check_guard() OWNER TO postgres;
++
++--
++-- Name: passport_claim_is_current(uuid); Type: FUNCTION; Schema: public; Owner: postgres
++--
++
++CREATE FUNCTION public.passport_claim_is_current(p_check uuid) RETURNS boolean
++    LANGUAGE sql STABLE
++    SET search_path TO ''
++    AS $$
++ SELECT EXISTS (
++  SELECT 1 FROM public.profile_verification_checks c
++  JOIN public.profile_verifications h ON h.id=c.verification_id
++  JOIN public.profiles p ON p.id=c.user_id
++  WHERE c.id=p_check AND c.passport_claim AND c.passport_state='supported'
++   AND c.expires_at>now() AND h.passport_opted_in_at IS NOT NULL
++   AND p.deleted_at IS NULL AND p.user_type=c.role
++   AND NOT EXISTS (SELECT 1 FROM public.profile_verification_checks newer
++    WHERE newer.user_id=c.user_id AND newer.target_key=c.target_key AND newer.passport_claim
++     AND newer.claim_version>c.claim_version)
++   AND (c.source_kind<>'manual_evidence' OR EXISTS (
++    SELECT 1 FROM public.profile_verification_evidence l JOIN public.trust_evidence e ON e.id=l.evidence_id
++    WHERE l.check_id=c.id AND e.passport_private AND e.deleted_at IS NULL AND e.owner_id=c.user_id))
++   AND NOT EXISTS (SELECT 1 FROM public.profile_verification_evidence l
++    JOIN public.trust_evidence e ON e.id=l.evidence_id
++    WHERE l.check_id=c.id AND (e.deleted_at IS NOT NULL OR NOT e.passport_private))
++ );
++$$;
++
++
++ALTER FUNCTION public.passport_claim_is_current(p_check uuid) OWNER TO postgres;
++
++--
++-- Name: passport_evidence_guard(); Type: FUNCTION; Schema: public; Owner: postgres
++--
++
++CREATE FUNCTION public.passport_evidence_guard() RETURNS trigger
++    LANGUAGE plpgsql SECURITY DEFINER
++    SET search_path TO ''
++    AS $$
++BEGIN
++ IF TG_OP='UPDATE' THEN
++  IF NEW.passport_private IS DISTINCT FROM OLD.passport_private THEN
++   RAISE EXCEPTION 'Upload fresh private evidence; purpose cannot be converted';
++  END IF;
++  IF OLD.passport_private AND
++   ROW(NEW.id,NEW.owner_id,NEW.object_path,NEW.sha256,NEW.byte_size,NEW.mime_type,NEW.category,NEW.title,NEW.claim,NEW.created_at)
++   IS DISTINCT FROM ROW(OLD.id,OLD.owner_id,OLD.object_path,OLD.sha256,OLD.byte_size,OLD.mime_type,OLD.category,OLD.title,OLD.claim,OLD.created_at) THEN
++   RAISE EXCEPTION 'Evidence provenance is immutable';
++  END IF;
++  IF OLD.passport_private AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS DISTINCT FROM OLD.deleted_at THEN
++   RAISE EXCEPTION 'Deleted evidence cannot be restored silently';
++  END IF;
++ END IF;
++ RETURN NEW;
++END $$;
++
++
++ALTER FUNCTION public.passport_evidence_guard() OWNER TO postgres;
++
++--
++-- Name: passport_evidence_tombstone(); Type: FUNCTION; Schema: public; Owner: postgres
++--
++
++CREATE FUNCTION public.passport_evidence_tombstone() RETURNS trigger
++    LANGUAGE plpgsql SECURITY DEFINER
++    SET search_path TO ''
++    AS $$
++BEGIN
++ IF NEW.passport_private AND OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
++  UPDATE public.profile_verification_checks c SET passport_state='stale'
++   WHERE c.passport_claim AND c.passport_state IN
++    ('submitted','in_review','supported','needs_changes','rejected') AND EXISTS
++     (SELECT 1 FROM public.profile_verification_evidence l WHERE l.check_id=c.id AND l.evidence_id=NEW.id);
++ END IF;
++ RETURN NEW;
++END $$;
++
++
++ALTER FUNCTION public.passport_evidence_tombstone() OWNER TO postgres;
++
++--
++-- Name: passport_link_guard(); Type: FUNCTION; Schema: public; Owner: postgres
++--
++
++CREATE FUNCTION public.passport_link_guard() RETURNS trigger
++    LANGUAGE plpgsql SECURITY DEFINER
++    SET search_path TO ''
++    AS $$
++DECLARE c public.profile_verification_checks; e public.trust_evidence;
++BEGIN
++ IF TG_OP='DELETE' THEN
++  SELECT * INTO c FROM public.profile_verification_checks WHERE id=OLD.check_id;
++  IF FOUND THEN
++   IF c.passport_state NOT IN ('submitted','in_review') THEN RAISE EXCEPTION 'Reviewed evidence links are immutable'; END IF;
++   INSERT INTO public.verification_audit_history(check_id,subject_id,event,evidence_id)
++    VALUES(c.id,c.user_id,'evidence_unlinked',OLD.evidence_id);
++  END IF;
++  RETURN OLD;
++ END IF;
++ SELECT * INTO c FROM public.profile_verification_checks WHERE id=NEW.check_id FOR UPDATE;
++ SELECT * INTO e FROM public.trust_evidence WHERE id=NEW.evidence_id FOR UPDATE;
++ IF c.id IS NULL OR e.id IS NULL OR NOT c.passport_claim
++   OR c.passport_state NOT IN ('submitted','in_review')
++   OR c.user_id<>e.owner_id OR NOT e.passport_private OR e.deleted_at IS NOT NULL THEN
++  RAISE EXCEPTION 'Evidence must be private, current and owned by this claim owner';
++ END IF;
++ INSERT INTO public.verification_audit_history(check_id,subject_id,event,evidence_id,evidence_sha256)
++  VALUES(c.id,c.user_id,'evidence_linked',e.id,e.sha256);
++ RETURN NEW;
++END $$;
++
++
++ALTER FUNCTION public.passport_link_guard() OWNER TO postgres;
++
++--
++-- Name: passport_no_sharing(); Type: FUNCTION; Schema: public; Owner: postgres
++--
++
++CREATE FUNCTION public.passport_no_sharing() RETURNS trigger
++    LANGUAGE plpgsql SECURITY DEFINER
++    SET search_path TO ''
++    AS $$
++DECLARE private_evidence boolean;
++BEGIN
++ SELECT passport_private INTO private_evidence FROM public.trust_evidence
++ WHERE id=NEW.evidence_id FOR UPDATE;
++ IF private_evidence THEN RAISE EXCEPTION 'Passport evidence cannot be shared'; END IF;
++ RETURN NEW;
++END $$;
++
++
++ALTER FUNCTION public.passport_no_sharing() OWNER TO postgres;
+ 
+ --
+ -- Name: queue_evidence_analysis(); Type: FUNCTION; Schema: public; Owner: postgres
+@@ -1445,12 +1710,37 @@
+     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+     checked_at timestamp with time zone DEFAULT now() NOT NULL,
+     created_at timestamp with time zone DEFAULT now() NOT NULL,
++    passport_claim boolean DEFAULT false NOT NULL,
++    claim_kind text,
++    claim_version integer,
++    claim_value_hash text,
++    passport_state text,
++    submitted_at timestamp with time zone,
++    decided_at timestamp with time zone,
++    expires_at timestamp with time zone,
++    decision_actor uuid,
++    source_kind text,
++    CONSTRAINT passport_claim_shape CHECK ((((NOT passport_claim) AND (claim_kind IS NULL) AND (claim_version IS NULL) AND (claim_value_hash IS NULL) AND (passport_state IS NULL) AND (submitted_at IS NULL) AND (decided_at IS NULL) AND (expires_at IS NULL) AND (decision_actor IS NULL) AND (source_kind IS NULL)) OR (passport_claim AND (verification_id IS NOT NULL) AND (role = ANY (ARRAY['early-stage-founder'::text, 'investor'::text])) AND (claim_kind IS NOT NULL) AND (claim_kind = ANY (ARRAY['account_control'::text, 'professional'::text, 'education'::text, 'startup'::text, 'firm'::text, 'traction'::text, 'investment_history'::text])) AND (claim_version IS NOT NULL) AND (claim_version > 0) AND (claim_value_hash IS NOT NULL) AND (claim_value_hash ~ '^[a-f0-9]{64}$'::text) AND (passport_state IS NOT NULL) AND (passport_state = ANY (ARRAY['submitted'::text, 'in_review'::text, 'supported'::text, 'needs_changes'::text, 'rejected'::text, 'stale'::text, 'revoked'::text, 'expired'::text])) AND (submitted_at IS NOT NULL) AND (status = 'skipped'::text) AND (score = 0) AND ((passport_state <> ALL (ARRAY['supported'::text, 'needs_changes'::text, 'rejected'::text])) OR ((decision_actor IS NOT NULL) AND (decided_at IS NOT NULL) AND (decision_actor <> user_id) AND (source_kind IS NOT NULL))) AND ((passport_state <> 'supported'::text) OR ((expires_at IS NOT NULL) AND (expires_at > decided_at))) AND ((source_kind IS NULL) OR (source_kind = ANY (ARRAY['manual_evidence'::text, 'authoritative_source'::text, 'oauth_control'::text, 'email_control'::text])))))),
++    CONSTRAINT passport_payload_minimal CHECK (((NOT passport_claim) OR ((target_value IS NULL) AND (metadata = '{}'::jsonb) AND (message IS NULL)))),
+     CONSTRAINT profile_verification_checks_score_check CHECK (((score >= 0) AND (score <= 100))),
+     CONSTRAINT profile_verification_checks_status_check CHECK ((status = ANY (ARRAY['passed'::text, 'failed'::text, 'warning'::text, 'skipped'::text])))
+ );
+ 
+ 
+ ALTER TABLE public.profile_verification_checks OWNER TO postgres;
++
++--
++-- Name: profile_verification_evidence; Type: TABLE; Schema: public; Owner: postgres
++--
++
++CREATE TABLE public.profile_verification_evidence (
++    check_id uuid NOT NULL,
++    evidence_id uuid NOT NULL,
++    linked_at timestamp with time zone DEFAULT now() NOT NULL
++);
++
++
++ALTER TABLE public.profile_verification_evidence OWNER TO postgres;
+ 
+ --
+ -- Name: profile_verifications; Type: TABLE; Schema: public; Owner: postgres
+@@ -1471,6 +1761,7 @@
+     checked_at timestamp with time zone DEFAULT now() NOT NULL,
+     created_at timestamp with time zone DEFAULT now() NOT NULL,
+     updated_at timestamp with time zone DEFAULT now() NOT NULL,
++    passport_opted_in_at timestamp with time zone,
+     CONSTRAINT profile_verifications_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'verified'::text, 'partially_verified'::text, 'needs_review'::text, 'failed'::text]))),
+     CONSTRAINT profile_verifications_trust_score_check CHECK (((trust_score >= 0) AND (trust_score <= 100)))
+ );
+@@ -1682,6 +1973,9 @@
+     reviewed_by uuid,
+     reviewed_at timestamp with time zone,
+     created_at timestamp with time zone DEFAULT now() NOT NULL,
++    passport_private boolean DEFAULT false NOT NULL,
++    deleted_at timestamp with time zone,
++    CONSTRAINT passport_evidence_shape CHECK (((NOT passport_private) OR (sha256 ~ '^[a-f0-9]{64}$'::text))),
+     CONSTRAINT trust_evidence_byte_size_check CHECK (((byte_size >= 1) AND (byte_size <= 5242880))),
+     CONSTRAINT trust_evidence_category_check CHECK ((category = ANY (ARRAY['identity'::text, 'education'::text, 'experience'::text, 'product'::text, 'traction'::text, 'investment_history'::text]))),
+     CONSTRAINT trust_evidence_claim_check CHECK (((length(claim) >= 10) AND (length(claim) <= 1000))),
+@@ -1795,6 +2089,30 @@
+ ALTER TABLE public.user_subscriptions OWNER TO postgres;
+ 
+ --
++-- Name: verification_audit_history; Type: TABLE; Schema: public; Owner: postgres
++--
++
++CREATE TABLE public.verification_audit_history (
++    id uuid DEFAULT gen_random_uuid() NOT NULL,
++    check_id uuid NOT NULL,
++    subject_id uuid NOT NULL,
++    event text NOT NULL,
++    old_state text,
++    new_state text,
++    actor_id uuid,
++    claim_value_hash text,
++    evidence_id uuid,
++    evidence_sha256 text,
++    claim_version integer,
++    target_key_hash text,
++    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
++    CONSTRAINT verification_audit_history_event_check CHECK ((event = ANY (ARRAY['submitted'::text, 'transition'::text, 'deleted'::text, 'evidence_linked'::text, 'evidence_unlinked'::text])))
++);
++
++
++ALTER TABLE public.verification_audit_history OWNER TO postgres;
++
++--
+ -- Name: ai_growth_plans ai_growth_plans_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+ --
+ 
+@@ -2171,6 +2489,14 @@
+ 
+ 
+ --
++-- Name: profile_verification_evidence profile_verification_evidence_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
++--
++
++ALTER TABLE ONLY public.profile_verification_evidence
++    ADD CONSTRAINT profile_verification_evidence_pkey PRIMARY KEY (check_id, evidence_id);
++
++
++--
+ -- Name: profile_verifications profile_verifications_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+ --
+ 
+@@ -2387,6 +2713,14 @@
+ 
+ 
+ --
++-- Name: verification_audit_history verification_audit_history_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
++--
++
++ALTER TABLE ONLY public.verification_audit_history
++    ADD CONSTRAINT verification_audit_history_pkey PRIMARY KEY (id);
++
++
++--
+ -- Name: ai_growth_plans_user_idx; Type: INDEX; Schema: public; Owner: postgres
+ --
+ 
+@@ -3150,6 +3484,41 @@
+ 
+ 
+ --
++-- Name: passport_audit_subject_idx; Type: INDEX; Schema: public; Owner: postgres
++--
++
++CREATE INDEX passport_audit_subject_idx ON public.verification_audit_history USING btree (subject_id, recorded_at);
++
++
++--
++-- Name: passport_claim_version_uq; Type: INDEX; Schema: public; Owner: postgres
++--
++
++CREATE UNIQUE INDEX passport_claim_version_uq ON public.profile_verification_checks USING btree (user_id, target_key, claim_version) WHERE passport_claim;
++
++
++--
++-- Name: passport_evidence_reverse_idx; Type: INDEX; Schema: public; Owner: postgres
++--
++
++CREATE INDEX passport_evidence_reverse_idx ON public.profile_verification_evidence USING btree (evidence_id);
++
++
++--
++-- Name: passport_queue_idx; Type: INDEX; Schema: public; Owner: postgres
++--
++
++CREATE INDEX passport_queue_idx ON public.profile_verification_checks USING btree (passport_state, submitted_at) WHERE passport_claim;
++
++
++--
++-- Name: passport_summary_idx; Type: INDEX; Schema: public; Owner: postgres
++--
++
++CREATE INDEX passport_summary_idx ON public.profile_verification_checks USING btree (user_id, expires_at) WHERE (passport_claim AND (passport_state = 'supported'::text));
++
++
++--
+ -- Name: profile_evidence_files_status_idx; Type: INDEX; Schema: public; Owner: postgres
+ --
+ 
+@@ -3259,6 +3628,48 @@
+ --
+ 
+ CREATE TRIGGER guard_reviewed_connection_trg BEFORE INSERT ON public.connections FOR EACH ROW EXECUTE FUNCTION public.guard_reviewed_connection();
++
++
++--
++-- Name: verification_audit_history passport_audit_immutable_trg; Type: TRIGGER; Schema: public; Owner: postgres
++--
++
++CREATE TRIGGER passport_audit_immutable_trg BEFORE DELETE OR UPDATE OR TRUNCATE ON public.verification_audit_history FOR EACH STATEMENT EXECUTE FUNCTION public.passport_audit_immutable();
++
++
++--
++-- Name: profile_verification_checks passport_check_guard_trg; Type: TRIGGER; Schema: public; Owner: postgres
++--
++
++CREATE TRIGGER passport_check_guard_trg BEFORE INSERT OR DELETE OR UPDATE ON public.profile_verification_checks FOR EACH ROW EXECUTE FUNCTION public.passport_check_guard();
++
++
++--
++-- Name: trust_evidence passport_evidence_guard_trg; Type: TRIGGER; Schema: public; Owner: postgres
++--
++
++CREATE TRIGGER passport_evidence_guard_trg BEFORE UPDATE ON public.trust_evidence FOR EACH ROW EXECUTE FUNCTION public.passport_evidence_guard();
++
++
++--
++-- Name: trust_evidence passport_evidence_tombstone_trg; Type: TRIGGER; Schema: public; Owner: postgres
++--
++
++CREATE TRIGGER passport_evidence_tombstone_trg AFTER UPDATE OF deleted_at ON public.trust_evidence FOR EACH ROW EXECUTE FUNCTION public.passport_evidence_tombstone();
++
++
++--
++-- Name: profile_verification_evidence passport_link_guard_trg; Type: TRIGGER; Schema: public; Owner: postgres
++--
++
++CREATE TRIGGER passport_link_guard_trg BEFORE INSERT OR DELETE ON public.profile_verification_evidence FOR EACH ROW EXECUTE FUNCTION public.passport_link_guard();
++
++
++--
++-- Name: evidence_grants passport_no_sharing_trg; Type: TRIGGER; Schema: public; Owner: postgres
++--
++
++CREATE TRIGGER passport_no_sharing_trg BEFORE INSERT OR UPDATE ON public.evidence_grants FOR EACH ROW EXECUTE FUNCTION public.passport_no_sharing();
+ 
+ 
+ --
+@@ -3747,6 +4158,22 @@
+ 
+ ALTER TABLE ONLY public.profile_verification_checks
+     ADD CONSTRAINT profile_verification_checks_verification_id_fkey FOREIGN KEY (verification_id) REFERENCES public.profile_verifications(id) ON DELETE CASCADE;
++
++
++--
++-- Name: profile_verification_evidence profile_verification_evidence_check_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
++--
++
++ALTER TABLE ONLY public.profile_verification_evidence
++    ADD CONSTRAINT profile_verification_evidence_check_id_fkey FOREIGN KEY (check_id) REFERENCES public.profile_verification_checks(id) ON DELETE CASCADE;
++
++
++--
++-- Name: profile_verification_evidence profile_verification_evidence_evidence_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
++--
++
++ALTER TABLE ONLY public.profile_verification_evidence
++    ADD CONSTRAINT profile_verification_evidence_evidence_id_fkey FOREIGN KEY (evidence_id) REFERENCES public.trust_evidence(id) ON DELETE RESTRICT;
+ 
+ 
+ --
+@@ -4431,6 +4858,83 @@
+ 
+ 
+ --
++-- Name: profile_verification_checks passport_checks_api_read; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_checks_api_read ON public.profile_verification_checks AS RESTRICTIVE FOR SELECT TO authenticated USING ((NOT passport_claim));
++
++
++--
++-- Name: profile_verification_checks passport_checks_no_delete; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_checks_no_delete ON public.profile_verification_checks AS RESTRICTIVE FOR DELETE TO anon, authenticated USING (false);
++
++
++--
++-- Name: profile_verification_checks passport_checks_no_insert; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_checks_no_insert ON public.profile_verification_checks AS RESTRICTIVE FOR INSERT TO anon, authenticated WITH CHECK (false);
++
++
++--
++-- Name: profile_verification_checks passport_checks_no_update; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_checks_no_update ON public.profile_verification_checks AS RESTRICTIVE FOR UPDATE TO anon, authenticated USING (false) WITH CHECK (false);
++
++
++--
++-- Name: trust_evidence passport_evidence_no_delete; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_evidence_no_delete ON public.trust_evidence AS RESTRICTIVE FOR DELETE TO anon, authenticated USING (false);
++
++
++--
++-- Name: trust_evidence passport_evidence_no_insert; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_evidence_no_insert ON public.trust_evidence AS RESTRICTIVE FOR INSERT TO anon, authenticated WITH CHECK (false);
++
++
++--
++-- Name: trust_evidence passport_evidence_no_update; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_evidence_no_update ON public.trust_evidence AS RESTRICTIVE FOR UPDATE TO anon, authenticated USING (false) WITH CHECK (false);
++
++
++--
++-- Name: trust_evidence passport_evidence_owner_read; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_evidence_owner_read ON public.trust_evidence AS RESTRICTIVE FOR SELECT TO authenticated USING (((NOT passport_private) OR ((owner_id = ( SELECT auth.uid() AS uid)) AND (deleted_at IS NULL))));
++
++
++--
++-- Name: profile_verifications passport_header_no_delete; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_header_no_delete ON public.profile_verifications AS RESTRICTIVE FOR DELETE TO anon, authenticated USING (false);
++
++
++--
++-- Name: profile_verifications passport_header_no_insert; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_header_no_insert ON public.profile_verifications AS RESTRICTIVE FOR INSERT TO anon, authenticated WITH CHECK (false);
++
++
++--
++-- Name: profile_verifications passport_header_no_update; Type: POLICY; Schema: public; Owner: postgres
++--
++
++CREATE POLICY passport_header_no_update ON public.profile_verifications AS RESTRICTIVE FOR UPDATE TO anon, authenticated USING (false) WITH CHECK (false);
++
++
++--
+ -- Name: profile_evidence_files; Type: ROW SECURITY; Schema: public; Owner: postgres
+ --
+ 
+@@ -4455,6 +4959,12 @@
+ ALTER TABLE public.profile_verification_checks ENABLE ROW LEVEL SECURITY;
+ 
+ --
++-- Name: profile_verification_evidence; Type: ROW SECURITY; Schema: public; Owner: postgres
++--
++
++ALTER TABLE public.profile_verification_evidence ENABLE ROW LEVEL SECURITY;
++
++--
+ -- Name: profile_verifications; Type: ROW SECURITY; Schema: public; Owner: postgres
+ --
+ 
+@@ -4677,6 +5187,12 @@
+ 
+ CREATE POLICY "users can read own usage" ON public.usage_counters FOR SELECT USING ((auth.uid() = user_id));
+ 
++
++--
++-- Name: verification_audit_history; Type: ROW SECURITY; Schema: public; Owner: postgres
++--
++
++ALTER TABLE public.verification_audit_history ENABLE ROW LEVEL SECURITY;
+ 
+ --
+ -- Name: FUNCTION capture_matching_request_event(); Type: ACL; Schema: public; Owner: postgres
+@@ -4791,6 +5307,56 @@
+ 
+ 
+ --
++-- Name: FUNCTION passport_audit_immutable(); Type: ACL; Schema: public; Owner: postgres
++--
++
++REVOKE ALL ON FUNCTION public.passport_audit_immutable() FROM PUBLIC;
++
++
++--
++-- Name: FUNCTION passport_check_guard(); Type: ACL; Schema: public; Owner: postgres
++--
++
++REVOKE ALL ON FUNCTION public.passport_check_guard() FROM PUBLIC;
++
++
++--
++-- Name: FUNCTION passport_claim_is_current(p_check uuid); Type: ACL; Schema: public; Owner: postgres
++--
++
++REVOKE ALL ON FUNCTION public.passport_claim_is_current(p_check uuid) FROM PUBLIC;
++GRANT ALL ON FUNCTION public.passport_claim_is_current(p_check uuid) TO service_role;
++
++
++--
++-- Name: FUNCTION passport_evidence_guard(); Type: ACL; Schema: public; Owner: postgres
++--
++
++REVOKE ALL ON FUNCTION public.passport_evidence_guard() FROM PUBLIC;
++
++
++--
++-- Name: FUNCTION passport_evidence_tombstone(); Type: ACL; Schema: public; Owner: postgres
++--
++
++REVOKE ALL ON FUNCTION public.passport_evidence_tombstone() FROM PUBLIC;
++
++
++--
++-- Name: FUNCTION passport_link_guard(); Type: ACL; Schema: public; Owner: postgres
++--
++
++REVOKE ALL ON FUNCTION public.passport_link_guard() FROM PUBLIC;
++
++
++--
++-- Name: FUNCTION passport_no_sharing(); Type: ACL; Schema: public; Owner: postgres
++--
++
++REVOKE ALL ON FUNCTION public.passport_no_sharing() FROM PUBLIC;
++
++
++--
+ -- Name: FUNCTION queue_evidence_analysis(); Type: ACL; Schema: public; Owner: postgres
+ --
+ 
+@@ -5118,18 +5684,23 @@
+ -- Name: TABLE profile_verification_checks; Type: ACL; Schema: public; Owner: postgres
+ --
+ 
+-GRANT ALL ON TABLE public.profile_verification_checks TO anon;
+-GRANT ALL ON TABLE public.profile_verification_checks TO authenticated;
+-GRANT ALL ON TABLE public.profile_verification_checks TO service_role;
++GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,MAINTAIN,UPDATE ON TABLE public.profile_verification_checks TO service_role;
++GRANT SELECT ON TABLE public.profile_verification_checks TO authenticated;
++
++
++--
++-- Name: TABLE profile_verification_evidence; Type: ACL; Schema: public; Owner: postgres
++--
++
++GRANT SELECT,INSERT,DELETE ON TABLE public.profile_verification_evidence TO service_role;
+ 
+ 
+ --
+ -- Name: TABLE profile_verifications; Type: ACL; Schema: public; Owner: postgres
+ --
+ 
+-GRANT ALL ON TABLE public.profile_verifications TO anon;
+-GRANT ALL ON TABLE public.profile_verifications TO authenticated;
+-GRANT ALL ON TABLE public.profile_verifications TO service_role;
++GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,MAINTAIN,UPDATE ON TABLE public.profile_verifications TO service_role;
++GRANT SELECT ON TABLE public.profile_verifications TO authenticated;
+ 
+ 
+ --
+@@ -5199,7 +5770,8 @@
+ -- Name: TABLE trust_evidence; Type: ACL; Schema: public; Owner: postgres
+ --
+ 
+-GRANT ALL ON TABLE public.trust_evidence TO service_role;
++GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,MAINTAIN,UPDATE ON TABLE public.trust_evidence TO service_role;
++GRANT SELECT ON TABLE public.trust_evidence TO authenticated;
+ 
+ 
+ --
+@@ -5248,8 +5820,15 @@
+ 
+ 
+ --
++-- Name: TABLE verification_audit_history; Type: ACL; Schema: public; Owner: postgres
++--
++
++GRANT SELECT ON TABLE public.verification_audit_history TO service_role;
++
++
++--
+ -- PostgreSQL database dump complete
+ --
+ 
+-\unrestrict qoHGSkfsGjJaaG4qbh8NPaCEdnx0n5oX6qL25nRJ5ETfKgc2bi4SvGuPvUNuHcJ
+-
++\unrestrict NGQhaikGiqz24LNl6fSS271QIemzkK7t6762e5SZ5Qgh7KDouXbfRpLmuGrVCS4
++

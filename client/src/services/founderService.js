@@ -2,7 +2,8 @@
 // ─── All Supabase calls for the early-stage founder role ────────────────────
 
 import { supabase } from '../lib/supabaseClient';
-import { attachMatchIntelligence } from './intelligentMatching';
+import { attachServerMatches } from './serverMatching';
+import { canMatchCofounders, founderIntent } from '../utils/founderIntent';
 
 const BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -49,7 +50,6 @@ const safeJson = (value, fallback = {}) => {
 };
 
 const REQUEST_CACHE_TTL = 30 * 1000;
-const PROFILE_CACHE_TTL = 60 * 1000;
 const requestCache = new Map();
 
 const cacheKey = (name, payload = {}) => `${name}:${JSON.stringify(payload)}`;
@@ -101,7 +101,7 @@ const parseFunding = (value) => {
 const lowerArray = (value) => safeArray(value).map((item) => String(item).toLowerCase());
 
 const scoreFounderTeamCandidate = (founderProfile = {}, candidate = {}) => {
-  let score = 20;
+  let score = 0;
   const reasons = [];
   const neededSkills = lowerArray(founderProfile.skills_needed);
   const hiringRoles = lowerArray(founderProfile.hiring_roles);
@@ -208,7 +208,7 @@ const scoreFounderInvestor = (founderProfile = {}, investor = {}) => {
 export async function fetchFounderProfile(userId) {
   if (!userId) throw new Error('userId is required');
 
-  return cachedRequest(cacheKey('founder-profile', { userId }), async () => {
+  // Editable profile reads must reflect the latest successful database writes.
     const [profRes, fpRes] = await Promise.all([
       supabase
         .from('profiles')
@@ -230,7 +230,6 @@ export async function fetchFounderProfile(userId) {
       profile: profRes.data || {},
       founderProfile: fpRes.data || {},
     };
-  }, PROFILE_CACHE_TTL);
 }
 
 export async function saveFounderBaseProfile(userId, data = {}) {
@@ -373,6 +372,8 @@ export async function saveFounderStartupProfile(userId, data = {}) {
     throw error;
   }
 
+  requestCache.clear();
+  window.dispatchEvent(new Event('profile:saved'));
   return payload;
 }
 
@@ -569,19 +570,9 @@ export async function fetchFounderDashboardData(userId) {
   let teamCandidates = [];
 
   try {
-    mentors = await fetchMentorsForFounder({
-      industry: founderProfile.industry || '',
-      expertise: safeArray(founderProfile.help_needed),
-      limit: 6,
-    });
-  } catch (e) {
-    console.warn('Founder dashboard mentors:', e.message);
-  }
-
-  try {
     investors = await fetchInvestors({
-      stage: founderProfile.funding_stage || founderProfile.startup_stage || '',
-      industry: founderProfile.industry || '',
+      stage: '',
+      industry: '',
       founderProfile,
       limit: 6,
     });
@@ -591,8 +582,8 @@ export async function fetchFounderDashboardData(userId) {
 
   try {
     teamCandidates = await fetchTeamCandidates({
-      skills: safeArray(founderProfile.skills_needed),
-      commitment: founderProfile.commitment_level || '',
+      skills: [],
+      commitment: '',
       excludeUserId: userId,
       founderProfile,
       limit: 6,
@@ -638,39 +629,6 @@ export async function fetchTeamCandidates({
   });
 
   return cachedRequest(key, async () => {
-  let studentsQuery = supabase
-    .from('student_profiles')
-    .select(`
-      id,
-      user_id,
-      skills_with_levels,
-      looking_for,
-      help_needed,
-      preferred_industries,
-      commitment_level,
-      preferred_role,
-      availability_status,
-      hours_per_week,
-      has_startup_idea,
-      startup_idea_description,
-      career_goals,
-      idea_title,
-      idea_domain,
-      idea_stage,
-      target_audience,
-      unique_value_prop,
-      profiles (
-        id,
-        full_name,
-        bio,
-        avatar_url,
-        location,
-        linkedin_url,
-        github_url
-      )
-    `)
-    .or('looking_for.cs.{"Co-Founder"},looking_for.cs.{"Startup"}');
-
   let foundersQuery = supabase
     .from('founder_profiles')
     .select(`
@@ -687,6 +645,7 @@ export async function fetchTeamCandidates({
       skills_needed,
       founder_skills,
       profile_completion,
+      metadata,
       profiles!founder_profiles_user_id_fkey (
         id,
         full_name,
@@ -697,37 +656,17 @@ export async function fetchTeamCandidates({
         github_url
       )
     `)
-    .contains('looking_for', ['Co-Founder']);
+    .eq('is_public', true)
+    .eq('is_active', true);
 
   if (excludeUserId) {
-    studentsQuery = studentsQuery.neq('user_id', excludeUserId);
     foundersQuery = foundersQuery.neq('user_id', excludeUserId);
   }
 
-  const [studentsRes, foundersRes] = await Promise.all([
-    studentsQuery.limit(limit),
-    foundersQuery.limit(limit),
-  ]);
-
-  if (studentsRes.error) throw studentsRes.error;
+  const foundersRes = await foundersQuery.order('updated_at', { ascending: false }).limit(150);
   if (foundersRes.error) throw foundersRes.error;
 
   let result = [
-    ...(studentsRes.data || []).map((student) => ({
-      ...student,
-      candidate_type: 'student',
-      name: student.profiles?.full_name,
-      avatar: student.profiles?.avatar_url,
-      bio: student.profiles?.bio || student.career_goals || student.startup_idea_description,
-      location: student.profiles?.location,
-      commitment: student.commitment_level,
-      preferred_role: student.preferred_role,
-      availability: student.availability_status,
-      has_idea: student.has_startup_idea,
-      skills: safeArray(student.skills_with_levels)
-        .map((item) => item?.skill || item)
-        .filter(Boolean),
-    })),
     ...(foundersRes.data || []).map((founder) => ({
       ...founder,
       candidate_type: 'founder',
@@ -738,15 +677,17 @@ export async function fetchTeamCandidates({
       commitment: founder.commitment_level,
       availability: founder.commitment_level,
       interests: [founder.industry].filter(Boolean),
-      has_idea: true,
+      has_idea: founderIntent(founder) === 'building',
       skills: safeArray(founder.founder_skills),
     })),
   ];
 
+  result = result.filter(candidate => canMatchCofounders(founderProfile, candidate));
+
   if (role) {
     const normalizedRole = String(role).toLowerCase();
     result = result.filter((candidate) => {
-      if (role === 'Co-Founder') return safeArray(candidate.looking_for).includes('Co-Founder');
+      if (role === 'Co-Founder') return true;
 
       const roleSignals = [
         candidate.preferred_role,
@@ -796,7 +737,7 @@ export async function fetchTeamCandidates({
     });
   }
 
-  return attachMatchIntelligence(
+  return (await attachServerMatches(
     result
     .map((candidate) => ({
       ...candidate,
@@ -804,7 +745,7 @@ export async function fetchTeamCandidates({
     })),
     founderProfile,
     'team'
-  )
+  ))
     .slice(0, limit);
   }, 45 * 1000);
 }
@@ -890,6 +831,7 @@ export async function fetchInvestors({
   limit = 20,
 } = {}) {
   const key = cacheKey('founder-investors', {
+    viewerId: founderProfile.user_id || '',
     stage,
     industry,
     limit,
@@ -904,6 +846,9 @@ export async function fetchInvestors({
     .select(`
       id,
       profile_id,
+      user_id,
+      metadata,
+      accepting_pitches,
       investor_type,
       fund_name,
       preferred_stages,
@@ -918,7 +863,7 @@ export async function fetchInvestors({
       is_verified,
       is_active,
       response_time,
-      profiles!investor_profiles_profile_id_fkey (
+      profiles!investor_profiles_user_id_fkey (
         id,
         full_name,
         bio,
@@ -929,7 +874,9 @@ export async function fetchInvestors({
       )
     `)
     .eq('is_active', true)
-    .limit(limit);
+    .eq('is_public', true)
+    .order('updated_at', { ascending: false })
+    .limit(150);
 
   if (stage) {
     query = query.contains('preferred_stages', [stage]);
@@ -942,7 +889,7 @@ export async function fetchInvestors({
   const { data, error } = await query;
 
   if (!error) {
-    return attachMatchIntelligence(
+    return (await attachServerMatches(
       (data || [])
       .map((investor) => ({
         ...investor,
@@ -950,30 +897,10 @@ export async function fetchInvestors({
       })),
       founderProfile,
       'founder-to-investor'
-    );
+    )).slice(0, limit);
   }
 
-  console.warn('Investor profile query unavailable, using profile fallback:', error.message);
-
-  const { data: profileRows, error: profilesError } = await supabase
-    .from('profiles')
-    .select('id, full_name, bio, avatar_url, location, linkedin_url, twitter_url, user_type')
-    .eq('user_type', 'investor')
-    .limit(limit);
-
-  if (profilesError) throw profilesError;
-
-  return (profileRows || []).map((profile) => ({
-    id: profile.id,
-    profile_id: profile.id,
-    user_id: profile.id,
-    investor_type: 'Investor',
-    is_active: true,
-    preferred_stages: [],
-    preferred_industries: [],
-    profiles: profile,
-    ...scoreFounderInvestor(founderProfile, {}),
-  }));
+  throw error;
   }, 45 * 1000);
 }
 
@@ -1094,15 +1021,15 @@ export function calcFounderCompletion(profile = {}, founderProfile = {}) {
   return Math.min(score, 100);
 }
 
-export function formatCheckSize(min, max) {
+export function formatCheckSize(min, max, currency = 'USD') {
   const fmt = (n) => {
     const value = Number(n);
 
     if (!Number.isFinite(value)) return 'Undisclosed';
 
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000000) return `${currency} ${(value / 1000000).toFixed(1)}M`;
 
-    return `$${(value / 1000).toFixed(0)}K`;
+    return `${currency} ${value.toLocaleString('en-US')}`;
   };
 
   if (!min && !max) return 'Undisclosed';

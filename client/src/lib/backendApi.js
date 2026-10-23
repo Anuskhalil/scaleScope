@@ -26,6 +26,14 @@ const readJson = async (res) => {
 };
 
 export const backendApi = {
+    evaluateMatches: async (candidateIds) => {
+        const res = await fetch(`${BASE}/api/matching/evaluate`, {
+            method: 'POST', headers: await getAuthHeaders(), body: JSON.stringify({ candidateIds }),
+        });
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.error || 'Matching unavailable');
+        return data.data || [];
+    },
     checkAccount: async (email) => {
         const res = await fetch(`${BASE}/api/auth/check-account`, {
             method: 'POST',
@@ -65,6 +73,13 @@ export const backendApi = {
             throw new Error('receiverId is required');
         }
 
+        const confirmed = await new Promise(resolve => {
+            const detail = { resolve, handled: false };
+            window.dispatchEvent(new CustomEvent('scalescope:confirm-request', { detail }));
+            if (!detail.handled) resolve(true);
+        });
+        if (!confirmed) throw new Error('Connection request cancelled. No request was sent.');
+
         const res = await fetch(`${BASE}/api/connections/request`, {
             method: 'POST',
             headers: await getAuthHeaders(),
@@ -78,9 +93,13 @@ export const backendApi = {
         const data = await readJson(res);
 
         if (!res.ok) {
+            if (data.code === 'USAGE_LIMIT_REACHED') {
+                window.dispatchEvent(new CustomEvent('scalescope:usage-limit', { detail: { message: data.error } }));
+            }
             throw new Error(data.error || `Connection request failed: ${res.status}`);
         }
 
+        window.dispatchEvent(new Event('scalescope:request-sent'));
         return data;
     },
 
@@ -401,11 +420,11 @@ export const backendApi = {
         return data.data || data;
     },
 
-    createBillingCheckout: async (planCode) => {
+    createBillingCheckout: async (planCode, interval = 'monthly') => {
         const res = await fetch(`${BASE}/api/billing/checkout`, {
             method: 'POST',
             headers: await getAuthHeaders(),
-            body: JSON.stringify({ planCode }),
+            body: JSON.stringify({ planCode, interval }),
         });
 
         const data = await readJson(res);

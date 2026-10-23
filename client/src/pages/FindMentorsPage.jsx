@@ -27,8 +27,8 @@ import toast from 'react-hot-toast';
 
 // 🔧 CHANGED: Added CSS for tooltips, focus states, and better loading
 const STYLES = `
-  .ss  { font-family:'Syne',sans-serif; }
-  .dm  { font-family:'DM Sans',sans-serif; }
+  .ss  { font-family:var(--font-heading); }
+  .dm  { font-family:var(--font-sans); }
   .lift { transition: transform .22s cubic-bezier(.22,.68,0,1.2), box-shadow .22s ease; will-change: transform; contain: content; }
   .lift:hover { transform: translateY(-3px); box-shadow: 0 16px 44px rgba(15,23,42,.09); }
   .g-ai { background: linear-gradient(135deg,#4f46e5,#7c3aed); }
@@ -45,7 +45,7 @@ const STYLES = `
   @keyframes si { from{opacity:0;transform:translateX(28px)} to{opacity:1;transform:none} }
   .tab-bar { border-bottom:2px solid #e2e8f0; display:flex; overflow-x:auto; scroll-behavior: smooth; }
   .tab-bar::-webkit-scrollbar { display:none; }
-  .tab { padding:10px 16px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .14s; white-space:nowrap; font-family:'DM Sans',sans-serif; }
+  .tab { padding:10px 16px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .14s; white-space:nowrap; font-family:var(--font-sans); }
   .tab.on { color:#4f46e5; border-bottom-color:#4f46e5; }
   .tab:active { transform: scale(.98); }
   .exp-wrap { position:relative; padding-left:22px; }
@@ -55,7 +55,7 @@ const STYLES = `
   .f0{animation:fu .32s ease both} .f1{animation:fu .32s .06s ease both} .f2{animation:fu .32s .12s ease both} .f3{animation:fu .32s .18s ease both} .f4{animation:fu .32s .24s ease both}
   @keyframes mp { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
   .modal-pop { animation:mp .22s cubic-bezier(.34,1.4,.64,1) both; }
-  .inp { width:100%; padding:10px 14px; border:1.5px solid #e2e8f0; border-radius:12px; font-size:13px; outline:none; font-family:'DM Sans',sans-serif; transition:border-color .14s; background:#fff; }
+  .inp { width:100%; padding:10px 14px; border:1.5px solid #e2e8f0; border-radius:12px; font-size:13px; outline:none; font-family:var(--font-sans); transition:border-color .14s; background:#fff; }
   .inp:focus { border-color:#6366f1; box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
   .thin::-webkit-scrollbar { width:4px; }
   .thin::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:4px; }

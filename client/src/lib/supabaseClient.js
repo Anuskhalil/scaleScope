@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { authCallbackFlow } from './authCallbackFlow';
 
 export const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, {
   auth: {
@@ -7,6 +8,6 @@ export const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.m
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'pkce',
+    flowType: authCallbackFlow(typeof window !== 'undefined' ? window.location : undefined),
   },
 });

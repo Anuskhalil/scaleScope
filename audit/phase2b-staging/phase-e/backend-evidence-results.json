@@ -1,0 +1,80 @@
+{
+  "status": "PASS",
+  "runId": "f6745f23-709b-48ce-aca4-f71f08261b3e",
+  "checks": [
+    {
+      "test": "Isolated staging backend target confirmed",
+      "status": "PASS"
+    },
+    {
+      "test": "founder identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "investor identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "Anonymous backend access denied",
+      "status": "PASS"
+    },
+    {
+      "test": "Ordinary investor cannot access reviewer queue",
+      "status": "PASS"
+    },
+    {
+      "test": "Fake PNG rejected by backend signature check",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner uploads synthetic evidence through backend",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner downloads exact original bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "Download privacy headers present",
+      "status": "PASS"
+    },
+    {
+      "test": "Connected investor cannot read unshared evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner list omits internal storage path and hash",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner explicitly shares legacy evidence with connected investor",
+      "status": "PASS"
+    },
+    {
+      "test": "Granted investor downloads exact bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "Recipient cannot delete owner evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner revokes sharing",
+      "status": "PASS"
+    },
+    {
+      "test": "Revoked recipient loses download access",
+      "status": "PASS"
+    }
+  ],
+  "cleanupSuccessful": true,
+  "fixtureIds": [
+    "53f259d0-0a24-4f0e-89cd-8d29a1455b92"
+  ],
+  "remaining": [
+    "Authorized reviewer HTTP access",
+    "Passport-private evidence HTTP restrictions",
+    "Other bucket comparison"
+  ],
+  "note": "Synthetic evidence may leave review/audit history. No account admission decision is changed by this runner."
+}

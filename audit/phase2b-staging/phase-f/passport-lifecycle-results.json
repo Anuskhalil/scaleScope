@@ -1,0 +1,194 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "test": "Synthetic reviewer opt-in configured",
+      "status": "PASS"
+    },
+    {
+      "test": "Isolated staging target confirmed",
+      "status": "PASS"
+    },
+    {
+      "test": "founder identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "investor identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "reviewer identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "Authorized reviewer can open review queue",
+      "status": "PASS"
+    },
+    {
+      "test": "Ordinary investor cannot open review queue",
+      "status": "PASS"
+    },
+    {
+      "test": "Founder safe-summary endpoint available",
+      "status": "PASS"
+    },
+    {
+      "test": "No existing live startup claim will be superseded",
+      "status": "PASS"
+    },
+    {
+      "test": "Synthetic private file uploaded",
+      "status": "PASS"
+    },
+    {
+      "test": "Private evidence fixture inserted",
+      "status": "PASS"
+    },
+    {
+      "test": "founder can download private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "reviewer can download private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Connected investor cannot download private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Anonymous private download denied",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner cannot share Passport-private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Denied sharing created no grant",
+      "status": "PASS"
+    },
+    {
+      "test": "Legacy deletion cannot remove Passport-private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Denied deletion preserved private bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "Anonymous claim submission denied",
+      "status": "PASS"
+    },
+    {
+      "test": "Forged claimant rejected",
+      "status": "PASS"
+    },
+    {
+      "test": "Missing consent rejected",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner submits claim through atomic backend RPC",
+      "status": "PASS"
+    },
+    {
+      "test": "founder sees hash-bound private review context",
+      "status": "PASS"
+    },
+    {
+      "test": "Context omits storage path and provenance hashes for founder",
+      "status": "PASS"
+    },
+    {
+      "test": "reviewer sees hash-bound private review context",
+      "status": "PASS"
+    },
+    {
+      "test": "Context omits storage path and provenance hashes for reviewer",
+      "status": "PASS"
+    },
+    {
+      "test": "Unrelated investor cannot read private claim context",
+      "status": "PASS"
+    },
+    {
+      "test": "Same request retry does not create a new version",
+      "status": "PASS"
+    },
+    {
+      "test": "Pending claim is absent from supported summary",
+      "status": "PASS"
+    },
+    {
+      "test": "Ordinary investor cannot review claim",
+      "status": "PASS"
+    },
+    {
+      "test": "Reviewer cannot skip in-review state",
+      "status": "PASS"
+    },
+    {
+      "test": "Authorized reviewer starts review",
+      "status": "PASS"
+    },
+    {
+      "test": "Stale decision version rejected",
+      "status": "PASS"
+    },
+    {
+      "test": "Reviewer supports synthetic claim",
+      "status": "PASS"
+    },
+    {
+      "test": "Repeated decision cannot overwrite prior review",
+      "status": "PASS"
+    },
+    {
+      "test": "Supported claim appears in owner summary",
+      "status": "PASS"
+    },
+    {
+      "test": "Summary exposes only safe allowlisted fields; public badges stay disabled",
+      "status": "PASS"
+    },
+    {
+      "test": "Synthetic evidence tombstoned",
+      "status": "PASS"
+    },
+    {
+      "test": "Tombstone removes supported claim from summary",
+      "status": "PASS"
+    },
+    {
+      "test": "Linked claim becomes stale",
+      "status": "PASS"
+    },
+    {
+      "test": "Lifecycle transitions and evidence link retained in audit",
+      "status": "PASS"
+    },
+    {
+      "test": "founder cannot download tombstoned evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "reviewer cannot download tombstoned evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "investor cannot download tombstoned evidence",
+      "status": "PASS"
+    }
+  ],
+  "cleanupSuccessful": true,
+  "evidenceId": "7a5b5433-a219-4e23-9dc9-9062ee1a1b52",
+  "claimId": "d335a716-dbf2-4b65-a512-9e160a2e960f",
+  "objectPath": "founders/42fce0f8-b0d3-41a9-b246-2d4a5def266e/phase-e-passport/7a5b5433-a219-4e23-9dc9-9062ee1a1b52.png",
+  "retainedSyntheticTombstone": true,
+  "remaining": [
+    "Complete Phase F regression and review-context validation"
+  ],
+  "note": "Synthetic claim decision/audit retained. Evidence file removed; account admission may return to pending. No migration or production change."
+}

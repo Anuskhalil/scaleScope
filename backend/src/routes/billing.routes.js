@@ -80,6 +80,7 @@ router.post('/checkout', async (req, res, next) => {
     const checkout = await createCheckout({
       userId: req.user.id,
       planCode: req.body?.planCode,
+      interval: req.body?.interval || 'monthly',
     });
 
     res.json({

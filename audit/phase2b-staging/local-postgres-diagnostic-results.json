@@ -1,0 +1,95 @@
+{
+  "status": "PASS",
+  "source_sha256": "0dde75ab93f06194b5952e1926b8d1a3d7767d1e44968eccd8f1b322e028271d",
+  "environment": "Disposable network-disabled PostgreSQL 17.6 with six supplied event triggers; no ports published",
+  "limitations": [
+    "Auth and Storage are minimal local stubs, not managed Supabase internals.",
+    "Supabase Vault extension guard omitted locally; retained in delivered SQL.",
+    "postgres is a local superuser, so hosted ownership permissions are not reproduced.",
+    "No hosted SQL Editor query rewriting, API, RLS behavior or provider integration tested."
+  ],
+  "logs": [
+    {
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-d",
+        "--name",
+        "scalescope-baseline-test-d7ff82ea36",
+        "--network",
+        "none",
+        "-e",
+        "POSTGRES_HOST_AUTH_METHOD=trust",
+        "postgres:17.6",
+        "-c",
+        "wal_level=logical"
+      ],
+      "exit_code": 0,
+      "stdout": "6e1121d6c5ac4a3ac55c138ba4bafaad0510d527e3086593f3704f57d75934ed\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-baseline-test-d7ff82ea36",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "exit_code": 0,
+      "stdout": "CREATE ROLE\nCREATE ROLE\nCREATE ROLE\nCREATE SCHEMA\nCREATE SCHEMA\nCREATE SCHEMA\nCREATE EXTENSION\nCREATE EXTENSION\nCREATE EXTENSION\nCREATE TABLE\nCREATE FUNCTION\nCREATE FUNCTION\nCREATE FUNCTION\nCREATE TABLE\nCREATE TABLE\nCREATE FUNCTION\nCREATE PUBLICATION\nCREATE FUNCTION\nCREATE EVENT TRIGGER\nCREATE FUNCTION\nCREATE EVENT TRIGGER\nCREATE FUNCTION\nCREATE EVENT TRIGGER\nCREATE FUNCTION\nCREATE EVENT TRIGGER\nCREATE FUNCTION\nCREATE EVENT TRIGGER\nCREATE FUNCTION\nCREATE EVENT TRIGGER\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-baseline-test-d7ff82ea36",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1"
+      ],
+      "exit_code": 0,
+      "stdout": "BEGIN\nDO\nROLLBACK\n               column1               \n-------------------------------------\n BASELINE_REHEARSAL_PASS_ROLLED_BACK\n(1 row)\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "exec",
+        "-i",
+        "scalescope-baseline-test-d7ff82ea36",
+        "psql",
+        "-X",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At"
+      ],
+      "exit_code": 0,
+      "stdout": "0\n0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "docker",
+        "stop",
+        "scalescope-baseline-test-d7ff82ea36"
+      ],
+      "exit_code": 0,
+      "stdout": "scalescope-baseline-test-d7ff82ea36\n",
+      "stderr": ""
+    }
+  ]
+}

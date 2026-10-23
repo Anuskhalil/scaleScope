@@ -24,7 +24,15 @@ const allowedOriginPatterns = [
 function isOriginAllowed(origin) {
   if (!origin) return true;
 
+  if (process.env.SCALESCOPE_STAGING === 'true') {
+    return ['http://localhost:5174', 'http://127.0.0.1:5174'].includes(origin.replace(/\/$/, ''));
+  }
+
   const cleanOrigin = origin.replace(/\/$/, '');
+
+  if (process.env.NODE_ENV === 'production') {
+    return envOrigins.filter(Boolean).map(value => value.trim().replace(/\/$/, '')).includes(cleanOrigin);
+  }
 
   return (
     uniqueAllowedOrigins.includes(cleanOrigin) ||
@@ -42,7 +50,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Evidence-Metadata'],
+  exposedHeaders: ['Content-Disposition'],
 };
 
 module.exports = {

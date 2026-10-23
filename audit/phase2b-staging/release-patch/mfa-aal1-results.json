@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "route": "/api/trust/review-queue",
+      "status": 403
+    },
+    {
+      "route": "/api/profile-review/queue",
+      "status": 403
+    },
+    {
+      "check": "AAL1 owner workspace available; reviewer queue hidden",
+      "pass": true
+    }
+  ],
+  "remaining": "Actual AAL2 browser access test"
+}

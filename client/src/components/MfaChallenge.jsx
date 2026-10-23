@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../auth/AuthContext';
 import { markAuthActivity } from '../auth/authActivity';
 
-export default function MfaChallenge() {
+export default function MfaChallenge({returnTo}) {
     const navigate = useNavigate();
     const location = useLocation();
     const { refreshMfaLevel, signOut } = useAuth();
@@ -17,7 +17,7 @@ export default function MfaChallenge() {
     const [verifying, setVerifying] = useState(false);
     const [error, setError] = useState('');
 
-    const redirectTo = location.state?.from || '/dashboard';
+    const redirectTo = returnTo || location.state?.from || '/dashboard';
 
     useEffect(() => {
         let cancelled = false;
@@ -127,7 +127,7 @@ export default function MfaChallenge() {
                             inputMode="numeric"
                             autoFocus
                             placeholder="123456"
-                            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-center text-xl font-black tracking-[0.35em] outline-none focus:border-[#98DE38]"
+                            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-center text-xl font-black font-mono tracking-normal outline-none focus:border-[#98DE38]"
                         />
 
                         {error && (

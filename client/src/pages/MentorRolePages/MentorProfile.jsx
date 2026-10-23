@@ -46,21 +46,21 @@ import { getAvatarStoragePath, getSignedAvatarUrl } from '../../utils/avatarStor
 
 const STYLES = `
   :root { --primary: #98DE38; --primary-dark: #7EC42E; --secondary: #1B2D7F; --secondary-light: #2A3F8F; --white: #fff; --gray-50: #F9FAFB; --gray-100: #F3F4F6; --gray-200: #E5E7EB; }
-  .ss { font-family: 'Syne', sans-serif; }
-  .dm { font-family: 'DM Sans', sans-serif; }
+  .ss { font-family: var(--font-heading); }
+  .dm { font-family: var(--font-sans); }
   .lift { transition: transform .2s cubic-bezier(.22,.68,0,1.2), box-shadow .2s ease; }
   .lift:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(27,45,127,.12); }
   .g-brand { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
   .g-sec { background: linear-gradient(135deg, var(--secondary), var(--secondary-light)); }
   .prog { background: linear-gradient(90deg, var(--primary), var(--primary-dark)); transition: width .4s ease; }
-  .inp { width: 100%; padding: 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; transition: border-color .15s; font-family: 'DM Sans', sans-serif; }
+  .inp { width: 100%; padding: 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; transition: border-color .15s; font-family: var(--font-sans); }
   .inp:focus { border-color: var(--primary); background: var(--white); }
   .inp:disabled { opacity: .55; cursor: not-allowed; }
-  .sel { width: 100%; padding: 10px 36px 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; appearance: none; transition: border-color .15s; font-family: 'DM Sans', sans-serif; }
+  .sel { width: 100%; padding: 10px 36px 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; appearance: none; transition: border-color .15s; font-family: var(--font-sans); }
   .sel:focus { border-color: var(--primary); background: var(--white); }
-  .ta { width: 100%; padding: 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; resize: none; transition: border-color .15s; font-family: 'DM Sans', sans-serif; }
+  .ta { width: 100%; padding: 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; resize: none; transition: border-color .15s; font-family: var(--font-sans); }
   .ta:focus { border-color: var(--primary); background: var(--white); }
-  .sec-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--secondary); display: flex; align-items: center; gap: 6px; margin-bottom: 16px; }
+  .sec-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0; color: var(--secondary); display: flex; align-items: center; gap: 6px; margin-bottom: 16px; }
   .fade-in { animation: fi .3s ease both; }
   @keyframes fi { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
   button:focus-visible, .inp:focus-visible, .sel:focus-visible, .ta:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

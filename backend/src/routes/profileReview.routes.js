@@ -1,0 +1,14 @@
+const express=require('express');
+const auth=require('../middlewares/auth.middleware');
+const {isReviewAdmin}=require('../services/adminAccess');
+const service=require('../services/profileReview.service');
+const router=express.Router();
+router.use(auth);
+router.use((req,res,next)=>{res.set('Cache-Control','no-store');next();});
+router.get('/me',async(req,res,next)=>{try{res.json({data:{review:await service.own(req.user.id),isAdmin:isReviewAdmin(req.user),aiEnabled:process.env.PROFILE_REVIEW_AI_ENABLED==='true'&&!!process.env.GEMINI_API_KEY}});}catch(e){next(e);}});
+router.use((req,res,next)=>isReviewAdmin(req.user)?next():res.status(403).json({error:'Authorized administrator with a verified email required'}));
+router.get('/queue',async(req,res,next)=>{try{res.json({data:await service.queue()});}catch(e){next(e);}});
+router.get('/profiles/:id',async(req,res,next)=>{try{res.json({data:await service.detail(req.params.id)});}catch(e){next(e);}});
+router.post('/profiles/:id/decision',async(req,res,next)=>{try{res.json({data:await service.decide(req.user.id,req.params.id,req.body)});}catch(e){next(e);}});
+router.use((err,req,res,next)=>{if(res.headersSent)return next(err);console.error('Profile review request failed:',err.code||err.status||'unknown');res.status(err.status||503).json({error:err.status?err.message:'Profile review is unavailable. Check the review migration and backend configuration.'});});
+module.exports=router;

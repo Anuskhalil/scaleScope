@@ -1,0 +1,83 @@
+{
+  "status": "PREPARED_NOT_EXECUTED",
+  "target": "sopklyxvzmungxwgboqs",
+  "production_version": "17.4",
+  "staging_version": "17.6",
+  "sources": [
+    {
+      "file": "Supabase Snippet Untitled query (12).csv",
+      "sha256": "7df132a75ecb556d9b11734dc15e670404757016d6cff7045b7eef84821480df"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (13).csv",
+      "sha256": "a3a731465d9dfacb73c00c23ca9c70ea4a0eb5ff784be43672045d80259cbad4"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (14).csv",
+      "sha256": "e4870241c4fd0bf1db4a33a068529c2c169fc7be51c6772b137eb0c916ceea60"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (15).csv",
+      "sha256": "33b0e3555be661e34204ea4253600a58b7c491ee976891b2ac2cccdd0684b58f"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (16).csv",
+      "sha256": "ba5b93999001a73f9c2dfc8ca832efd83ad7c62e1c453c305b33f31be9bfcaac"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (17).csv",
+      "sha256": "c928661f0aa1a698761af03f1642045c04134124da722c2ab916412c09b6cef6"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (18).csv",
+      "sha256": "36386ddb54dc25bf6edd1038cd42722acae7a0e3dd19a2c5d8812ed5b4c06dac"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (19).csv",
+      "sha256": "ea4d272d137dcf2178e02b25e478ff587d3c42605d8dfc2302e2a64724d142ee"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (20).csv",
+      "sha256": "5bd759c0e476f024aac9112ab233e328c12774fa51640e0448b645bae42f97c3"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (21).csv",
+      "sha256": "39441d48d2e9c18868f288b9645715e8a747b187f0a1cea7e6855ad0daf263c7"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (22).csv",
+      "sha256": "575ffb1fe015679da3f8e52f183c60481eb15387c3eb8589313a7d6770a2a5ae"
+    },
+    {
+      "file": "Supabase Snippet Untitled query (23).csv",
+      "sha256": "a7cdc30b562d23e9142c440800ead12ddf2a5916380eaeb3166b041d31807545"
+    },
+    {
+      "file": "production-dependencies.csv.csv",
+      "sha256": "d28f27ac21bdac47e0729df2aaa794f23037d926915188bfb2fec76b5b49baaf"
+    },
+    {
+      "file": "staging-dependencies.csv.csv",
+      "sha256": "ca09f8178508d0d5e86e5596ef4ecaba799dae1c7d53558b1ba22ca4c2aad4f5"
+    }
+  ],
+  "rehearsal_sha256": "bce700e710641254fb17f33c261dc8bbafcc9fa7c1ec2c370ebd04c2cb79a030",
+  "counts": {
+    "tables": 43,
+    "columns": 551,
+    "functions": 23,
+    "constraints": 204,
+    "standalone_indexes": 121,
+    "policies": 117,
+    "triggers": 21
+  },
+  "limits": [
+    "Rollback-only SQL; not an applied migration or completed Phase A.",
+    "Default ACLs, schema grants and managed platform objects are not overwritten; inspect parity separately.",
+    "Known unsafe legacy RPC grants reproduced only inside rollback transaction; no approved persistent baseline yet.",
+    "Function body creation is not a functional test; legacy broken references intentionally preserved.",
+    "Managed publication supabase_realtime_messages_publication exists only on production; not cloned.",
+    "No production records or Storage objects copied. Five bucket config rows only, rolled back.",
+    "Dashboard target identity requires manual URL check; SQL preflight independently refuses nonempty public schema."
+  ]
+}

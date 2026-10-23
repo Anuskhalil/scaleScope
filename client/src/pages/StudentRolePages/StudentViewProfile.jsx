@@ -142,15 +142,15 @@ function ChipGroup({ title, values = [], tone = 'blue' }) {
 function LinksSection({ profile, founder, student, mentor, investor }) {
   const links = [
     { label: 'LinkedIn', url: profile.linkedin_url },
-    { label: 'GitHub', url: profile.github_url },
-    { label: 'Twitter', url: profile.twitter_url },
+    { label: 'GitHub', url: investor ? null : profile.github_url },
+    { label: 'Twitter', url: investor ? null : profile.twitter_url },
     { label: 'Resume', url: student?.resume_url },
     { label: 'Portfolio', url: student?.portfolio_url || investor?.portfolio_url },
     { label: 'Website', url: founder?.website_url || investor?.website_url },
     { label: 'Pitch Deck', url: founder?.pitch_deck_url },
     { label: 'Pitch Video', url: founder?.pitch_video_url },
     { label: 'Demo', url: founder?.demo_url },
-    { label: 'Booking', url: mentor?.booking_url || investor?.booking_url },
+    { label: 'Booking', url: investor?.booking_url || mentor?.booking_url },
   ].filter((item) => hasText(item.url));
 
   if (!links.length) return null;
@@ -242,13 +242,37 @@ function StudentDetails({ student }) {
 
 function FounderDetails({ founder }) {
   if (!founder) return null;
+  const intent = founder.metadata?.founder_intent || 'building';
+  if (intent !== 'building') return (
+    <Section title="Founder Journey" icon={<Users className="w-5 text-[#1B2D7F]" />}>
+      <FieldGrid items={[
+        { label: 'Journey', value: intent === 'joining' ? 'Joining as a Co-Founder' : 'Exploring ideas', Icon: Users },
+        { label: 'Background', value: founder.metadata?.founder_background, Icon: GraduationCap },
+        { label: 'Relevant experience', value: founder.metadata?.relevant_experience, Icon: Briefcase },
+        { label: 'Skills', value: (founder.founder_skills || []).join(', '), Icon: Briefcase },
+        { label: 'Commitment', value: founder.commitment_level, Icon: Clock },
+        { label: 'Weekly availability', value: founder.weekly_hours, Icon: Clock },
+      ]} />
+    </Section>
+  );
 
   return (
     <>
+      <Section title={founder.founder_background === "professional" ? "Professional Background" : "Education"}>
+        <FieldGrid items={founder.founder_background === "professional" ? [
+          {label:"Current Role",value:founder.current_role,Icon:Briefcase},
+          {label:"Company / Organization",value:founder.current_company,Icon:Building2},
+          {label:"Relevant experience (years)",value:founder.relevant_experience_years,Icon:Clock},
+        ] : [
+          {label:"University / Institute",value:founder.university,Icon:GraduationCap},
+          {label:"Degree / Major",value:founder.degree,Icon:GraduationCap},
+        ]} />
+      </Section>
       <Section title="Founder Startup" icon={<Rocket className="w-5 text-[#1B2D7F]" />}>
         <FieldGrid
           items={[
             { label: 'Company Name', value: founder.company_name, Icon: Building2 },
+            { label: 'Founder Background', value: founder.founder_background, Icon: Users },
             { label: 'Idea Title', value: founder.idea_title, Icon: Lightbulb },
             { label: 'Industry', value: founder.industry, Icon: Target },
             { label: 'Startup Stage', value: founder.startup_stage || founder.company_stage, Icon: Clock },
@@ -268,12 +292,7 @@ function FounderDetails({ founder }) {
             { label: 'Solution', value: founder.solution_description, Icon: Lightbulb },
             { label: 'Unique Value', value: founder.unique_value_proposition, Icon: Star },
             { label: 'Target Market', value: founder.target_market || founder.target_audience, Icon: Users },
-            { label: 'Market Size', value: founder.market_size, Icon: Target },
-            { label: 'Competitors', value: founder.competitors, Icon: Building2 },
             { label: 'Revenue Model', value: founder.revenue_model, Icon: DollarSign },
-            { label: 'Business Model Details', value: founder.business_model_details, Icon: DollarSign },
-            { label: 'Go-To-Market Strategy', value: founder.go_to_market_strategy, Icon: Rocket },
-            { label: 'Current Challenges', value: founder.current_challenges, Icon: Shield },
           ]}
         />
       </Section>
@@ -286,20 +305,10 @@ function FounderDetails({ founder }) {
             { label: 'Commitment', value: founder.commitment_level, Icon: Clock },
             { label: 'Weekly Hours', value: founder.weekly_hours, Icon: Clock },
             { label: 'Validation Status', value: founder.validation_status, Icon: ShieldCheck },
-            { label: 'Customer Validation', value: founder.customer_validation, Icon: ShieldCheck },
-            { label: 'Traction Summary', value: founder.traction_summary, Icon: Star },
-            { label: 'Monthly Revenue', value: formatMoney(founder.monthly_revenue), Icon: DollarSign },
-            { label: 'Active Users', value: founder.active_users, Icon: Users },
-            { label: 'Customer Count', value: founder.customer_count, Icon: Users },
             { label: 'Funding Stage', value: founder.funding_stage, Icon: DollarSign },
-            { label: 'Funding Raised', value: formatMoney(founder.funding_raised), Icon: DollarSign },
-            { label: 'Ask Amount', value: founder.ask_amount, Icon: DollarSign },
-            { label: 'Use of Funds', value: founder.use_of_funds, Icon: DollarSign },
             { label: 'Investment Readiness', value: founder.investment_readiness, Icon: DollarSign },
             { label: 'Incubator / Accelerator', value: founder.incubator_or_accelerator, Icon: Rocket },
-            { label: 'Next 6 Month Milestones', value: founder.milestones_next_6_months, Icon: Target },
             { label: 'Co-Founder Status', value: founder.cofounder_status, Icon: Users },
-            { label: 'Equity Available', value: founder.equity_available, Icon: DollarSign },
             { label: 'Co-Founder Requirements', value: founder.cofounder_requirements, Icon: Users },
           ]}
         />
@@ -310,7 +319,6 @@ function FounderDetails({ founder }) {
           <ChipGroup title="Skills Needed" values={safeArray(founder.skills_needed)} />
           <ChipGroup title="Hiring Roles" values={safeArray(founder.hiring_roles)} />
           <ChipGroup title="Tech Stack" values={safeArray(founder.tech_stack)} />
-          <ChipGroup title="Key Risks" values={safeArray(founder.key_risks)} />
         </div>
       </Section>
     </>
@@ -375,7 +383,6 @@ function InvestorDetails({ investor }) {
             { label: 'Accepting Pitches', value: investor.accepting_pitches, Icon: MessageSquare },
             { label: 'Preferred Contact', value: investor.preferred_contact_method, Icon: MessageSquare },
             { label: 'Typical Involvement', value: investor.typical_involvement, Icon: Users },
-            { label: 'Verified', value: investor.is_verified, Icon: ShieldCheck },
             { label: 'Minimum Traction Required', value: investor.minimum_traction_required, Icon: Target },
             { label: 'Due Diligence Requirements', value: investor.due_diligence_requirements, Icon: Shield },
             { label: 'Investment Thesis', value: investor.what_i_look_for || investor.investment_thesis, Icon: Lightbulb },
@@ -417,11 +424,11 @@ export default function StudentViewProfile() {
         setState({ loading: true, error: null });
 
         const [profileRes, studentRes, founderRes, mentorRes, investorRes, connectionsRes] = await Promise.allSettled([
-          supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
-          supabase.from('student_profiles').select('*').eq('user_id', userId).maybeSingle(),
-          supabase.from('founder_profiles').select('*').eq('user_id', userId).maybeSingle(),
-          supabase.from('mentor_profiles').select('*').eq('user_id', userId).maybeSingle(),
-          supabase.from('investor_profiles').select('*').eq('user_id', userId).maybeSingle(),
+          supabase.from('profiles').select('id,full_name,user_type,bio,location,avatar_url,linkedin_url,github_url,twitter_url').eq('id', userId).is('deleted_at', null).maybeSingle(),
+          Promise.resolve({data: null}),
+          supabase.from('founder_profiles').select('founder_background:metadata->>founder_background, university:metadata->>university, degree:metadata->>degree, current_role:metadata->>current_role, current_company:metadata->>current_company, relevant_experience_years:metadata->>relevant_experience_years, user_id, product_status, company_name, idea_title, industry, startup_stage, company_stage, problem_statement, problem_solving, solution_description, unique_value_proposition, target_market, target_audience, revenue_model, startup_location, legal_status, launch_timeline, founding_year, team_size, founder_role, commitment_level, weekly_hours, validation_status, funding_stage, investment_readiness, incubator_or_accelerator, cofounder_status, cofounder_requirements, founder_skills, looking_for, skills_needed, pitch_deck_url, demo_url, website_url').eq('user_id', userId).eq('is_public', true).eq('is_active', true).maybeSingle(),
+          Promise.resolve({data: null}),
+          supabase.from('investor_profiles').select('user_id,investor_type,firm_name,fund_name,check_range_min,check_range_max,ticket_size_min,ticket_size_max,geography_focus,geographic_focus,total_investments,portfolio_count,exits,successful_exits,investment_frequency,lead_or_follow,response_time,accepting_pitches,preferred_contact_method,typical_involvement,minimum_traction_required,due_diligence_requirements,what_i_look_for,investment_thesis,notable_investments,preferred_stages,investment_stage,preferred_industries,industries_of_interest,preferred_business_models,website_url,portfolio_url,booking_url').eq('user_id', userId).eq('is_public', true).eq('is_active', true).maybeSingle(),
           backendApi.getMyConnections(),
         ]);
 
@@ -630,9 +637,9 @@ export default function StudentViewProfile() {
                 context="profile_view"
               />
             )}
-            <StudentDetails student={student} />
+            {profile.user_type === 'student' && <StudentDetails student={student} />}
             <FounderDetails founder={founder} />
-            <MentorDetails mentor={mentor} />
+
             <InvestorDetails investor={investor} />
             <LinksSection profile={profile} student={student} founder={founder} mentor={mentor} investor={investor} />
           </div>

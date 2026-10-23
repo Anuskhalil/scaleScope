@@ -16,13 +16,6 @@ const testimonials = [
     role: 'MVP stage',
     rating: 5,
   },
-  {
-    quote:
-      'For mentors, the value is clear: discover students who actually need your expertise instead of manually searching through profiles.',
-    author: 'Startup Mentor',
-    role: 'Product & validation',
-    rating: 5,
-  },
 ];
 
 export default function Testimonials() {

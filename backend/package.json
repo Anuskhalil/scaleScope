@@ -2,6 +2,8 @@
   "name": "backend",
   "version": "1.0.0",
   "scripts": {
+    "test": "node scripts/test-unit.cjs",
+    "start:staging": "node scripts/start-staging.cjs",
     "dev": "nodemon src/app.js",
     "start": "node src/app.js"
   },

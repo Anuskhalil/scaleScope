@@ -196,6 +196,7 @@ export function AuthProvider({ children }) {
 
         if (!mounted) return;
 
+        setAuthError(err.message || 'Authentication failed');
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -228,6 +229,7 @@ export function AuthProvider({ children }) {
       if (event === 'SIGNED_OUT') {
         clearAuthActivity();
       } else if (nextSession) {
+        setAuthError(null);
         markAuthActivity();
       }
 

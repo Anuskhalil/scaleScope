@@ -53,7 +53,9 @@ exports.setupSocket = (server) => {
     console.log(`🔌 Connected: ${socket.data.userId}`);
 
     socket.data.messageTimestamps = [];
-    onlineUsers.set(socket.data.userId, socket.id);
+    const connections = onlineUsers.get(socket.data.userId) || new Set();
+    connections.add(socket.id);
+    onlineUsers.set(socket.data.userId, connections);
     socket.join(`user:${socket.data.userId}`);
     io.emit('presence:update', {
       userId: socket.data.userId,
@@ -62,6 +64,8 @@ exports.setupSocket = (server) => {
 
     socket.on('join:conv', async (convId) => {
       if (!convId) return;
+      try { await require('../services/profileReview.service').assertApproved(socket.data.userId); }
+      catch { socket.emit('error',{message:'Your profile is under review. Messaging unlocks after approval.'}); return; }
 
       const { data: membership, error } = await supabase
         .from('conversation_participants')
@@ -78,13 +82,17 @@ exports.setupSocket = (server) => {
       socket.join(`conv:${convId}`);
     });
 
-    socket.on('msg:send', async ({ convId, content }) => {
+    socket.on('msg:send', async ({ convId, content } = {}, ack) => {
+      const reject = (message) => {
+        if (typeof ack === 'function') ack({ error: message });
+        else socket.emit('error', { message });
+      };
       const cleanContent = String(content || '').trim();
 
-      if (!cleanContent) return;
+      if (!cleanContent) return reject('Message content is required');
 
       if (cleanContent.length > 2000) {
-        socket.emit('error', { message: 'message content is too long' });
+        reject('message content is too long');
         return;
       }
 
@@ -93,7 +101,7 @@ exports.setupSocket = (server) => {
 
       if (bucket.length >= SOCKET_MESSAGE_MAX_PER_WINDOW) {
         socket.data.messageTimestamps = bucket;
-        socket.emit('error', { message: 'Too many messages. Please slow down.' });
+        reject('Too many messages. Please slow down.');
         return;
       }
 
@@ -103,12 +111,14 @@ exports.setupSocket = (server) => {
       try {
         const msg = await createMessage(convId, socket.data.userId, cleanContent);
 
+        if (typeof ack === 'function') ack({ data: msg });
+
         io.to(`conv:${convId}`).emit('msg:new', msg);
 
         const otherUserId = await getOtherParticipantId(convId, socket.data.userId);
         const receiverOnline = otherUserId ? onlineUsers.has(otherUserId) : false;
 
-        if (!receiverOnline) {
+        if (!receiverOnline && process.env.SCALESCOPE_STAGING !== 'true') {
           setTimeout(async () => {
             try {
               const stillOnline = otherUserId ? onlineUsers.has(otherUserId) : false;
@@ -132,11 +142,14 @@ exports.setupSocket = (server) => {
           }, AUTO_REPLY_DELAY_MS);
         }
       } catch (err) {
-        socket.emit('error', { message: err.message });
+        reject(err.message);
       }
     });
 
     socket.on('disconnect', () => {
+      const connections = onlineUsers.get(socket.data.userId);
+      connections?.delete(socket.id);
+      if (connections?.size) return;
       onlineUsers.delete(socket.data.userId);
       io.emit('presence:update', {
         userId: socket.data.userId,

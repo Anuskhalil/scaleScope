@@ -38,6 +38,7 @@ export default function RegisterPage() {
     user_type: ''
   });
   const [msg, setMsg] = useState(location.state?.error || '');
+  const [messageType, setMessageType] = useState('error');
   const [loading, setLoading] = useState(false);
 
   async function ensureProfile(userId, email) {
@@ -64,6 +65,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setMsg('');
+    setMessageType('error');
 
     if (form.password !== form.confirmPassword) {
       setMsg('Passwords do not match.');
@@ -71,7 +73,7 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!form.user_type) {
+    if (!['early-stage-founder', 'investor'].includes(form.user_type)) {
       setMsg('Please select how you are joining us.');
       setLoading(false);
       return;
@@ -113,6 +115,7 @@ export default function RegisterPage() {
       }
 
       if (!data.session || !data.user?.id) {
+        setMessageType('success');
         setMsg(
           'Account created. Please confirm your email first, then you will be taken to your dashboard.'
         );
@@ -139,9 +142,7 @@ export default function RegisterPage() {
   }
 
   const userTypes = [
-    { value: 'student', label: 'Student', description: 'Learning and building ideas' },
-    { value: 'early-stage-founder', label: 'Early-Stage Founder', description: 'Building a startup' },
-    { value: 'mentor', label: 'Mentor', description: 'Sharing expertise' },
+    { value: 'early-stage-founder', label: 'Early Founder', description: 'Building a startup as a student or professional' },
     { value: 'investor', label: 'Investor', description: 'Finding opportunities' },
   ];
 
@@ -312,17 +313,17 @@ export default function RegisterPage() {
 
             {/* Error/Success Message */}
             {msg && (
-              <div className={`flex items-center gap-2 p-3 rounded-xl ${msg.includes('Check your email') || msg.includes('Success')
-                ? 'bg-green-50 border border-green-200'
+              <div role={messageType === 'success' ? 'status' : 'alert'} className={`flex items-center gap-2 p-3 rounded-xl ${messageType === 'success'
+                ? 'bg-[#98DE38] border border-[#7EC42E]'
                 : 'bg-red-50 border border-red-200'
                 }`}>
-                {msg.includes('Check your email') || msg.includes('Success') ? (
-                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                {messageType === 'success' ? (
+                  <CheckCircle className="w-5 h-5 text-[#1B2D7F] flex-shrink-0" />
                 ) : (
                   <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
                 )}
-                <p className={`text-sm ${msg.includes('Check your email') || msg.includes('Success')
-                  ? 'text-green-700'
+                <p className={`text-sm ${messageType === 'success'
+                  ? 'text-[#1B2D7F]'
                   : 'text-red-700'
                   }`}>
                   {msg}

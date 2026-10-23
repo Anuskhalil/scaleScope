@@ -4,7 +4,7 @@
 
 import { supabase } from '../lib/supabaseClient';
 import { backendApi } from '../lib/backendApi';
-import { attachMatchIntelligence } from './intelligentMatching';
+import { attachServerMatches } from './serverMatching';
 import { uploadRoleAvatar } from '../utils/avatarStorage';
 
 // ── Re-export shared infrastructure ──────────────────────────────────────
@@ -65,7 +65,7 @@ export function calcInvestorCompletion(p, ip) {
   if ((p.bio        || '').trim().length > 30) s += 6;
   if  (p.avatar_url)                           s += 5;
   if  (p.location)                             s += 4;
-  if  (p.linkedin_url || ip.metadata?.investor_profile_url || ip.metadata?.investor_video_url) s += 3;
+  if  (p.linkedin_url || ip.website_url || ip.portfolio_url || ip.metadata?.investor_profile_url) s += 3;
   // Investment criteria (45)
   if  (ip.investor_type)                       s += 8;
   if  (ip.firm_name || ip.fund_name)           s += 7;
@@ -105,8 +105,8 @@ export function getInvestorProfileNudges(p, ip) {
 /**
  * Format ticket size range into readable label.
  */
-export function formatTicketSize(min, max) {
-  const fmt = n => n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(1)}M` : `$${(n / 1000).toFixed(0)}K`;
+export function formatTicketSize(min, max, currency = 'USD') {
+  const fmt = n => `${currency} ${Number(n).toLocaleString('en-US')}`;
   if (!min && !max) return 'Undisclosed';
   if (!min) return `Up to ${fmt(max)}`;
   if (!max) return `${fmt(min)}+`;
@@ -165,7 +165,7 @@ export async function saveInvestorDetails(userId, data) {
 
   const { error } = await supabase.from('investor_profiles').upsert({
     user_id:               userId,
-    profile_id:            data.profile_id || userId,
+    profile_id:            userId,
     investor_type:         data.investor_type         || null,
     firm_name:             data.firm_name || data.fund_name || null,
     investment_stage:      preferredStages,
@@ -189,7 +189,6 @@ export async function saveInvestorDetails(userId, data) {
     total_investments:     totalInvestments,
     exits,
     what_i_look_for:       data.what_i_look_for || data.investment_thesis || null,
-    is_verified:           Boolean(data.is_verified),
     response_time:         data.response_time || null,
     website_url:           data.website_url || null,
     booking_url:           null,
@@ -207,6 +206,7 @@ export async function saveInvestorDetails(userId, data) {
     updated_at:            new Date().toISOString(),
   }, { onConflict: 'user_id' });
   if (error) throw error;
+  window.dispatchEvent(new Event('profile:saved'));
 }
 
 /**
@@ -280,7 +280,7 @@ export async function fetchInvestorDashboard(userId) {
   // Suggested startups (founders matching investor's industry/stage)
   let startups = [];
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('founder_profiles')
       .select(`
         id, user_id, company_name, idea_title, industry,
@@ -289,7 +289,12 @@ export async function fetchInvestorDashboard(userId) {
         pitch_deck_url, demo_url,
         profiles ( id, full_name, bio, avatar_url, location )
       `)
-      .limit(8);
+      .eq('is_public', true)
+      .eq('is_active', true)
+      .neq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(150);
+    if (error) throw error;
     startups = data || [];
   } catch (e) { console.warn('startups:', e.message); }
 
@@ -325,43 +330,16 @@ export async function fetchInvestorDashboard(userId) {
 // FIND STARTUPS (investor browsing)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const normalizeStudentIdeaForInvestor = (row = {}) => ({
-  id: `student-${row.id}`,
-  source_id: row.id,
-  source_role: 'student',
-  source_label: 'Student Idea',
-  user_id: row.user_id,
-  company_name: row.idea_title || 'Student Startup Idea',
-  idea_title: row.idea_title || 'Student Startup Idea',
-  industry: row.idea_domain || '',
-  startup_stage: row.idea_stage || 'Idea',
-  company_stage: row.idea_stage || 'Idea',
-  funding_stage: '',
-  team_size: null,
-  problem_solving: row.startup_idea_description || '',
-  problem_statement: row.startup_idea_description || '',
-  unique_value_proposition: row.unique_value_prop || '',
-  target_market: row.target_audience || '',
-  target_audience: row.target_audience || '',
-  revenue_model: '',
-  looking_for: row.looking_for || [],
-  help_needed: row.help_needed || [],
-  pitch_deck_url: '',
-  demo_url: '',
-  website_url: '',
-  profile_completion: row.profile_completion || 0,
-  profiles: row.profiles || {},
-});
-
+/**
+ * Fetch startups from student and professional Early Founders.
+ */
 const normalizeFounderStartupForInvestor = (row = {}) => ({
   ...row,
   source_role: 'founder',
   source_label: 'Founder Startup',
+  founder_background: row.metadata?.founder_background || '',
 });
 
-/**
- * Fetch founder startups and student startup ideas for an investor to browse.
- */
 export async function fetchStartupsForInvestor({
   industry = '',
   stage    = '',
@@ -375,47 +353,26 @@ export async function fetchStartupsForInvestor({
       problem_solving, problem_statement, unique_value_proposition,
       target_market, revenue_model, looking_for, help_needed,
       pitch_deck_url, demo_url, website_url,
-      profile_completion, is_public, is_active,
+      profile_completion, is_public, is_active, metadata,
       profiles ( id, full_name, bio, avatar_url, location )
     `)
     .eq('is_public', true)
     .eq('is_active', true)
     .limit(limit);
 
-  let studentQuery = supabase
-    .from('student_profiles')
-    .select(`
-      id, user_id, university, degree, major,
-      has_startup_idea, startup_idea_description,
-      idea_title, idea_domain, idea_stage, target_audience, unique_value_prop,
-      looking_for, help_needed, skills_with_levels, commitment_level,
-      profile_completion,
-      profiles ( id, full_name, bio, avatar_url, location )
-    `)
-    .eq('has_startup_idea', true)
-    .limit(limit);
-
   if (industry) {
     founderQuery = founderQuery.eq('industry', industry);
-    studentQuery = studentQuery.eq('idea_domain', industry);
   }
 
   if (stage) {
     founderQuery = founderQuery.or(`startup_stage.eq.${stage},company_stage.eq.${stage},funding_stage.eq.${stage}`);
-    studentQuery = studentQuery.eq('idea_stage', stage);
   }
 
-  const [founderRes, studentRes] = await Promise.all([founderQuery, studentQuery]);
-
+  const founderRes = await founderQuery;
   if (founderRes.error) throw founderRes.error;
-  if (studentRes.error) throw studentRes.error;
-
-  const founders = (founderRes.data || []).map(normalizeFounderStartupForInvestor);
-  const studentIdeas = (studentRes.data || [])
-    .filter((row) => row.idea_title || row.startup_idea_description)
-    .map(normalizeStudentIdeaForInvestor);
-
-  return [...founders, ...studentIdeas];
+  return (founderRes.data || [])
+    .filter(row => !row.metadata?.founder_intent || row.metadata.founder_intent === 'building')
+    .map(normalizeFounderStartupForInvestor);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -426,40 +383,6 @@ export async function fetchStartupsForInvestor({
  * Score startups against an investor's thesis and criteria.
  * Returns startups sorted by relevance with _score and _matchReason.
  */
-export function rankStartupsForInvestor(startups, investorProfile) {
-  const ip         = investorProfile || {};
-  const industries = (ip.preferred_industries || ip.industries_of_interest || []).map(s => s.toLowerCase());
-  const stages     = (ip.preferred_stages || ip.investment_stage || []).map(s => s.toLowerCase());
-
-  const scored = startups.map(f => {
-    let score   = 0;
-    const reasons = [];
-    const fInd  = (f.industry    || '').toLowerCase();
-    const fStage= (f.funding_stage || f.startup_stage || f.company_stage || '').toLowerCase();
-
-    // Industry match
-    if (fInd && industries.some(i => i.includes(fInd) || fInd.includes(i))) {
-      score += 45;
-      reasons.push(`${f.industry} matches your focus`);
-    }
-    // Stage match
-    if (fStage && stages.some(s => s.includes(fStage) || fStage.includes(s))) {
-      score += 35;
-      reasons.push(`${f.funding_stage || f.startup_stage || 'Stage'} aligns`);
-    }
-    // Has pitch deck (investor-ready signal)
-    if (f.pitch_deck_url) { score += 10; }
-    // Has a defined problem statement
-    if (f.problem_solving || f.problem_statement) score += 10;
-    // Student ideas may not have fundraising assets yet, but a completed idea profile is still useful deal-flow.
-    if (f.source_role === 'student' && Number(f.profile_completion || 0) >= 60) score += 10;
-
-    return {
-      ...f,
-      _score:       Math.min(score, 100),
-      _matchReason: reasons[0] || 'Matches your portfolio focus',
-    };
-  });
-
-  return attachMatchIntelligence(scored, ip, 'investor-to-startup');
+export async function rankStartupsForInvestor(startups) {
+  return attachServerMatches(startups);
 }

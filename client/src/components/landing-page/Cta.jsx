@@ -15,7 +15,7 @@ export default function CTA() {
         </div>
 
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white mb-6">
-          Ready to discover your next co-founder, mentor, or opportunity?
+          Ready to discover your next co-founder, investor, or opportunity?
         </h2>
 
         <p className="text-lg sm:text-xl text-white/75 mb-10 max-w-2xl mx-auto">

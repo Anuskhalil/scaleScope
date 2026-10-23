@@ -11,6 +11,7 @@ import {
 } from '../../services/investorService';
 import { backendApi } from '../../lib/backendApi';
 import IntelligentMatchPanel from '../../components/IntelligentMatchPanel';
+import ProfileAvatar from '../../components/ProfileAvatar';
 import {
   DISCOVERY_INDUSTRIES,
   DISCOVERY_LOCATIONS,
@@ -65,10 +66,6 @@ const CSS = `
   .tooltip-box::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--secondary); }
 `;
 
-const initials = (name) => {
-  if (!name) return '?';
-  return name.split(' ').map((word) => word[0]).join('').slice(0, 2).toUpperCase();
-};
 
 const getScore = (item) => Number(item?._score || item?.matchScore || item?.score || 0);
 const profileOf = (item) => item?.profiles || item?.profile || {};
@@ -78,16 +75,16 @@ function StartupCard({ startup, investorProfile, expressState, connectionStatus,
   const name = startup.company_name || startup.idea_title || 'Unnamed Startup';
   const stage = startup.funding_stage || startup.startup_stage || startup.company_stage || '';
   const score = getScore(startup);
-  const reason = startup._matchReason || 'Matches your investment focus';
+  const reason = startup._matchReason || 'Not enough matching information. Review saved profile details.';
   const summary = startup.problem_solving || startup.problem_statement || startup.unique_value_proposition || p.bio || '';
   const sourceLabel = startup.source_label || (startup.source_role === 'student' ? 'Student Idea' : 'Founder Startup');
-  const ownerLabel = startup.source_role === 'student' ? 'Student Founder' : 'Founder';
+  const ownerLabel = startup.founder_background === 'student' ? 'Student Founder' : 'Early Founder';
 
   return (
     <article className="bg-white rounded-2xl p-5 border border-gray-100 lift">
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="hidden sm:block w-1 rounded-full self-stretch g-brand" aria-hidden="true" />
-        <div className="w-14 h-14 rounded-xl g-sec flex items-center justify-center text-white font-bold flex-shrink-0">{initials(name)}</div>
+        <ProfileAvatar value={p.avatar_url} name={p.full_name || name} className="w-14 h-14 rounded-xl g-sec text-white font-bold" />
         <div className="flex-1 min-w-0">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
             <div>
@@ -193,7 +190,7 @@ export default function FindStartupsPage() {
       ]);
       const investorProfile = profile || profileData.investorProfile;
       if (!profile) setProfile(investorProfile);
-      setStartups(rankStartupsForInvestor(rows, investorProfile));
+      setStartups(await rankStartupsForInvestor(rows, investorProfile));
       const myConnections = await backendApi.getMyConnections().catch((err) => {
         console.warn('Investor startup connection status load failed:', err);
         return { data: [] };
@@ -237,7 +234,7 @@ export default function FindStartupsPage() {
         (!filters.industry || String(startup.industry || '').toLowerCase().includes(filters.industry.toLowerCase())) &&
         (!filters.stage || stage.toLowerCase() === filters.stage.toLowerCase()) &&
         (!filters.location || String(p.location || startup.startup_location || '').toLowerCase().includes(filters.location.toLowerCase())) &&
-        (!filters.source || startup.source_role === filters.source) &&
+        (!filters.source || startup.founder_background === filters.source) &&
         (filters.matchBand === 'all' || (filters.matchBand === '60plus' && score >= 60) || (filters.matchBand === 'below60' && score < 60))
       );
     }).sort((a, b) => getScore(b) - getScore(a));
@@ -315,7 +312,7 @@ export default function FindStartupsPage() {
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mt-3">
               <div>
                 <h1 className="text-3xl sm:text-4xl font-black text-gray-900">Startup Deal Flow</h1>
-                <p className="text-gray-500 text-sm max-w-xl mt-2">Discover founder startups and student startup ideas. Match quality is based on your preferred stages, industries, and thesis.</p>
+                <p className="text-gray-500 text-sm max-w-xl mt-2">Discover startups from student and professional early founders. Match quality is based on your preferred stages, industries, and thesis.</p>
               </div>
               <Link to="/investor/profile" className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:bg-gray-50">Improve Matching <ArrowRight className="w-4" /></Link>
             </div>
@@ -330,7 +327,7 @@ export default function FindStartupsPage() {
           <section className="bg-white border border-gray-200 rounded-2xl p-4 mb-6">
             <div className="flex items-center gap-2">
               <Search className="w-5 text-gray-400" />
-              <input type="text" value={filters.query} onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))} placeholder="Search by startup, student idea, founder, industry, problem..." className="flex-1 outline-none text-sm" />
+              <input type="text" value={filters.query} onChange={(event) => setFilters((prev) => ({ ...prev, query: event.target.value }))} placeholder="Search by startup, founder, industry, problem..." className="flex-1 outline-none text-sm" />
               {filters.query && <button type="button" onClick={() => setFilters((prev) => ({ ...prev, query: '' }))} className="p-1 hover:bg-gray-100 rounded" aria-label="Clear search"><X className="w-4 text-gray-400" /></button>}
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-6 gap-3 mt-4">
@@ -338,7 +335,7 @@ export default function FindStartupsPage() {
               <SelectFilter label="Industry" value={filters.industry} onChange={(value) => setFilters((prev) => ({ ...prev, industry: value }))}><option value="">All industries</option>{industryOptions.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
               <SelectFilter label="Stage" value={filters.stage} onChange={(value) => setFilters((prev) => ({ ...prev, stage: value }))}><option value="">All stages</option>{stageOptions.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
               <SelectFilter label="Location" value={filters.location} onChange={(value) => setFilters((prev) => ({ ...prev, location: value }))}><option value="">All locations</option>{locationOptions.map((item) => <option key={item} value={item}>{item}</option>)}</SelectFilter>
-              <SelectFilter label="Source" value={filters.source} onChange={(value) => setFilters((prev) => ({ ...prev, source: value }))}><option value="">Students & founders</option><option value="student">Student ideas</option><option value="founder">Founder startups</option></SelectFilter>
+              <SelectFilter label="Founder Background" value={filters.source} onChange={(value) => setFilters((prev) => ({ ...prev, source: value }))}><option value="">All founders</option><option value="student">Student</option><option value="professional">Professional</option></SelectFilter>
               <div className="flex items-end"><button type="button" onClick={resetFilters} className="w-full py-2 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2"><SlidersHorizontal className="w-4" />Reset</button></div>
             </div>
           </section>
@@ -375,7 +372,7 @@ export default function FindStartupsPage() {
 
           <aside className="mt-8 bg-white rounded-2xl p-5 border border-gray-100">
             <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2"><ShieldCheck className="w-4 text-[#1B2D7F]" />Matching tip</h3>
-            <p className="text-sm text-gray-600">Add preferred stages, industry focus, check range, and thesis to get better founder startup and student idea matches.</p>
+            <p className="text-sm text-gray-600">Add preferred stages, industry focus, check range, and thesis to get better startup matches.</p>
             <Link to="/investor/profile" className="inline-flex items-center gap-1 text-xs font-bold text-[#1B2D7F] mt-3 hover:underline">Edit Profile <ArrowRight className="w-3" /></Link>
           </aside>
         </div>

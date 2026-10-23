@@ -44,23 +44,23 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 md:h-20">
           {/* Logo */}
-          <div className="flex-shrink-0 flex items-center mt-3 md:mt-5 min-w-0">
+          <div className="flex-shrink-0 flex items-center min-w-0">
             <Link to="/" className="flex items-center gap-2 group min-w-0">
               <img
                 src={ScalScopeLogo}
                 alt="Scale Scope Logo"
-                className="h-auto w-40 sm:w-52 md:w-60 md:h-14 lg:h-16 object-cover"
+                className="w-36 sm:w-44 h-12 object-cover"
               />
             </Link>
           </div>
 
-          <div className="hidden md:flex items-center gap-7">
+          <div className="hidden xl:flex items-center gap-7">
             {navItems.map((item) => (
               item.to ? (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="text-sm font-semibold text-slate-600 hover:text-[#1B2D7F] transition-colors"
+                  className="whitespace-nowrap text-sm font-semibold text-slate-600 hover:text-[#1B2D7F] transition-colors"
                 >
                   {item.label}
                 </Link>
@@ -76,7 +76,7 @@ export default function Navbar() {
             ))}
           </div>
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden xl:flex items-center gap-3">
             <Link
               to="/login"
               className="px-4 py-2 text-sm font-bold text-slate-700 hover:text-[#1B2D7F] transition-colors"
@@ -96,7 +96,7 @@ export default function Navbar() {
           <button
             type="button"
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            className="md:hidden p-2 rounded-xl hover:bg-slate-100 transition-colors"
+            className="xl:hidden p-2 rounded-xl hover:bg-slate-100 transition-colors"
             aria-label="Toggle navigation menu"
             aria-expanded={mobileMenuOpen}
           >
@@ -110,7 +110,7 @@ export default function Navbar() {
       </div>
 
       {mobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-slate-100 shadow-xl">
+        <div className="xl:hidden max-h-[calc(100dvh-5rem)] overflow-y-auto bg-white border-t border-slate-100 shadow-xl">
           <div className="px-4 py-5 space-y-2">
             {navItems.map((item) => (
               item.to ? (

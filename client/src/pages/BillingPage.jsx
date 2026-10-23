@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   CheckCircle,
@@ -43,6 +43,9 @@ const formatLimit = (value) => {
 };
 
 export default function BillingPage() {
+  const [params, setParams] = useSearchParams();
+  const returned = params.get('checkout') === 'success';
+  const [portalBusy, setPortalBusy] = useState(false);
   const [state, setState] = useState({
     loading: true,
     error: null,
@@ -50,9 +53,9 @@ export default function BillingPage() {
     usage: null,
   });
 
-  const load = async () => {
+  const load = useCallback(async (silent = false) => {
     try {
-      setState((prev) => ({ ...prev, loading: true, error: null }));
+      setState((prev) => ({ ...prev, loading: !silent, error: null }));
       const [billing, usage] = await Promise.all([
         backendApi.getMyBilling(),
         backendApi.getBillingUsage('connection_requests'),
@@ -64,6 +67,7 @@ export default function BillingPage() {
         billing,
         usage,
       });
+      window.dispatchEvent(new Event('scalescope:billing-updated'));
     } catch (error) {
       setState((prev) => ({
         ...prev,
@@ -71,13 +75,30 @@ export default function BillingPage() {
         error: error.message || 'Could not load billing',
       }));
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
+
+  useEffect(() => {
+    if (!returned || state.billing?.plan?.code !== 'founder_pro') return;
+    const next = new URLSearchParams(params);
+    next.delete('checkout');
+    setParams(next, { replace: true });
+    toast.success('Founder Pro is active. Your subscription has been confirmed.', { id: 'billing-confirmed' });
+  }, [returned, state.billing?.plan?.code, params, setParams]);
+
+  useEffect(() => {
+    if (!returned || state.billing?.plan?.code === 'founder_pro') return;
+    let attempts = 0;
+    const timer = setInterval(() => { load(true); if (++attempts >= 12) clearInterval(timer); }, 5000);
+    return () => clearInterval(timer);
+  }, [returned, state.billing?.plan?.code, load]);
 
   const handlePortal = async () => {
+    if (portalBusy) return;
+    setPortalBusy(true);
     try {
       const portal = await backendApi.openBillingPortal();
       if (portal.url) {
@@ -90,6 +111,8 @@ export default function BillingPage() {
       });
     } catch (error) {
       toast.error(error.message || 'Could not open billing portal');
+    } finally {
+      setPortalBusy(false);
     }
   };
 
@@ -100,7 +123,9 @@ export default function BillingPage() {
   const used = limit.used || state.usage?.usage?.used_count || 0;
   const max = limit.limit ?? plan.limits?.connection_requests ?? 0;
   const pct = usagePercent(used, max);
-  const ecosystemAccess = plan.metadata?.ecosystem_access || ['mentor', 'investor'].includes(billing.role);
+  const ecosystemAccess = plan.metadata?.ecosystem_access || billing.role === 'investor';
+  const proAccess = plan.code === 'founder_pro';
+  const previousProExpired = !proAccess && subscription.status === 'expired';
 
   return (
     <>
@@ -117,10 +142,12 @@ export default function BillingPage() {
             </h1>
             <p className="text-sm text-gray-500 mt-2 max-w-2xl">
               {ecosystemAccess
-                ? 'Mentors and investors receive free ecosystem access so the platform can keep guidance and deal-flow strong.'
-                : 'Your billing plan controls outreach limits and premium matching features. Messaging after accepted connections remains available.'}
+                ? 'Investors receive free ecosystem access.'
+                : 'Your plan controls outreach limits. Matching, review decisions and messaging eligibility remain separate from payment.'}
             </p>
           </header>
+          {returned && !state.loading && !state.error && <p role="status" className="mb-5 rounded-lg border border-gray-200 bg-white p-4 text-sm">{previousProExpired ? 'Your previous Pro subscription has ended. Free access remains available. If you just made a new purchase, its confirmation may still be pending.' : ['past_due', 'unpaid', 'paused'].includes(subscription.status) ? 'Pro access is inactive. Check your subscription in Manage Billing.' : plan.code === 'founder_pro' ? 'Founder Pro is active. Your subscription has been confirmed.' : 'Waiting for subscription confirmation. Returning from checkout alone does not activate Pro. Refresh if confirmation takes longer than a minute.'}</p>}
+          {billing.plans?.some(item => item.test_mode) && <p className="mb-4 text-sm text-amber-800">Test billing mode. Test purchases are not live subscriptions.</p>}
 
           {state.loading ? (
             <div className="min-h-[300px] flex items-center justify-center">
@@ -146,9 +173,12 @@ export default function BillingPage() {
 
                   <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#98DE38]/20 text-[#1B2D7F] text-xs font-black uppercase">
                     <CheckCircle className="w-3.5" />
-                    {subscription.status || 'free'}
+                    {proAccess ? (subscription.cancel_at_period_end ? 'Renewal stopped' : subscription.status || 'active') : 'Free access'}
                   </span>
                 </div>
+                {subscription.current_period_end && (proAccess || previousProExpired) && <p className="mt-3 text-sm text-gray-600">{previousProExpired ? 'Previous Pro subscription ended' : subscription.cancel_at_period_end ? 'Pro access ends' : 'Current Pro period ends'}: {new Date(subscription.current_period_end).toLocaleDateString()}</p>}
+                {previousProExpired && <p role="status" className="mt-3 text-sm text-gray-600">Your Free plan remains available. This month's used requests have been preserved.</p>}
+                {['past_due','unpaid','paused'].includes(subscription.status) && <p role="status" className="mt-3 text-sm text-amber-800">Pro access is inactive. Manage Billing to resolve your subscription status.</p>}
 
                 <div className="mt-6 rounded-2xl bg-gray-50 border border-gray-100 p-4">
                   <div className="flex items-center justify-between gap-3">
@@ -182,12 +212,12 @@ export default function BillingPage() {
                 <div className="g-sec rounded-2xl p-5 text-white">
                   <Shield className="w-6 mb-3" />
                   <h3 className="font-black text-lg">
-                    {ecosystemAccess ? 'Free ecosystem access' : 'Upgrade when you need scale'}
+                    {ecosystemAccess ? 'Free ecosystem access' : proAccess ? 'Your Pro allowance' : 'Upgrade when you need scale'}
                   </h3>
                   <p className="text-sm text-white/70 mt-2">
                     {ecosystemAccess
-                      ? 'No paid plan is required for mentors and investors. Keep your profile strong to receive better matches.'
-                      : 'Premium plans unlock deeper AI reports, more requests, and role-specific advanced discovery.'}
+                      ? 'No paid plan is required for investors. Keep your profile strong to receive better matches.'
+                      : 'Founder Pro provides a higher monthly connection request allowance. Verification and match scores cannot be purchased.'}
                   </p>
                   <Link to="/pricing" className="mt-4 w-full py-2.5 g-brand text-black rounded-xl text-sm font-black flex items-center justify-center gap-2">
                     {ecosystemAccess ? 'View Access' : 'View Plans'} <ArrowRight className="w-4" />
@@ -199,14 +229,15 @@ export default function BillingPage() {
                     <Sparkles className="w-4 text-[#1B2D7F]" />
                     Billing actions
                   </h3>
-                  {!ecosystemAccess && (
+                  {!ecosystemAccess && subscription.provider_subscription_id && (
                     <button
                       type="button"
                       onClick={handlePortal}
+                      disabled={portalBusy}
                       className="mt-4 w-full py-2.5 border border-gray-200 rounded-xl text-sm font-black text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
                     >
                       <CreditCard className="w-4" />
-                      Manage Billing
+                      {portalBusy ? 'Opening...' : 'Manage Billing'}
                     </button>
                   )}
                   <button
@@ -219,8 +250,8 @@ export default function BillingPage() {
                   </button>
                   <p className="text-xs text-gray-400 mt-3">
                     {ecosystemAccess
-                      ? 'Billing is not required for mentor and investor ecosystem access.'
-                      : 'Payment portal becomes active after a Lemon Squeezy test subscription is created.'}
+                      ? 'Billing is not required for investor ecosystem access.'
+                      : 'Manage renewals, cancellation and payment details through Lemon Squeezy.'}
                   </p>
                 </div>
               </aside>

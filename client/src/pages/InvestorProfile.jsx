@@ -1,3 +1,4 @@
+import MatchingPreferenceFields from '../components/MatchingPreferenceFields';
 // src/pages/InvestorProfile.jsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -5,6 +6,9 @@ import { useAuth } from '../auth/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import RoleNavbar from '../components/landing-page/RoleNavbar';
 import AIProfileQualityChecker from '../components/AIProfileQualityChecker';
+import EvidenceEntry from '../components/EvidenceEntry';
+import InvestmentMandateFields from '../components/InvestmentMandateFields';
+import { validateCheckRange } from '../utils/investmentFit';
 import {
   fetchInvestorProfile,
   calcInvestorCompletion,
@@ -40,21 +44,21 @@ import toast from 'react-hot-toast';
 
 const STYLES = `
   :root { --primary: #98DE38; --primary-dark: #7EC42E; --secondary: #1B2D7F; --secondary-light: #2A3F8F; --white: #fff; --gray-50: #F9FAFB; --gray-100: #F3F4F6; --gray-200: #E5E7EB; }
-  .ss { font-family: 'Syne', sans-serif; }
-  .dm { font-family: 'DM Sans', sans-serif; }
+  .ss { font-family: var(--font-heading); }
+  .dm { font-family: var(--font-sans); }
   .lift { transition: transform .2s cubic-bezier(.22,.68,0,1.2), box-shadow .2s ease; }
   .lift:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(27,45,127,.12); }
   .g-brand { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); }
   .g-sec { background: linear-gradient(135deg, var(--secondary), var(--secondary-light)); }
   .prog { background: linear-gradient(90deg, var(--primary), var(--primary-dark)); transition: width .4s ease; }
-  .inp { width: 100%; padding: 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; transition: border-color .15s; font-family: 'DM Sans', sans-serif; }
+  .inp { width: 100%; padding: 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; transition: border-color .15s; font-family: var(--font-sans); }
   .inp:focus { border-color: var(--primary); background: var(--white); }
   .inp:disabled { opacity: .55; cursor: not-allowed; }
-  .sel { width: 100%; padding: 10px 36px 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; appearance: none; transition: border-color .15s; font-family: 'DM Sans', sans-serif; }
+  .sel { width: 100%; padding: 10px 36px 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; appearance: none; transition: border-color .15s; font-family: var(--font-sans); }
   .sel:focus { border-color: var(--primary); background: var(--white); }
-  .ta { width: 100%; padding: 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; resize: none; transition: border-color .15s; font-family: 'DM Sans', sans-serif; }
+  .ta { width: 100%; padding: 10px 14px; background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 12px; font-size: 14px; outline: none; resize: none; transition: border-color .15s; font-family: var(--font-sans); }
   .ta:focus { border-color: var(--primary); background: var(--white); }
-  .sec-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--secondary); display: flex; align-items: center; gap: 6px; margin-bottom: 16px; }
+  .sec-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0; color: var(--secondary); display: flex; align-items: center; gap: 6px; margin-bottom: 16px; }
   .fade-in { animation: fi .3s ease both; }
   @keyframes fi { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
   button:focus-visible, .inp:focus-visible, .sel:focus-visible, .ta:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
@@ -252,7 +256,7 @@ const normalizeProfile = (user, profile = {}, investorProfile = {}) => {
     lead_or_follow: investorProfile.lead_or_follow || '',
     minimum_traction_required: investorProfile.minimum_traction_required || '',
     preferred_business_models: safeArray(investorProfile.preferred_business_models),
-    portfolio_url: investorProfile.portfolio_url || '',
+    portfolio_url: investorProfile.portfolio_url || investorProfile.metadata?.investor_profile_url || '',
     due_diligence_requirements: investorProfile.due_diligence_requirements || '',
     metadata: investorProfile.metadata || {},
     profile_completion: investorProfile.profile_completion || 0,
@@ -290,7 +294,7 @@ function getInvestorQualityChecks(form) {
     { field: 'notable_investments', condition: (form.notable_investments || '').trim().length > 10, label: 'Notable investments' },
     { field: 'response_time', condition: !!form.response_time, label: 'Response time' },
     { field: 'lead_or_follow', condition: !!form.lead_or_follow, label: 'Lead or follow preference' },
-    { field: 'minimum_traction_required', condition: (form.minimum_traction_required || '').trim().length > 10, label: 'Minimum traction required' },
+    { field: 'minimum_traction_required', condition: !!form.minimum_traction_required?.trim() && form.minimum_traction_required !== 'Other', label: 'Expected startup progress' },
     { field: 'due_diligence_requirements', condition: (form.due_diligence_requirements || '').trim().length > 10, label: 'Due diligence requirements' },
     { field: 'portfolio_evidence', condition: !hasStartupInvestment(form) || !!(form.metadata?.portfolio_evidence_url || form.metadata?.portfolio_evidence_file_url), label: 'Portfolio investment evidence' },
   ];
@@ -418,6 +422,8 @@ export default function InvestorProfilePage() {
     if (event) event.preventDefault();
     if (saving) return;
 
+    const rangeError = validateCheckRange(formData.check_range_min, formData.check_range_max);
+    if (rangeError) { setSaveError(rangeError); return; }
     const quality = getInvestorQualityChecks(formData);
     const missingRequired = quality.required.filter((item) => !item.condition);
     if (missingRequired.length > 0) {
@@ -429,12 +435,10 @@ export default function InvestorProfilePage() {
 
     const linkValues = {
       linkedin_url: formData.linkedin_url,
-      investor_profile_url: formData.metadata?.investor_profile_url,
-      investor_video_url: formData.metadata?.investor_video_url,
+      website_url: formData.website_url,
+      portfolio_url: formData.portfolio_url,
       portfolio_evidence_url: formData.metadata?.portfolio_evidence_url,
       invested_startup_website: formData.metadata?.invested_startup_website,
-      traction_requirement_url: formData.metadata?.traction_requirement_url,
-      due_diligence_url: formData.metadata?.due_diligence_url,
     };
     const invalidLinks = Object.entries(linkValues)
       .filter(([, value]) => value && getLinkStatus(value) !== 'Format verified')
@@ -465,23 +469,24 @@ export default function InvestorProfilePage() {
         total_investments: formData.total_investments || formData.portfolio_count,
         exits: formData.exits || formData.successful_exits,
         what_i_look_for: formData.what_i_look_for || formData.investment_thesis,
-        website_url: '',
+        website_url: formData.website_url?.trim() || '',
         booking_url: '',
         investment_frequency: formData.investment_frequency || '',
         lead_or_follow: formData.lead_or_follow || '',
-        minimum_traction_required: formData.minimum_traction_required?.trim() || '',
+        minimum_traction_required: formData.minimum_traction_required === 'Other' ? '' : formData.minimum_traction_required?.trim() || '',
         preferred_business_models: formData.preferred_business_models || [],
-        portfolio_url: formData.metadata?.investor_profile_url || '',
+        portfolio_url: formData.portfolio_url?.trim() || '',
         due_diligence_requirements: formData.due_diligence_requirements?.trim() || '',
         preferred_contact_method: '',
         github_url: '',
         twitter_url: '',
         metadata: {
           ...(formData.metadata || {}),
+          investor_profile_url: formData.portfolio_url?.trim() || '',
           link_verification: Object.fromEntries(
             Object.entries(linkValues).map(([field, value]) => [field, getLinkStatus(value)])
           ),
-          verified_at: new Date().toISOString(),
+          format_checked_at: new Date().toISOString(),
         },
         profile_completion: profileCompletion,
         onboarding_completed: true,
@@ -675,6 +680,7 @@ export default function InvestorProfilePage() {
 
             <section className="lg:col-span-3">
               <div className="space-y-6">
+              <EvidenceEntry />
               <AIProfileQualityChecker
                 roleLabel="Investor profile"
                 completion={completion}
@@ -708,7 +714,7 @@ export default function InvestorProfilePage() {
 
 function ViewMode({ formData, completion }) {
   const ticket = formData.check_range_min || formData.check_range_max
-    ? `${formData.check_range_min || '0'} - ${formData.check_range_max || 'Open'} USD`
+    ? `${formData.check_range_min ?? '0'} - ${formData.check_range_max ?? 'Open'} ${formData.metadata?.check_currency || 'USD'}`
     : 'Not disclosed';
 
   return (
@@ -806,32 +812,30 @@ function ViewMode({ formData, completion }) {
           {[
             { label: 'Investment Frequency', value: formData.investment_frequency, Icon: Clock },
             { label: 'Lead or Follow', value: formData.lead_or_follow, Icon: Target },
-            { label: 'Investor Profile', value: formData.metadata?.investor_profile_url ? 'Added' : '', Icon: FileText },
-            { label: 'Investor Video', value: formData.metadata?.investor_video_url ? 'Added' : '', Icon: Globe },
           ].map((item) => <InfoTile key={item.label} item={item} />)}
         </div>
         <ChipGroup title="Preferred Business Models" values={formData.preferred_business_models} strong />
         {formData.minimum_traction_required && (
           <div className="p-4 bg-gray-50 rounded-xl border-l-4 mb-4" style={{ borderColor: '#1B2D7F' }}>
-            <p className="text-xs font-bold uppercase mb-1" style={{ color: '#1B2D7F' }}>Minimum Traction Required</p>
+            <p className="text-xs font-bold uppercase mb-1" style={{ color: '#1B2D7F' }}>Expected Startup Progress</p>
             <p className="text-sm text-gray-700 leading-relaxed">{formData.minimum_traction_required}</p>
           </div>
         )}
         {formData.due_diligence_requirements && (
           <div className="p-4 bg-gray-50 rounded-xl border-l-4" style={{ borderColor: '#98DE38' }}>
-            <p className="text-xs font-bold uppercase mb-1" style={{ color: '#98DE38' }}>Due Diligence Requirements</p>
+            <p className="text-xs font-bold uppercase mb-1" style={{ color: '#98DE38' }}>Investment Review Requirements</p>
             <p className="text-sm text-gray-700 leading-relaxed">{formData.due_diligence_requirements}</p>
           </div>
         )}
       </Section>
 
       <Section title="Links" icon={<LinkIcon className="w-5 h-5 text-[#1B2D7F]" />}>
-        {[formData.linkedin_url, formData.metadata?.investor_profile_url, formData.metadata?.investor_video_url].some(Boolean) ? (
+        {[formData.linkedin_url, formData.website_url, formData.portfolio_url].some(Boolean) ? (
           <div className="grid md:grid-cols-2 gap-3">
             {[
               { key: 'linkedin_url', label: 'LinkedIn', Icon: Linkedin },
-              { key: 'investor_profile_url', label: 'Investor Profile', Icon: FileText, meta: true },
-              { key: 'investor_video_url', label: 'Investor Video', Icon: Globe, meta: true },
+              { key: 'portfolio_url', label: 'Investment Portfolio / Investor Profile', Icon: FileText },
+              { key: 'website_url', label: 'Firm / Fund Website', Icon: Globe },
             ].filter((link) => link.meta ? formData.metadata?.[link.key] : formData[link.key]).map((link) => {
               const url = link.meta ? formData.metadata?.[link.key] : formData[link.key];
 
@@ -885,11 +889,12 @@ function EditMode({ formData, updateField, toggleArrayField, completion, onFileU
       </EditSection>
 
       <EditSection title="Investment Criteria" icon={<DollarSign className="w-4 h-4" />} hint="Founders use these fields to decide whether to pitch you.">
+        <InvestmentMandateFields value={formData} onChange={updateField} />
         <div className="grid md:grid-cols-2 gap-4">
           <SelectField label="Investor Type" value={formData.investor_type} onChange={(value) => updateField('investor_type', value)} options={INVESTOR_TYPES} placeholder="Select investor type..." />
           <FormInput label="Fund / Firm Name" value={formData.firm_name} onChange={(value) => updateField('firm_name', value)} icon={<Building2 className="w-4 h-4" />} placeholder="e.g. Indus Valley Capital" />
-          <FormInput label="Check Range Min (USD)" type="number" value={formData.check_range_min ?? ''} onChange={(value) => updateField('check_range_min', value)} placeholder="e.g. 25000" />
-          <FormInput label="Check Range Max (USD)" type="number" value={formData.check_range_max ?? ''} onChange={(value) => updateField('check_range_max', value)} placeholder="e.g. 150000" />
+          <FormInput label={`Check Range Min (${formData.metadata?.check_currency || 'USD'})`} type="number" value={formData.check_range_min ?? ''} onChange={(value) => updateField('check_range_min', value)} placeholder="e.g. 25000" />
+          <FormInput label={`Check Range Max (${formData.metadata?.check_currency || 'USD'})`} type="number" value={formData.check_range_max ?? ''} onChange={(value) => updateField('check_range_max', value)} placeholder="e.g. 150000" />
           <SelectField label="Geography Focus" value={formData.geography_focus} onChange={(value) => updateField('geography_focus', value)} options={GEO_OPTS} placeholder="Select geography..." />
         </div>
 
@@ -991,6 +996,7 @@ function EditMode({ formData, updateField, toggleArrayField, completion, onFileU
         </label>
       </EditSection>
 
+      <MatchingPreferenceFields value={formData} onChange={updateField} />
       <EditSection title="Deal Process" icon={<Target className="w-4 h-4" />} hint="Use clean investor fields for founder matching and pitch routing.">
         <div className="grid md:grid-cols-2 gap-4">
           <SelectField label="Investment Frequency" value={formData.investment_frequency} onChange={(value) => updateField('investment_frequency', value)} options={INVESTMENT_FREQUENCY_OPTS} placeholder="Select frequency..." />
@@ -1008,54 +1014,57 @@ function EditMode({ formData, updateField, toggleArrayField, completion, onFileU
           }}
           placeholder="Other business model..."
         />
-        <FormTextarea label="Minimum Traction Required" value={formData.minimum_traction_required} onChange={(value) => updateField('minimum_traction_required', value)} placeholder="e.g. MVP launched, 1K MAU, paid pilots, revenue, LOIs, or founder-market fit signals." rows={3} max={500} />
-        <ProofBox
-          title="Traction Requirement Template / Notes"
-          description="Optional: upload a checklist or sample metrics format you expect founders to share."
-          url={formData.metadata?.traction_requirement_url || ''}
-          onUrlChange={(value) => updateField('metadata', { ...(formData.metadata || {}), traction_requirement_url: value })}
-          filePath={formData.metadata?.traction_requirement_file_url}
-          onFileChange={(file) => onFileUpload?.({ file, folder: 'traction-requirements', metadataKey: 'traction_requirement_file_url' })}
-          uploading={uploading}
-        />
-        <FormTextarea label="Due Diligence Requirements" value={formData.due_diligence_requirements} onChange={(value) => updateField('due_diligence_requirements', value)} placeholder="Documents or proof you need before reviewing: pitch deck, cap table, financials, metrics, incorporation, customer evidence." rows={3} max={700} />
-        <ProofBox
-          title="Due Diligence Requirements Document"
-          description="Upload a due diligence checklist, investment memo template, docs list, or fund requirements."
-          url={formData.metadata?.due_diligence_url || ''}
-          onUrlChange={(value) => updateField('metadata', { ...(formData.metadata || {}), due_diligence_url: value })}
-          filePath={formData.metadata?.due_diligence_file_url}
-          onFileChange={(file) => onFileUpload?.({ file, folder: 'due-diligence', metadataKey: 'due_diligence_file_url' })}
-          uploading={uploading}
-        />
+        <div className="space-y-3">
+          <label className="block text-sm font-semibold text-gray-700" htmlFor="traction-progress">What progress do you expect?</label>
+          <select id="traction-progress" className="inp" value={['Idea-stage welcome', 'Prototype', 'Working MVP', 'Active users', 'Paying customers'].includes(formData.minimum_traction_required) ? formData.minimum_traction_required : formData.minimum_traction_required ? 'Other' : ''}
+            onChange={(event) => updateField('minimum_traction_required', event.target.value)}>
+            <option value="">No minimum specified</option>
+            {['Idea-stage welcome', 'Prototype', 'Working MVP', 'Active users', 'Paying customers', 'Other'].map(value => <option key={value} value={value}>{value}</option>)}
+          </select>
+          {formData.minimum_traction_required && !['Idea-stage welcome', 'Prototype', 'Working MVP', 'Active users', 'Paying customers'].includes(formData.minimum_traction_required) && (
+            <FormTextarea label="Your progress requirements" value={formData.minimum_traction_required === 'Other' ? '' : formData.minimum_traction_required}
+              onChange={(value) => updateField('minimum_traction_required', value || 'Other')} placeholder="For example: a tested prototype and feedback from potential customers. Revenue is not required." rows={3} max={500} />
+          )}
+        </div>
+        <FormTextarea label="What will you review before investing? (optional)" value={formData.due_diligence_requirements} onChange={(value) => updateField('due_diligence_requirements', value)} placeholder="For example: the team, product demo, ownership and financial records where applicable." rows={3} max={700} />
+        <details className="border-t border-gray-200 pt-4">
+          <summary className="cursor-pointer text-sm font-semibold text-[#1B2D7F]">Advanced Requirements (optional)</summary>
+          <div className="mt-3">
+            <ProofBox
+              title="Investment Review Checklist"
+              description="Optional checklist of documents you request during investment review."
+              filePath={formData.metadata?.due_diligence_file_url}
+              onFileChange={(file) => onFileUpload?.({ file, folder: 'due-diligence', metadataKey: 'due_diligence_file_url' })}
+              uploading={uploading}
+              uploadLabel="Upload checklist"
+              showUrl={false}
+            />
+          </div>
+        </details>
       </EditSection>
 
-      <EditSection title="Links" icon={<LinkIcon className="w-4 h-4" />} hint="LinkedIn is the strongest investor verification signal.">
+      <EditSection title="Links" icon={<LinkIcon className="w-4 h-4" />} hint="Professional links (optional).">
         <div className="grid md:grid-cols-2 gap-4">
           {[
             { field: 'linkedin_url', Icon: Linkedin, label: 'LinkedIn URL', points: 3, placeholder: 'https://linkedin.com/in/you' },
-            { field: 'investor_profile_url', Icon: FileText, label: 'Investor Profile URL', points: 3, placeholder: 'https://yourfund.com/profile' },
-            { field: 'investor_video_url', Icon: Globe, label: 'Investor Video URL', points: 2, placeholder: 'https://youtube.com/... or https://loom.com/...' },
+            { field: 'website_url', Icon: Globe, label: 'Firm / Fund Website', points: 3, placeholder: 'https://yourfund.com' },
+            { field: 'portfolio_url', Icon: FileText, label: 'Investment Portfolio / Investor Profile', points: 2, placeholder: 'https://yourfund.com/portfolio' },
           ].map((item) => (
             <div key={item.field}>
               <label className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
                 <item.Icon className="w-3.5 h-3.5" style={{ color: '#1B2D7F' }} />
                 {item.label}
-                <span className="ml-auto text-white font-bold px-1.5 py-0.5 rounded-full text-[10px]" style={{ background: '#98DE38' }}>+{item.points}</span>
               </label>
               <input
                 type="url"
                 placeholder={item.placeholder}
-                value={item.field in formData ? formData[item.field] || '' : formData.metadata?.[item.field] || ''}
-                onChange={(event) => {
-                  if (item.field in formData) updateField(item.field, event.target.value);
-                  else updateField('metadata', { ...(formData.metadata || {}), [item.field]: event.target.value });
-                }}
+                value={formData[item.field] || ''}
+                onChange={(event) => updateField(item.field, event.target.value)}
                 className="inp"
                 aria-label={`${item.label} input`}
               />
-              <p className={`text-xs mt-1 font-semibold ${getLinkStatus(item.field in formData ? formData[item.field] : formData.metadata?.[item.field]) === 'Format verified' ? 'text-green-700' : (item.field in formData ? formData[item.field] : formData.metadata?.[item.field]) ? 'text-red-600' : 'text-gray-400'}`}>
-                {getLinkStatus(item.field in formData ? formData[item.field] : formData.metadata?.[item.field])}
+              <p className={`text-xs mt-1 font-semibold ${getLinkStatus(formData[item.field]) === 'Format verified' ? 'text-green-700' : formData[item.field] ? 'text-red-600' : 'text-gray-400'}`}>
+                {getLinkStatus(formData[item.field])}
               </p>
             </div>
           ))}
@@ -1146,7 +1155,7 @@ function InlineArrayAdder({ value, onChange, onAdd, placeholder }) {
   );
 }
 
-function ProofBox({ title, description, url, onUrlChange, filePath, onFileChange, uploading }) {
+function ProofBox({ title, description, url, onUrlChange, filePath, onFileChange, uploading, uploadLabel = 'Upload proof file', showUrl = true }) {
   return (
     <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
       <div>
@@ -1154,7 +1163,7 @@ function ProofBox({ title, description, url, onUrlChange, filePath, onFileChange
         <p className="text-xs text-gray-400 mt-1">{description}</p>
       </div>
 
-      <div>
+      {showUrl && <div>
         <input
           type="url"
           value={url || ''}
@@ -1165,11 +1174,11 @@ function ProofBox({ title, description, url, onUrlChange, filePath, onFileChange
         <p className={`text-xs mt-1 font-semibold ${getLinkStatus(url) === 'Format verified' ? 'text-green-700' : url ? 'text-red-600' : 'text-gray-400'}`}>
           {getLinkStatus(url)}
         </p>
-      </div>
+      </div>}
 
       <label className="flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-[#98DE38]/60 bg-white text-sm font-bold text-gray-600">
         {uploading ? <Loader className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-        Upload proof file
+        {uploadLabel}
         <input
           type="file"
           accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg,.mp4,.mov,.xlsx,.csv"

@@ -1,9 +1,13 @@
+import MatchExplanation from '../../components/MatchExplanation';
+import { attachServerMatches } from '../../services/serverMatching';
 // src/pages/DiscoverPage.jsx
 import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { backendApi } from '../../lib/backendApi';
+import { fetchDiscoverSources } from '../../services/discoverSources';
+import { founderIntent, canMatchCofounders } from '../../utils/founderIntent';
 import { getSignedAvatarUrl } from '../../utils/avatarStorage';
 import {
   Search,
@@ -588,7 +592,7 @@ const PeopleCard = memo(function PeopleCard({ person, onConnect, onMessage, conn
                 className={`text-xs font-bold px-2.5 py-1 rounded-full ${isMentor ? 'bg-indigo-50 text-indigo-700' : 'bg-purple-50 text-purple-700'
                   }`}
               >
-                {isMentor ? 'Mentor Match' : isFounder ? 'Founder Match' : 'Co-Founder Match'}
+                {person.serverMatch?.status==='review_pending' ? 'Explore profile' : isMentor ? 'Mentor Match' : isFounder ? 'Founder Match' : 'Co-Founder Match'}
               </span>
 
               {/* <span className="text-xs font-black px-2.5 py-1 rounded-full bg-[#98DE38]/20 text-[#1B2D7F]">
@@ -620,24 +624,7 @@ const PeopleCard = memo(function PeopleCard({ person, onConnect, onMessage, conn
             </div>
           )}
 
-          <div className="tooltip-wrap mt-3">
-            <button
-              type="button"
-              className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
-              aria-label="Why recommended?"
-            >
-              <Info className="w-3" /> Why this match?
-            </button>
-
-            <div className="tooltip-box">
-              <p className="font-semibold mb-1">Match Reasons:</p>
-              <ul className="list-disc list-inside text-xs space-y-1">
-                {(person.reasons || ['Profile alignment']).map((reason, index) => (
-                  <li key={`${reason}-${index}`}>{reason}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          <MatchExplanation fit={person.serverMatch} />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
             <Link
@@ -789,160 +776,11 @@ export default function DiscoverPage() {
     });
 
     try {
-      const [profileRes, studentRes, founderRes, studentsRes, foundersRes, mentorsRes, investorsRes, connectionsRes, prefsRes] = await Promise.allSettled([
-        supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, location, bio, user_type')
-          .eq('id', user.id)
-          .maybeSingle(),
-
-        supabase
-          .from('student_profiles')
-          .select(`
-            id,
-            user_id,
-            university,
-            degree,
-            major,
-            current_year,
-            skills_with_levels,
-            preferred_industries,
-            help_needed,
-            looking_for,
-            commitment_level,
-            has_startup_idea,
-            startup_idea_description,
-            idea_title,
-            idea_domain,
-            idea_stage,
-            target_audience,
-            unique_value_prop,
-            profile_completion
-          `)
-          .eq('user_id', user.id)
-          .maybeSingle(),
-
-        supabase
-          .from('founder_profiles')
-          .select(`
-            user_id,
-            company_name,
-            idea_title,
-            industry,
-            startup_stage,
-            commitment_level,
-            help_needed,
-            looking_for,
-            founder_skills,
-            skills_needed,
-            profile_completion
-          `)
-          .eq('user_id', user.id)
-          .maybeSingle(),
-
-        supabase
-          .from('student_profiles')
-          .select(`
-            id,
-            user_id,
-            university,
-            degree,
-            major,
-            current_year,
-            skills_with_levels,
-            preferred_industries,
-            help_needed,
-            looking_for,
-            commitment_level,
-            has_startup_idea,
-            startup_idea_description,
-            idea_title,
-            idea_domain,
-            idea_stage,
-            target_audience,
-            unique_value_prop,
-            profile_completion,
-            updated_at,
-            profiles(
-              id,
-              full_name,
-              avatar_url,
-              location,
-              bio,
-              user_type
-            )
-          `)
-          .neq('user_id', user.id)
-          .limit(100),
-
-        supabase
-          .from('founder_profiles')
-          .select(`
-            id,
-            user_id,
-            company_name,
-            idea_title,
-            industry,
-            startup_stage,
-            solution_description,
-            unique_value_proposition,
-            target_audience,
-            looking_for,
-            help_needed,
-            commitment_level,
-            founder_skills,
-            profile_completion,
-            profiles!founder_profiles_user_id_fkey(
-              id,
-              full_name,
-              avatar_url,
-              location,
-              bio,
-              user_type
-            )
-          `)
-          .neq('user_id', user.id)
-          .limit(100),
-
-        supabase
-          .from('mentor_profiles')
-          .select(`
-            *,
-            profiles!mentor_profiles_user_id_fkey(
-              id, full_name, avatar_url, location, bio, user_type
-            )
-          `)
-          .eq('is_public', true)
-          .eq('is_active', true)
-          .neq('user_id', user.id)
-          .limit(100),
-
-        supabase
-          .from('investor_profiles')
-          .select(`
-            *,
-            profiles!investor_profiles_user_id_fkey(
-              id, full_name, avatar_url, location, bio, user_type
-            )
-          `)
-          .eq('is_public', true)
-          .eq('is_active', true)
-          .neq('user_id', user.id)
-          .limit(100),
-
-        backendApi.getMyConnections(),
-
-        supabase
-          .from('matching_preferences')
-          .select('*')
-          .eq('user_id', user.id)
-          .maybeSingle(),
-      ]);
-
+      const { profileRes, founderRes, foundersRes, investorsRes, connectionsRes, prefsRes } =
+        await fetchDiscoverSources(supabase, backendApi, user.id);
       const currentFounder = founderRes.status === 'fulfilled' ? founderRes.value.data || {} : {};
       const profile = {
         ...(profileRes.status === 'fulfilled' ? profileRes.value.data || {} : {}),
-        ...(studentRes.status === 'fulfilled' ? studentRes.value.data || {} : {}),
         ...(currentFounder.user_id ? {
           idea_domain: currentFounder.industry,
           idea_stage: currentFounder.startup_stage,
@@ -955,9 +793,9 @@ export default function DiscoverPage() {
         } : {}),
       };
 
-      const rawStudents = studentsRes.status === 'fulfilled' ? studentsRes.value.data || [] : [];
+      const rawStudents = [];
       const rawFounders = foundersRes.status === 'fulfilled' ? foundersRes.value.data || [] : [];
-      const rawMentors = mentorsRes.status === 'fulfilled' ? mentorsRes.value.data || [] : [];
+      const rawMentors = [];
       const rawInvestors = investorsRes.status === 'fulfilled' ? investorsRes.value.data || [] : [];
 
       const connections =
@@ -1022,18 +860,19 @@ export default function DiscoverPage() {
 
       rawFounders.forEach((founder) => {
         const p = normalizeProfile(founder);
+        const building = founderIntent(founder) === 'building';
         const founderMatchShape = {
           ...founder,
           idea_domain: founder.industry,
           idea_stage: founder.startup_stage,
-          has_startup_idea: true,
+          has_startup_idea: building,
           startup_idea_description: founder.solution_description,
           skills_with_levels: (founder.founder_skills || []).map((skill) => ({ skill })),
           interests: [founder.industry].filter(Boolean),
         };
         const skills = (founder.founder_skills || []).filter(Boolean);
 
-        if (founder.idea_title || founder.company_name) {
+        if (building && (founder.idea_title || founder.company_name)) {
           startups.push({
             user_id: founder.user_id,
             founderName: p.full_name,
@@ -1048,11 +887,13 @@ export default function DiscoverPage() {
           });
         }
 
-        if (hasLookingFor(founder, 'Co-Founder')) {
-          const match = computeDiscoverMatch(profile, founderMatchShape, 'cofounder');
+        if (p.user_type === 'early-stage-founder' || p.user_type === 'student') {
+          const eligible = canMatchCofounders(profile, founder);
+          const match = eligible ? computeDiscoverMatch(profile, founderMatchShape, 'cofounder') : { score: 0, reasons: ['Co-founder intent is not mutually compatible'] };
 
           people.push({
             _type: 'founder',
+            seeking_cofounder: eligible,
             id: `founder-${founder.user_id}`,
             user_id: founder.user_id,
             name: p.full_name,
@@ -1063,7 +904,7 @@ export default function DiscoverPage() {
             org: founder.company_name,
             skills: skills.slice(0, 5),
             commitment: founder.commitment_level,
-            has_idea: true,
+            has_idea: building,
             matchScore: match.score,
             reasons: match.reasons,
           });
@@ -1150,7 +991,7 @@ export default function DiscoverPage() {
       setData({
         profile,
         startups: startups.sort((a, b) => String(b.idea_title || '').localeCompare(String(a.idea_title || ''))),
-        people: people.sort((a, b) => b.matchScore - a.matchScore),
+        people: await attachServerMatches(people),
         opportunities,
         connections,
         prefs: prefsRes.status === 'fulfilled' ? prefsRes.value.data || null : null,
@@ -1189,7 +1030,7 @@ export default function DiscoverPage() {
       const matchRole =
         role === 'All' ||
         (role === 'Mentor' && person._type === 'mentor') ||
-        (role === 'Co-Founder' && person._type === 'cofounder') ||
+        (role === 'Co-Founder' && (person._type === 'cofounder' || person.seeking_cofounder)) ||
         (role === 'Founder' && person._type === 'founder') ||
         (role === 'Investor' && person._type === 'investor');
 
@@ -1375,7 +1216,7 @@ export default function DiscoverPage() {
                   Explore the Ecosystem
                 </h1>
                 <p className="text-gray-500 text-sm max-w-xl mt-2">
-                  Discover students, co-founders, mentor-seekers, startup ideas, and opportunities in one trusted feed.
+                  Discover early founders, co-founders, investors, startup ideas, and opportunities.
                 </p>
               </div>
 
@@ -1474,7 +1315,7 @@ export default function DiscoverPage() {
                     </div>
 
                     <div className="flex gap-2">
-                      {['All', 'Mentor', 'Co-Founder', 'Founder', 'Investor'].map((item) => (
+                      {['All', 'Co-Founder', 'Founder', 'Investor'].map((item) => (
                         <button
                           key={item}
                           type="button"
@@ -1516,7 +1357,7 @@ export default function DiscoverPage() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="font-bold text-gray-900">Startup Ideas</h2>
-                      <p className="text-xs text-gray-400">Explore student ideas before connecting.</p>
+                      <p className="text-xs text-gray-400">Explore startup ideas before connecting.</p>
                     </div>
                   </div>
 
@@ -1714,7 +1555,7 @@ export default function DiscoverPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-900 truncate">{person.name}</p>
                           <p className="text-xs text-gray-500 truncate">
-                            {person._type === 'mentor' ? 'Mentor' : 'Co-Founder'} · {person.matchScore}%
+                            {person._type === 'investor' ? 'Investor' : 'Early Founder'} · {person.matchScore}%
                           </p>
                         </div>
 
@@ -1772,7 +1613,7 @@ export default function DiscoverPage() {
 
                 <div className="space-y-3">
                   {[
-                    { label: 'Mentor-seeking Students', value: people.filter((person) => person._type === 'mentor').length, cls: 'text-indigo-600' },
+                    { label: 'Investors', value: people.filter((person) => person._type === 'investor').length, cls: 'text-indigo-600' },
                     { label: 'Co-Founder Seekers', value: people.filter((person) => person._type === 'cofounder').length, cls: 'text-purple-600' },
                     { label: 'Founder Collaborators', value: people.filter((person) => person._type === 'founder').length, cls: 'text-amber-600' },
                     { label: 'Startup Ideas', value: startups.length, cls: 'text-amber-600' },

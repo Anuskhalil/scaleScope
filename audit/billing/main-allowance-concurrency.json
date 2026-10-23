@@ -1,0 +1,14 @@
+{
+  "time": "2026-10-20T15:45:23.346Z",
+  "project": "gqkjvxcyetesvqmjkuus.supabase.co",
+  "syntheticOnly": true,
+  "sender": "qa-allowance-recipient-6@example.invalid",
+  "statuses": [
+    402,
+    201
+  ],
+  "usage": 5,
+  "requestCount": 5,
+  "result": "PASS",
+  "pendingAcceptance": true
+}

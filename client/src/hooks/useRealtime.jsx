@@ -40,24 +40,29 @@ export const useRealtime = ({ onConnectionRequest, onConnectionResponse, onMessa
   }, [onConvCreated]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
     
     let socket;
+    let active = true;
     const setup = async () => {
       socket = await initSocket(user.id);
+      if (!active || !socket) return;
       socket.on('conn:request', handleConnRequest);
       socket.on('conn:response', handleConnResponse);
       socket.on('msg:new', handleMessage);
       socket.on('conv:created', handleConvCreated);
     };
     
-    setup();
+    setup().catch(() => {
+      // HTTP loading remains available when realtime cannot initialize.
+    });
     
     return () => {
+      active = false;
       socket?.off('conn:request', handleConnRequest);
       socket?.off('conn:response', handleConnResponse);
       socket?.off('msg:new', handleMessage);
       socket?.off('conv:created', handleConvCreated);
     };
-  }, [user, handleConnRequest, handleConnResponse, handleMessage, handleConvCreated]);
+  }, [user?.id, handleConnRequest, handleConnResponse, handleMessage, handleConvCreated]);
 };

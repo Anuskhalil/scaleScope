@@ -18,6 +18,7 @@ async function getOtherParticipant(conversationId, senderId) {
 }
 
 exports.createMessage = async (convId, senderId, content) => {
+    await require('./profileReview.service').assertApproved(senderId);
     if (!convId) throw new Error('conversation id is required');
     if (!senderId) throw new Error('sender id is required');
     if (!content?.trim()) throw new Error('message content is required');
@@ -70,6 +71,12 @@ exports.createMessage = async (convId, senderId, content) => {
         })
         .eq('id', convId);
 
+    try {
+        const recipient = await getOtherParticipant(convId, senderId);
+        if (recipient) require('../config/socket').getIO()?.to(`user:${recipient}`).emit('message:notification', {
+            id: data.id, conversation_id: convId,
+        });
+    } catch { console.warn('Message saved; notification unavailable'); }
     return data;
 };
 
@@ -92,6 +99,7 @@ exports.triggerAIReply = async (msg, convId, options = {}) => {
             console.warn('ðŸ¤– AI reply skipped: receiver not found');
             return null;
         }
+        await require('./profileReview.service').assertApproved(receiverId);
 
         if (typeof isReceiverOnline === 'function' && isReceiverOnline(receiverId)) {
             console.log('AI reply skipped: receiver came online');
@@ -303,6 +311,7 @@ Write only the auto-reply text:
         }
 
 
+        if (typeof isReceiverOnline === 'function' && isReceiverOnline(receiverId)) return null;
         const now = new Date().toISOString();
 
         const { data: aiMsg, error: aiError } = await supabase

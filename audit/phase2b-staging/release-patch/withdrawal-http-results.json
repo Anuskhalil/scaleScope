@@ -1,0 +1,126 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "test": "Synthetic reviewer opt-in configured",
+      "status": "PASS"
+    },
+    {
+      "test": "Isolated staging target confirmed",
+      "status": "PASS"
+    },
+    {
+      "test": "founder identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "investor identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "reviewer identity authenticated",
+      "status": "PASS"
+    },
+    {
+      "test": "Authorized reviewer can open review queue",
+      "status": "PASS"
+    },
+    {
+      "test": "Ordinary investor cannot open review queue",
+      "status": "PASS"
+    },
+    {
+      "test": "Hosted review metadata and writes enabled",
+      "status": "PASS"
+    },
+    {
+      "test": "Synthetic private file uploaded",
+      "status": "PASS"
+    },
+    {
+      "test": "Private evidence fixture inserted",
+      "status": "PASS"
+    },
+    {
+      "test": "founder can download private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "reviewer can download private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Connected investor cannot download private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Anonymous private download denied",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner cannot share Passport-private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Denied sharing created no grant",
+      "status": "PASS"
+    },
+    {
+      "test": "Legacy deletion cannot remove Passport-private evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "Denied deletion preserved private bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "Anonymous withdrawal denied",
+      "status": "PASS"
+    },
+    {
+      "test": "Other-user withdrawal denied",
+      "status": "PASS"
+    },
+    {
+      "test": "Withdrawal requires explicit confirmation",
+      "status": "PASS"
+    },
+    {
+      "test": "Denied withdrawals preserve bytes",
+      "status": "PASS"
+    },
+    {
+      "test": "Owner withdraws via backend",
+      "status": "PASS"
+    },
+    {
+      "test": "Withdrawal retry is idempotent",
+      "status": "PASS"
+    },
+    {
+      "test": "Synthetic evidence tombstoned",
+      "status": "PASS"
+    },
+    {
+      "test": "founder cannot download tombstoned evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "reviewer cannot download tombstoned evidence",
+      "status": "PASS"
+    },
+    {
+      "test": "investor cannot download tombstoned evidence",
+      "status": "PASS"
+    }
+  ],
+  "cleanupSuccessful": true,
+  "evidenceId": "6e2744c3-4c47-43bc-aaa2-7b0dc0d960ca",
+  "objectPath": "founders/42fce0f8-b0d3-41a9-b246-2d4a5def266e/phase-e-passport/6e2744c3-4c47-43bc-aaa2-7b0dc0d960ca.png",
+  "retainedSyntheticTombstone": true,
+  "remaining": [
+    "Other bucket configuration comparison",
+    "Reviewer permission removal and re-test"
+  ],
+  "note": "No profile approval, claim decision, schema migration or production change."
+}

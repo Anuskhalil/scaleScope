@@ -1,0 +1,8 @@
+{
+  "01_REHEARSAL_ROLLBACK.sql": "c54dc42dae1089f9554ceacd9c5faa618a85936bd2b47c1738ef1e57d25696f4",
+  "202610070001_trust_passport_STAGING.sql": "63e1daa2dc91adb881c763f560e91056d90d06115e1b3b32517f57ac73ab3913",
+  "postflight.sql": "4b145d701489b36b60fa2c9bd47c56da2bac797f93202054e3cb8eaa7a3f7ef0",
+  "preflight.sql": "d764fc78c8699f6cf62485406ec90f604acd0b3e3848288505b33e2b41a50bc4",
+  "safeguards.sql": "675eac26fe3b2d8cfcfdfe6c47f8b0d3ce7c851f88dc01fbd7d506d368c8a1b5",
+  "smoke.sql": "d76280043f6f0881f94cb1765da6925a64118a9761d38ed0dddf8441e83c38c9"
+}

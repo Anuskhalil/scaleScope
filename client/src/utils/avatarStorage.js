@@ -21,7 +21,7 @@ export function getAvatarStoragePath(value) {
       }
 
       return raw;
-    } catch (error) {
+    } catch {
       return raw;
     }
   }

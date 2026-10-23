@@ -16,7 +16,7 @@ const trustPoints = [
 ];
 
 const platformSignals = [
-  { value: '4', label: 'User roles', sub: 'Students, founders, mentors, investors' },
+  { value: '2', label: 'User roles', sub: 'Early Founders and Investors' },
   { value: 'AI', label: 'Smart matching', sub: 'Skills, needs, goals, commitment' },
   { value: '1:1', label: 'Real connections', sub: 'Connect, accept, then message' },
   { value: 'Live', label: 'Growth dashboard', sub: 'Track profile and connections' },
@@ -42,8 +42,8 @@ export default function Hero() {
               </h1>
 
               <p className="text-lg sm:text-xl text-slate-600 mb-8 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-                Scale Scope helps students and early-stage founders discover trusted
-                co-founders, mentors, and investors through profile-based AI matching,
+                Scale Scope helps student and professional early founders discover trusted
+                co-founders and investors through profile-based AI matching,
                 connection requests, and real-time collaboration.
               </p>
 
@@ -105,7 +105,7 @@ export default function Hero() {
 
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="font-bold text-slate-900">Mentor Suggestion</p>
+                      <p className="font-bold text-slate-900">AI Mentor</p>
                       <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-black">
                         Relevant
                       </span>

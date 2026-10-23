@@ -1,5 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-require('dotenv').config();
+require('./environment').loadEnvironment();
 
 if (!process.env.GEMINI_API_KEY) {
   console.warn('⚠️ GEMINI_API_KEY is missing. AI replies will fallback.');

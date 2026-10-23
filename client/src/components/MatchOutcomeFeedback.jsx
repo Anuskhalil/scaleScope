@@ -19,7 +19,7 @@ const TAGS = [
   'Needs proof',
   'Weak traction',
   'Wrong stage',
-  'Good mentor fit',
+  'Wrong geography',
   'Good investor fit',
 ];
 
@@ -83,7 +83,7 @@ export default function MatchOutcomeFeedback({
             Match Feedback
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            Help ScaleScope improve recommendations after profile reviews or conversations.
+            Private feedback for recommendation review. Reported outcomes are not independently verified.
           </p>
         </div>
 

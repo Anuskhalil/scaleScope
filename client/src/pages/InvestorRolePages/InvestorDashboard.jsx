@@ -1,3 +1,4 @@
+import MatchExplanation from '../../components/MatchExplanation';
 // src/pages/InvestorRolePages/InvestorDashboard.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -136,7 +137,7 @@ function StartupSuggestionCard({ startup, status, onExpress, onMessage }) {
   return (
     <div className="bg-white rounded-2xl p-4 border border-gray-100 hover:shadow-md transition lift">
       <div className="flex items-center gap-3 mb-3">
-        <Avatar name={name} size="lg" />
+        <Avatar name={profile.full_name || name} src={profile.avatar_url} size="lg" />
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-gray-900 truncate">{name}</h3>
           <p className="text-xs text-gray-500 truncate">{startup.industry || profile.location || 'Startup match'}{stage ? ` · ${stage}` : ''}</p>
@@ -144,6 +145,7 @@ function StartupSuggestionCard({ startup, status, onExpress, onMessage }) {
         <span className="px-2 py-1 text-[10px] font-bold rounded-full bg-[#98DE38]/20 text-[#1B2D7F] flex-shrink-0">{score}% Match</span>
       </div>
       {(startup.problem_solving || startup.problem_statement) && <p className="text-xs text-gray-600 mb-3 line-clamp-2">{startup.problem_solving || startup.problem_statement}</p>}
+      <MatchExplanation fit={startup.serverMatch} />
       {startup._matchReason && <p className="text-xs text-gray-600 mb-4">{startup._matchReason}</p>}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <Link to={`/user-profile/${startup.user_id}`} className="py-2 border-2 border-[#1B2D7F]/10 bg-[#1B2D7F]/5 text-[#1B2D7F] rounded-xl text-xs font-bold hover:bg-[#1B2D7F]/10 transition flex items-center justify-center">View Profile</Link>
@@ -173,7 +175,7 @@ export default function InvestorDashboard() {
     setLoading(true);
     try {
       const dashboard = await fetchInvestorDashboard(user.id);
-      dashboard.startups = rankStartupsForInvestor(dashboard.startups, dashboard.investorProfile);
+      dashboard.startups = await rankStartupsForInvestor(dashboard.startups, dashboard.investorProfile);
       setData(dashboard);
     } catch (err) {
       console.error('[InvestorDashboard]', err);
@@ -232,9 +234,10 @@ export default function InvestorDashboard() {
   const nudges = getInvestorProfileNudges(profile, investorProfile);
   const ticket = formatTicketSize(
     investorProfile.check_range_min || investorProfile.ticket_size_min,
-    investorProfile.check_range_max || investorProfile.ticket_size_max
+    investorProfile.check_range_max || investorProfile.ticket_size_max,
+    investorProfile.metadata?.check_currency || 'USD'
   );
-  const strongStartups = startups.filter((startup) => getScore(startup) >= 60).slice(0, 5);
+  const strongStartups = startups.filter((startup) => getScore(startup) >= 60 && startup.serverMatch?.status === 'potential_fit').slice(0, 5);
 
   return (
     <>

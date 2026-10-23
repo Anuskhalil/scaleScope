@@ -1,8 +1,6 @@
 const supabase = require('../config/supabase');
 
 const VALID_REQUEST_TYPES = [
-  'mentor_request',
-  'mentor_offer',
   'cofounder_request',
   'investor_contact',
   'investor_interest',
@@ -13,6 +11,12 @@ exports.sendRequest = async (senderId, receiverId, type, message) => {
   if (!senderId) throw new Error('Sender is required');
   if (!receiverId) throw new Error('Receiver is required');
   if (senderId === receiverId) throw new Error('Cannot request yourself');
+  const { data: participants, error: roleError } = await supabase.from('profiles')
+    .select('id,user_type').in('id', [senderId, receiverId]);
+  if (roleError) throw roleError;
+  if (participants?.length !== 2 || participants.some(p => !['early-stage-founder', 'investor'].includes(p.user_type))) {
+    throw new Error('Connections are available between Early Founders and Investors.');
+  }
 
   const requestType = type || 'cofounder_request';
 
@@ -54,20 +58,19 @@ exports.sendRequest = async (senderId, receiverId, type, message) => {
     };
   }
 
-  const { data, error } = await supabase
-    .from('connection_requests')
-    .insert({
-      sender_id: senderId,
-      receiver_id: receiverId,
-      type: requestType,
-      status: 'pending',
-      message: message?.slice(0, 500) || null,
-      created_at: new Date().toISOString(),
-    })
-    .select('id, status, sender_id, receiver_id, type, created_at')
-    .single();
-
-  if (error) throw error;
+  await require('./profileReview.service').assertApproved(receiverId);
+  const billing = await require('./billing.service').getUserSubscription(senderId);
+  const { data, error } = await supabase.rpc('send_connection_with_allowance', {
+    p_sender: senderId, p_receiver: receiverId, p_type: requestType,
+    p_message: message?.slice(0, 500) || null,
+    p_limit: billing.entitlements.connection_requests,
+  });
+  if (error) throw Object.assign(new Error('Connection service is temporarily unavailable. Please try again later.'), { status: 503 });
+  if (data?.limited) throw Object.assign(new Error('Monthly connection request allowance reached. Existing conversations remain available.'), {
+    status: 402, code: 'USAGE_LIMIT_REACHED', used: data.used, limit: data.limit,
+    upgradePath: billing.plan.code === 'free' && billing.role === 'early-stage-founder' ? '/pricing' : '/billing',
+  });
+  if (!data?.id) throw Object.assign(new Error('Connection request could not be confirmed.'), { status: 503 });
 
   return {
     id: data.id,
@@ -75,6 +78,8 @@ exports.sendRequest = async (senderId, receiverId, type, message) => {
     senderId: data.sender_id,
     receiverId: data.receiver_id,
     type: data.type,
+    alreadyPending: Boolean(data.alreadyPending),
+    alreadyConnected: Boolean(data.alreadyConnected),
   };
 };
 

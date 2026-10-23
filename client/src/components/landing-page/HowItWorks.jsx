@@ -34,7 +34,7 @@ const howItWorks = [
     step: '04',
     title: 'Collaborate and grow',
     description:
-      'Chat in real time, discover mentors and opportunities, and track growth from your role-based dashboard.',
+      'Chat in real time, discover co-founders and investors, and track growth from your dashboard.',
     icon: TrendingUp,
   },
 ];

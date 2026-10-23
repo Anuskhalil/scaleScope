@@ -1,12 +1,17 @@
 const express = require('express');
 const auth = require('../middlewares/auth.middleware');
 const { sendRequest, respondRequest } = require('../services/connection.service');
-const { checkUsageLimit, incrementUsage } = require('../services/billing.service');
 const supabase = require('../config/supabase');
 const { getIO } = require('../config/socket');
 
 const router = express.Router();
 router.use(auth);
+router.use(async(req,res,next)=>{
+ if(req.method!=='POST'||!['/request','/respond'].includes(req.path))return next();
+ if(req.path==='/respond'&&req.body?.action==='decline')return next();
+ try{await require('../services/profileReview.service').assertApproved(req.user.id);next();}
+ catch(e){res.status(e.status||503).json({error:e.status?e.message:'Profile review status unavailable'});}
+});
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isUuid = (value) => UUID_RE.test(String(value || ''));
@@ -17,20 +22,6 @@ router.post('/request', async (req, res) => {
 
         if (!isUuid(receiverId)) {
             return res.status(400).json({ error: 'Invalid receiverId' });
-        }
-
-        const usage = await checkUsageLimit(req.user.id, 'connection_requests');
-
-        if (!usage.allowed) {
-            return res.status(402).json({
-                success: false,
-                error: `Monthly connection request limit reached for your ${usage.billing.plan?.name || 'current'} plan.`,
-                code: 'USAGE_LIMIT_REACHED',
-                feature: usage.featureKey,
-                used: usage.used,
-                limit: usage.limit,
-                upgradePath: '/pricing',
-            });
         }
 
         const result = await sendRequest(
@@ -50,8 +41,6 @@ router.post('/request', async (req, res) => {
             });
         }
 
-        await incrementUsage(req.user.id, 'connection_requests');
-
         getIO()?.to(`user:${receiverId}`).emit('conn:request', {
             id: result.id,
             senderId: req.user.id,
@@ -67,9 +56,13 @@ router.post('/request', async (req, res) => {
     } catch (e) {
         console.error('CONNECTION REQUEST ERROR:', e);
 
-        res.status(400).json({
+        res.status(e.status || 400).json({
             success: false,
             error: e.message,
+            code: e.code,
+            used: e.used,
+            limit: e.limit,
+            upgradePath: e.upgradePath,
         });
     }
 });

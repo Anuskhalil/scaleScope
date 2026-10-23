@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "bucket": "avatars",
+      "status": "PASS"
+    },
+    {
+      "bucket": "message-attachments",
+      "status": "PASS"
+    },
+    {
+      "bucket": "profile-documents",
+      "status": "PASS"
+    },
+    {
+      "bucket": "profile-evidence",
+      "status": "PASS"
+    },
+    {
+      "bucket": "trust-evidence",
+      "status": "PASS"
+    }
+  ],
+  "findings": [
+    "message-attachments baseline has no bucket-level size or MIME allowlist. Parity is not a security approval; application upload controls and bucket hardening need separate review."
+  ],
+  "scope": "Read-only staging baseline comparison. No production query or policy changes."
+}

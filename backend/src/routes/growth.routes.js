@@ -15,6 +15,9 @@ function rateLimit(req, res, next) {
   const now = Date.now();
   const windowMs = 60 * 1000;
   const max = 8;
+  for (const [id, timestamps] of hits) {
+    if (!timestamps.some(ts => now - ts < windowMs)) hits.delete(id);
+  }
   const bucket = (hits.get(key) || []).filter((ts) => now - ts < windowMs);
 
   if (bucket.length >= max) {
@@ -30,18 +33,15 @@ function rateLimit(req, res, next) {
 
 router.post('/plan', rateLimit, async (req, res, next) => {
   try {
-    const signals = req.body?.signals && typeof req.body.signals === 'object'
-      ? req.body.signals
-      : {};
-
-    const plan = await getGrowthPlan(req.user.id, signals);
+    // Never trust client-supplied role, scores, user ID or task completion.
+    const plan = await getGrowthPlan(req.user.id);
     return res.json({ data: plan });
   } catch (err) {
     return next(err);
   }
 });
 
-router.post('/match-outcome', async (req, res, next) => {
+router.post('/match-outcome', rateLimit, async (req, res, next) => {
   try {
     const {
       targetUserId,
@@ -72,12 +72,23 @@ router.post('/match-outcome', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid match outcome' });
     }
 
+    const { data: target, error: targetError } = await supabase.from('profiles')
+      .select('id,user_type').eq('id', targetUserId).is('deleted_at', null).maybeSingle();
+    if (targetError) throw targetError;
+    if (!target || !['early-stage-founder','investor'].includes(target.user_type)) return res.status(404).json({error:'Profile unavailable'});
+    const table = target.user_type === 'investor' ? 'investor_profiles' : 'founder_profiles';
+    const {data: visible,error: visibilityError}=await supabase.from(table).select('user_id').eq('user_id',targetUserId).eq('is_public',true).eq('is_active',true).maybeSingle();
+    if(visibilityError)throw visibilityError;
+    if(!visible)return res.status(404).json({error:'Profile unavailable'});
+    if(rating !== null && rating !== undefined && rating !== '' && (!Number.isFinite(Number(rating)) || Number(rating)<1 || Number(rating)>5)) {
+      return res.status(400).json({error:'Rating must be between 1 and 5'});
+    }
     const safeRating = rating === null || rating === undefined || rating === ''
       ? null
       : Math.max(1, Math.min(5, Number(rating)));
 
     const safeTags = Array.isArray(reasonTags)
-      ? reasonTags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 8)
+      ? reasonTags.map((tag) => String(tag).trim().slice(0,80)).filter(Boolean).slice(0, 8)
       : [];
 
     const { error } = await supabase
@@ -94,6 +105,11 @@ router.post('/match-outcome', async (req, res, next) => {
 
     if (error) throw error;
 
+    await require('../services/matching.service').record([{
+      actor_id:req.user.id,target_id:targetUserId,event_type:'feedback_reported',
+      reference:outcome+':'+new Date().toISOString().slice(0,10),
+      payload:{outcome,rating:safeRating,reason_tags:safeTags,source:'user_report',confirmed:false}
+    }]);
     return res.json({ success: true });
   } catch (err) {
     if (err.message?.includes('match_outcomes')) {

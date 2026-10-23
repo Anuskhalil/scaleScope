@@ -1,7 +1,6 @@
 // src/pages/MessagesPage.jsx
 import React, { useState, useEffect, useCallback, memo, useRef, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '../../lib/supabaseClient';
 import { useAuth } from '../../auth/AuthContext';
 import { getSocket, initSocket } from '../../lib/socketClient';
 import { backendApi } from '../../lib/backendApi';
@@ -15,7 +14,7 @@ import {
   CheckCheck,
   MessageSquare,
   ArrowLeft,
-  GraduationCap,
+  Users,
   DollarSign,
   Bot,
   MoreVertical,
@@ -279,7 +278,7 @@ export default function MessagesPage() {
 
   const [state, setState] = useState({
     loading: true,
-    sidebar: window.innerWidth >= 768,
+    sidebar: true,
     loadingMessages: false,
   });
 
@@ -321,7 +320,9 @@ export default function MessagesPage() {
 
     if (!socket) return;
 
-    socket.emit('join:conv', conversationId);
+    const rejoin = () => socket.emit('join:conv', conversationId);
+    socket.on('connect', rejoin);
+    rejoin();
 
     const newHandler = (newMsg) => {
       if (newMsg.conversation_id !== conversationId) return;
@@ -436,6 +437,7 @@ export default function MessagesPage() {
 
     return () => {
       socket.off('msg:new', newHandler);
+      socket.off('connect', rejoin);
       socket.off('msg:updated', updateHandler);
       socket.off('msg:deleted', deleteHandler);
       socket.off('conv:read', readHandler);
@@ -548,7 +550,7 @@ export default function MessagesPage() {
     const handleResize = () => {
       setState((prev) => ({
         ...prev,
-        sidebar: window.innerWidth >= 768,
+        sidebar: window.innerWidth >= 768 || !activeConversationRef.current,
       }));
     };
 
@@ -627,10 +629,22 @@ export default function MessagesPage() {
       const socket = getSocket();
 
       if (socket?.connected) {
-        socket.emit('msg:send', {
-          convId: data.active.id,
-          content: text,
+        const response = await new Promise((resolve, reject) => {
+          socket.timeout(15000).emit('msg:send', { convId: data.active.id, content: text }, (error, value) => {
+            if (error) return reject(new Error('Delivery confirmation timed out. Check the conversation before retrying.'));
+            if (value?.error) return reject(new Error(value.error));
+            if (!value?.data?.id) return reject(new Error('Message confirmation unavailable'));
+            resolve(value);
+          });
         });
+        const newMsg = response.data;
+        setData((prev) => ({
+          ...prev,
+          messages: prev.active?.id === newMsg.conversation_id && !prev.messages.some(m => m.id === newMsg.id)
+            ? [...prev.messages, newMsg] : prev.messages,
+          convos: prev.convos.map(c => c.id === newMsg.conversation_id
+            ? { ...c, lastMessage: newMsg, last_message_at: newMsg.created_at } : c),
+        }));
       } else {
         const response = await backendApi.sendConversationMessage(data.active.id, text);
         const newMsg = response.data;
@@ -654,7 +668,7 @@ export default function MessagesPage() {
       scrollToBottom();
     } catch (err) {
       console.error('Failed to send:', err);
-      toast.error('Failed to send');
+      toast.error(err.message || 'Failed to send');
     } finally {
       setSending(false);
     }
@@ -702,7 +716,7 @@ export default function MessagesPage() {
 
       const matchCategory =
         filters.cat === 'All' ||
-        (filters.cat === 'Mentors' && userType === 'mentor') ||
+        (filters.cat === 'Founders' && userType === 'early-stage-founder') ||
         (filters.cat === 'Investors' && userType === 'investor');
 
       const matchQuery =
@@ -733,7 +747,7 @@ export default function MessagesPage() {
     <>
       <style>{CSS}</style>
 
-      <div className="h-screen page-bg pt-16 flex flex-col">
+      <div className="h-dvh page-bg pt-16 flex flex-col">
         {!state.sidebar && (
           <div className="px-4 py-3 border-b border-gray-200 bg-white flex items-center gap-3">
             <button
@@ -808,9 +822,9 @@ export default function MessagesPage() {
                     icon: null,
                   },
                   {
-                    key: 'Mentors',
-                    label: 'Mentors',
-                    icon: <GraduationCap className="w-3" />,
+                    key: 'Founders',
+                    label: 'Founders',
+                    icon: <Users className="w-3" />,
                   },
                   {
                     key: 'Investors',
